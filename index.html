@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Branchlands</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+</head>
+<body>
+<header>
+  <h1>🌿 Branchlands</h1>
+  <span class="tag">a world you fix by writing real Python · every zone unlocks a new reason to code</span>
+  <span class="sp"></span>
+  <span id="xp">0 XP</span>
+  <button id="codexBtn">📜 Codex</button>
+</header>
+
+<nav id="zones"></nav>
+
+<main>
+  <aside id="levels" class="panel"></aside>
+
+  <section id="mission" class="panel"></section>
+
+  <section class="stagecol">
+    <div id="mode-robot" class="mode panel" hidden>
+      <canvas id="world" width="352" height="220"></canvas>
+    </div>
+
+    <div id="mode-git" class="mode panel" hidden>
+      <canvas id="graph" width="400" height="130"></canvas>
+      <div id="term"></div>
+      <input id="termIn" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, press Enter  (help)">
+    </div>
+
+    <div id="mode-review" class="mode panel" hidden>
+      <div id="prHead"></div>
+      <textarea id="reviewComment" placeholder="Your review comment: what is wrong, and on which line?"></textarea>
+      <div class="toolbar"><button id="requestBtn">✍️ Request changes</button><span id="reviewStatus"></span></div>
+    </div>
+
+    <div id="mode-oracle" class="mode panel" hidden>
+      <div id="chat"></div>
+      <input id="chatIn" type="text" autocomplete="off" placeholder="talk to your bot after you press Run">
+    </div>
+
+    <div id="mode-editor" class="mode panel" hidden>
+      <div class="toolbar">
+        <button id="runBtn" class="primary">▶ Run (Ctrl+Enter)</button>
+        <button id="resetBtn">↺ Reset world</button>
+        <button id="starterBtn" class="small">starter code</button>
+        <span class="sp"></span>
+        <span id="lineCount"></span>
+        <select id="speed"><option value="normal">normal</option><option value="fast">fast</option></select>
+      </div>
+      <textarea id="code" spellcheck="false"></textarea>
+      <div id="console"></div>
+    </div>
+  </section>
+</main>
+
+<div id="modal" hidden><div id="modalBody"></div></div>
+
+<footer>Branchlands prototype · Python runs in your browser via Skulpt · progress is saved in this browser only</footer>
+
+<script src="js/levels.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/python.js"></script>
+<script src="js/render.js"></script>
+<script src="js/gitsim.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
