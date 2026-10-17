@@ -1,6 +1,6 @@
 # Branchlands: company program
 
-*Version 0.1, 17 October 2026. Owner: Justin Morris.*
+*Version 0.2, 17 October 2026. Owner: Justin Morris.*
 
 ## 1. The one-line pitch
 
@@ -23,7 +23,7 @@ Branchlands owns the gap: **collaboration and AI as game content, not as a featu
 
 Type Python → robot acts → world changes → zone completes → a **Reason** unlocks ("Stop doing boring stuff by hand") → a **real-world quest** sends the skill to the kid's own computer and repo → next zone opens.
 
-The prototype in this repo implements the loop end to end: 7 zones, 14 levels, four play modes (robot world, Git terminal, PR review, chatbot), progression and save.
+The prototype in this repo implements the loop end to end: 8 zones, 35 levels, seven play modes (robot world in Python or JavaScript, Git terminal with merge conflicts and push/pull, PR review, PR authoring, rule and memory chatbots, a real local LLM via Ollama), a world map, star ratings, achievements, a level editor with share links, and GitHub-verified real-world quests.
 
 ### 3.2 Mechanics borrowed from the teardown (as patterns, not content)
 
@@ -45,12 +45,12 @@ Combat theming (Common Sense Media flags CodeCombat for it). Gems/loot boxes. Le
 
 | Phase | Weeks | Ships | Done when |
 |---|---|---|---|
-| 0. Prototype | now | this repo | a kid can play 1-1 through 7-1 unassisted |
+| 0. Prototype | done | this repo: 35 levels, 8 zones, editor, Ollama Oracle, JS zone, GitHub quest check | a kid can play 1-1 through 8-5 unassisted |
 | 1. Family alpha | 1–6 | Justin + son use the repo for real: his branches, his PRs, his levels | 10 merged PRs authored by the kid; 3 new levels he designed |
-| 2. Real Git zone | 6–12 | Zone 5 reads the player's actual repo via a tiny local helper (`branchlands serve`), quests auto-complete on real commits | first commit in the real repo marks 5-1 done in-game |
+| 2. Real Git zone | 6–12 | Zone 5 reads the player's actual repo via a tiny local helper (`branchlands serve`); today the game already verifies commits and merged PRs through the public GitHub API | first local commit marks 5-1 done in-game without GitHub |
 | 3. Co-op | 12–20 | two browsers, one world: author/reviewer roles, live PR review on a shared level, deliberate merge-conflict level | two families outside ours finish Zone 6 together |
-| 4. The real Oracle | 20–26 | Zone 7-2: the kid's `reply()` falls back to a local Ollama model with a system prompt they write; Zone 7-3: train a tiny classifier (Machine Learning for Kids pattern) | NPC in the kid's own game answers from a model running on their machine |
-| 5. Content + art | 26–40 | 30+ levels, level editor (Learn Git Branching has one; copy the idea), pixel art, sound | 2 hours of play per zone |
+| 4. The real Oracle | 20–26 | 7-3 (Ollama system-prompt Oracle) ships in the prototype; next: the Oracle becomes an NPC inside the robot world, plus 7-4: train a tiny classifier (Machine Learning for Kids pattern) | NPC in the kid's own game answers from a model running on their machine |
+| 5. Content + art | 26–40 | 60+ levels (35 and a level editor exist), community level packs from share links, pixel art pass, music | 2 hours of play per zone |
 | 6. Launch | 40–52 | public web app, homeschool co-op pilots, Discord | 500 families, 20 paying |
 
 ### 3.5 Technical stack (keep it boring)
