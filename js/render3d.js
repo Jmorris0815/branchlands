@@ -10,6 +10,7 @@ import { RenderPass } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/
 import { UnrealBloomPass } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js/+esm";
 import { OutputPass } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js/+esm";
 import { Sky } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/objects/Sky.js/+esm";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm";
 
 const Render3D = (() => {
   const phone = document.documentElement.dataset.device === "phone";
@@ -25,6 +26,47 @@ const Render3D = (() => {
   const cam = { center: new THREE.Vector3(), dist: 10, el: 0.82, az: 0.35, azV: 0, introK: 0, look: new THREE.Vector3(), follow: new THREE.Vector3() };
   let particles;
   const texCache = {};
+
+  // ---------- generated glTF models (optional) ----------
+  // Real models made from concept art (FLUX) and image-to-3D (Hunyuan3D) on the family's DGX Spark: see tools/assets3d/.
+  // Each entry says which file in assets/models/ to use, how big it should be in tiles (fit "h" = height, "w" = footprint),
+  // how far to lift it off the ground, which way its front faces, and whether Bolt's paint colour tints it.
+  // If a file is missing or still loading, the built-in shape below is drawn instead, so the game never waits on a download.
+  const ASSETS = {
+    bolt:     { fit: "h", size: 0.95, rotY: Math.PI / 2, tint: true },
+    house:    { fit: "w", size: 0.92, rotY: Math.PI },
+    tree:     { fit: "h", size: 1.35 }, rock: { fit: "w", size: 0.9 }, crate: { fit: "w", size: 0.84 }, pillar: { fit: "h", size: 0.95 }, crystal: { fit: "h", size: 1.15 }, ice: { fit: "w", size: 0.86 },
+    crab:     { fit: "w", size: 0.62, rotY: Math.PI },
+    apple:    { fit: "h", size: 0.34, lift: 0.08 }, gem: { fit: "h", size: 0.42, lift: 0.15 }, key: { fit: "w", size: 0.4, lift: 0.18 }, lens: { fit: "h", size: 0.4, lift: 0.12 },
+    villager: { fit: "h", size: 1.1 }, villager2: { fit: "h", size: 1.1 }, stall: { fit: "w", size: 1.05 },
+  };
+  const MODEL_BASE = "assets/models/", assetTpl = {}, assetWaiters = {}, gltfLoader = new GLTFLoader();
+  function loadAsset(name) {
+    if (assetTpl[name] !== undefined || !ASSETS[name]) return;
+    assetTpl[name] = null; const a = ASSETS[name];
+    gltfLoader.load(MODEL_BASE + name + ".glb", gltf => {
+      const root = gltf.scene; root.rotation.y = a.rotY || 0; root.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(root), sz = new THREE.Vector3(), c = new THREE.Vector3(); box.getSize(sz); box.getCenter(c);
+      const s = (a.size / (a.fit === "h" ? sz.y : Math.max(sz.x, sz.z))) || 1;
+      const g = new THREE.Group(); g.add(root); root.scale.setScalar(s); root.position.set(-c.x * s, -box.min.y * s + (a.lift || 0), -c.z * s);
+      root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.shared = true; const m = o.material; if (m) { m.envMapIntensity = 0.35; if (m.map) m.map.anisotropy = 4; } } });
+      g.userData.top = sz.y * s + (a.lift || 0);
+      assetTpl[name] = g; (assetWaiters[name] || []).forEach(fn => fn()); delete assetWaiters[name];
+    }, undefined, () => console.info("no model file for " + name + ", drawing the built-in shape"));
+  }
+  // fill group g with the model (now, or as soon as it arrives); until then, or if there is no file, draw the built-in shape
+  function useAsset(g, name, fallback) {
+    loadAsset(name);
+    const place = () => {
+      const t = assetTpl[name]; if (!t) return false;
+      g.clear(); const inst = t.clone(true); if (ASSETS[name].tint) tintModel(inst, paint); g.add(inst);
+      g.userData.model = inst; g.userData.top = t.userData.top; if (g.userData.onModel) g.userData.onModel(inst); return true;
+    };
+    if (!place()) { fallback(); if (assetTpl[name] === null) (assetWaiters[name] = assetWaiters[name] || []).push(() => { if (g.parent) place(); }); }
+    return g;
+  }
+  function tintModel(inst, color) { inst.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); o.material.color.copy(color); o.userData.shared = false; } }); }
+  function preloadAssets() { for (const n in ASSETS) loadAsset(n); }
 
   // ---------- zone weather ----------
   const THEMES = {
@@ -81,17 +123,22 @@ const Render3D = (() => {
       g.add(label((p.locked ? "🔒 " : "") + name, 0, 0, 0.5, 1.3));
       if (!p.locked) { const l = new THREE.PointLight(c, 1.5, 3, 2); l.position.set(0, 0.7, 0); g.add(l); }
     } else if (p.kind === "npc") {
-      const c = new THREE.Color(p.color);
-      g.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4, clearcoat: 0.6 }), 0, 0.45, 0));
-      g.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
-      g.add(mesh(new THREE.CylinderGeometry(0.19, 0.23, 0.08, 16), std({ color: c.clone().multiplyScalar(0.6) }), 0, 0.99, 0));
-      g.add(label(name, 0, 0, 0.5, 1.35)); g.userData.bob = true;
+      const vis = new THREE.Group(); g.add(vis); g.add(label(name, 0, 0, 0.5, 1.35)); g.userData.bob = true;
+      useAsset(vis, name.length % 2 ? "villager" : "villager2", () => {
+        const c = new THREE.Color(p.color);
+        vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4, clearcoat: 0.6 }), 0, 0.45, 0));
+        vis.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
+        vis.add(mesh(new THREE.CylinderGeometry(0.19, 0.23, 0.08, 16), std({ color: c.clone().multiplyScalar(0.6) }), 0, 0.99, 0));
+      });
     } else {
-      const m = std({ color: 0x8a5a3a, roughness: 0.85, map: texture("planks", 0x8a5a3a) });
-      g.add(mesh(new THREE.BoxGeometry(0.8, 0.5, 0.6), m, 0, 0.25, 0));
-      g.add(mesh(new THREE.BoxGeometry(1.0, 0.06, 0.9), std({ color: p.kind === "sign" ? 0x4a6b86 : 0xc8553d, roughness: 0.8 }), 0, 0.95, 0));
-      for (const s of [-1, 1]) g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.95, 6), std({ color: 0x5a3a1a }), s * 0.42, 0.47, -0.35));
-      g.add(label(name, 0, 0, 0.5, 1.3));
+      const vis = new THREE.Group(); g.add(vis); g.add(label(name, 0, 0, 0.5, 1.3));
+      const build = () => {
+        const m = std({ color: 0x8a5a3a, roughness: 0.85, map: texture("planks", 0x8a5a3a) });
+        vis.add(mesh(new THREE.BoxGeometry(0.8, 0.5, 0.6), m, 0, 0.25, 0));
+        vis.add(mesh(new THREE.BoxGeometry(1.0, 0.06, 0.9), std({ color: p.kind === "sign" ? 0x4a6b86 : 0xc8553d, roughness: 0.8 }), 0, 0.95, 0));
+        for (const s of [-1, 1]) vis.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.95, 6), std({ color: 0x5a3a1a }), s * 0.42, 0.47, -0.35));
+      };
+      if (p.kind === "sign") build(); else useAsset(vis, "stall", build);
     }
     return g;
   }
@@ -133,7 +180,7 @@ const Render3D = (() => {
     canvas.addEventListener("pointermove", e => { if (drag) { cam.az = drag.az + (e.clientX - drag.x) * 0.008; cam.el = Math.min(1.3, Math.max(0.4, drag.el + (e.clientY - drag.y) * 0.006)); cam.azV = 0; } });
     canvas.addEventListener("pointerup", e => { if (drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) canvas.dispatchEvent(new CustomEvent("tileclick", { bubbles: true, detail: pickTile(e) })); drag = null; }); canvas.addEventListener("pointercancel", () => drag = null);
     canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.max(4, Math.min(40, cam.dist * (e.deltaY > 0 ? 1.08 : 0.93))); }, { passive: false });
-    ok = true;
+    ok = true; preloadAssets();
     if (!loopStarted) { loopStarted = true; requestAnimationFrame(frame); }
   }
 
@@ -214,6 +261,10 @@ const Render3D = (() => {
   // ---------- builders ----------
   function wall(kind, color) {
     const g = new THREE.Group();
+    if (kind === "rock" || kind === "tree" || kind === "crystal") { g.rotation.y = rnd(0, 6.28); g.scale.setScalar(rnd(0.92, 1.08)); }
+    return useAsset(g, kind, () => wallShape(g, kind, color));
+  }
+  function wallShape(g, kind, color) {
     if (kind === "rock") { const n = 1 + Math.floor(Math.random() * 3); for (let i = 0; i < n; i++) { const r = rnd(0.3, 0.5); const m = mesh(new THREE.DodecahedronGeometry(r, 0), std({ color: jitter(color, 0.12), roughness: 0.95 }), rnd(-0.2, 0.2), r * 0.75, rnd(-0.2, 0.2)); m.rotation.set(rnd(0, 3), rnd(0, 3), rnd(0, 3)); m.scale.y = rnd(0.7, 1.1); g.add(m); } }
     else if (kind === "tree") { const trunk = mesh(new THREE.CylinderGeometry(0.07, 0.11, 0.55, 7), std({ color: 0x6b4a2f, roughness: 0.9 }), 0, 0.27, 0); g.add(trunk); const leaf = std({ color: jitter(color, 0.14), roughness: 0.85 }); g.add(mesh(new THREE.IcosahedronGeometry(0.4, 1), leaf, 0, 0.78, 0)); g.add(mesh(new THREE.IcosahedronGeometry(0.3, 1), leaf, rnd(-0.22, 0.22), 1.0, rnd(-0.22, 0.22))); g.add(mesh(new THREE.IcosahedronGeometry(0.24, 1), leaf, rnd(-0.25, 0.25), 0.6, rnd(-0.25, 0.25))); g.rotation.y = rnd(0, 6); }
     else if (kind === "pillar") { const m = std({ color: jitter(color, 0.1), roughness: 0.9, map: texture("cobble", color) }); const h = rnd(0.8, 1.05); g.add(mesh(new THREE.BoxGeometry(0.82, h, 0.82), m, 0, h / 2, 0)); g.add(mesh(new THREE.BoxGeometry(0.92, 0.12, 0.92), std({ color: 0x5c7a55, roughness: 1 }), 0, h + 0.05, 0)); }
@@ -223,29 +274,35 @@ const Render3D = (() => {
     return g;
   }
   function house() {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); useAsset(vis, "house", () => houseShape(vis));
+    const light = new THREE.PointLight(0xffb86b, 2.5, 3.5, 2); light.position.set(0.6, 0.45, -0.1); g.add(light);
+    return g;
+  }
+  function houseShape(g) {
     g.add(mesh(new THREE.BoxGeometry(0.66, 0.5, 0.6), std({ color: 0xf4ead6, roughness: 0.9 }), 0, 0.25, 0));
     const roof = mesh(new THREE.ConeGeometry(0.6, 0.42, 4), std({ color: 0xb8553d, roughness: 0.8 }), 0, 0.7, 0); roof.rotation.y = Math.PI / 4; g.add(roof);
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.26, 0.16), std({ color: 0x6b4a2f }), 0.34, 0.14, 0.1));
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.14, 0.14), std({ color: 0xffe9a8, emissive: 0xffb347, emissiveIntensity: 2.2 }), 0.34, 0.3, -0.15));
     g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 6), std({ color: 0x8a7b70 }), -0.18, 0.85, -0.15));
-    const light = new THREE.PointLight(0xffb86b, 2.5, 3.5, 2); light.position.set(0.6, 0.45, -0.1); g.add(light);
-    return g;
   }
+  const ITEM_MODEL = { A: "apple", "*": "gem", K: "key", L: "lens" };
   function item(kind) {
-    const g = new THREE.Group(); g.userData.kind = kind;
+    const g = new THREE.Group(); g.userData.kind = kind; g.userData.spin = kind === "A" ? 0.4 : 1.2;
+    return useAsset(g, ITEM_MODEL[kind] || "gem", () => itemShape(g, kind));
+  }
+  function itemShape(g, kind) {
     if (kind === "A") { g.add(mesh(new THREE.SphereGeometry(0.19, 20, 16), phys({ color: 0xd8322a, roughness: 0.35, clearcoat: 0.8 }), 0, 0.2, 0)); g.add(mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.12, 5), std({ color: 0x5a3a1a }), 0, 0.42, 0)); g.add(mesh(new THREE.BoxGeometry(0.12, 0.02, 0.06), std({ color: 0x4e9a3a }), 0.06, 0.44, 0)); }
     if (kind === "L") { g.add(mesh(new THREE.TorusGeometry(0.19, 0.045, 10, 28), gold(), 0, 0.3, 0)); g.add(mesh(new THREE.CircleGeometry(0.17, 24), phys({ color: 0xcfe9ff, roughness: 0, transparent: true, opacity: 0.4, side: THREE.DoubleSide }), 0, 0.3, 0)); const h = mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.3, 8), gold(), 0.22, 0.1, 0); h.rotation.z = 0.8; g.add(h); }
     if (kind === "*") { const m = mesh(new THREE.OctahedronGeometry(0.2, 0), std({ color: 0x9df0ff, emissive: 0x2bb8ff, emissiveIntensity: 1.3, roughness: 0.1 }), 0, 0.35, 0); m.scale.y = 1.5; g.add(m); }
     if (kind === "K") { g.add(mesh(new THREE.TorusGeometry(0.11, 0.035, 8, 20), gold(), -0.12, 0.3, 0)); g.add(mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), gold(), 0.1, 0.3, 0)); g.add(mesh(new THREE.BoxGeometry(0.05, 0.1, 0.05), gold(), 0.2, 0.24, 0)); g.add(mesh(new THREE.BoxGeometry(0.05, 0.08, 0.05), gold(), 0.11, 0.25, 0)); }
-    g.userData.spin = kind === "A" ? 0.4 : 1.2; return g;
   }
   function switchMesh() { const g = new THREE.Group(); g.add(mesh(new THREE.CylinderGeometry(0.32, 0.34, 0.08, 20), std({ color: 0x3a3f47, metalness: 0.5, roughness: 0.6 }), 0, 0.04, 0)); const top = mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.1, 20), std({ color: 0xc0392b, emissive: 0xc0392b, emissiveIntensity: 0.25 }), 0, 0.12, 0); g.userData.top = top; g.add(top); return g; }
   function doorMesh(across) { const g = new THREE.Group(); const m = std({ color: 0x7a4a2a, roughness: 0.85, map: texture("planks", 0x7a4a2a) }); const slab = mesh(new THREE.BoxGeometry(across ? 0.96 : 0.26, 1.05, across ? 0.26 : 0.96), m, 0, 0.52, 0); g.add(slab); g.add(mesh(new THREE.SphereGeometry(0.04, 8, 8), gold(), across ? 0.3 : 0.16, 0.5, across ? 0.16 : 0.3)); g.userData.target = 0; return g; }
   function gateMesh(across) { const g = new THREE.Group(); const m = std({ color: 0x6c7680, metalness: 0.9, roughness: 0.35 }); for (let i = 0; i < 4; i++) { const o = -0.33 + i * 0.22; g.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.0, 8), m, across ? o : 0, 0.5, across ? 0 : o)); } g.add(mesh(new THREE.BoxGeometry(across ? 0.9 : 0.08, 0.06, across ? 0.08 : 0.9), m, 0, 0.5, 0)); g.add(mesh(new THREE.BoxGeometry(across ? 0.9 : 0.08, 0.06, across ? 0.08 : 0.9), m, 0, 0.95, 0)); g.userData.target = 0; return g; }
   function padMesh(d) { const cols = { 1: 0x9b59ff, 2: 0xff6fb5, 3: 0x4fd1ff, 4: 0xffb347 }; const c = cols[d] || 0x9b59ff; const g = new THREE.Group(); g.add(mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.05, 24), std({ color: 0x2b2440, roughness: 0.6 }), 0, 0.025, 0)); const ring = mesh(new THREE.TorusGeometry(0.28, 0.035, 10, 32), std({ color: c, emissive: c, emissiveIntensity: 1.6 }), 0, 0.09, 0); ring.rotation.x = Math.PI / 2; g.add(ring); const halo = mesh(new THREE.TorusGeometry(0.2, 0.02, 8, 24), std({ color: c, emissive: c, emissiveIntensity: 2.5 }), 0, 0.4, 0); g.userData.halo = halo; g.add(halo); return g; }
-  function crabMesh() {
-    const g = new THREE.Group(); const red = std({ color: 0xe0523a, roughness: 0.5 }), dark = std({ color: 0xb03a26, roughness: 0.6 });
+  function crabMesh() { const g = new THREE.Group(); return useAsset(g, "crab", () => crabShape(g)); }
+  function crabShape(g) {
+    const red = std({ color: 0xe0523a, roughness: 0.5 }), dark = std({ color: 0xb03a26, roughness: 0.6 });
     const body = mesh(new THREE.SphereGeometry(0.3, 18, 12), red, 0, 0.17, 0); body.scale.set(1, 0.55, 0.75); g.add(body);
     for (const s of [-1, 1]) { g.add(mesh(new THREE.SphereGeometry(0.1, 10, 8), dark, s * 0.34, 0.14, -0.1)); for (let i = 0; i < 3; i++) { const leg = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.28, 5), dark, s * 0.3, 0.08, -0.05 + i * 0.1); leg.rotation.z = s * 1.1; g.add(leg); } }
     for (const s of [-1, 1]) { g.add(mesh(new THREE.SphereGeometry(0.04, 8, 8), std({ color: 0xffffff }), s * 0.09, 0.32, -0.18)); g.add(mesh(new THREE.SphereGeometry(0.02, 6, 6), std({ color: 0x111111 }), s * 0.09, 0.32, -0.215)); }
@@ -271,24 +328,28 @@ const Render3D = (() => {
     return g;
   }
   function robotMesh() {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); g.userData.body = vis; g.userData.bodyY = 0;
+    useAsset(vis, "bolt", () => robotShape(vis));
+    const hat = hatMesh(look.hat); if (hat) { g.add(hat); g.userData.hat = hat; }
+    vis.userData.onModel = () => { if (hat) hat.position.y = (vis.userData.top || 0.7) - 0.06; }; if (vis.userData.model) vis.userData.onModel();
+    headlight = new THREE.SpotLight(0xfff1cc, 6, 5.5, 0.5, 0.6, 1.2); headlight.position.set(0.2, 0.5, 0); const tgt = new THREE.Object3D(); tgt.position.set(3, -0.4, 0); g.add(tgt); headlight.target = tgt; g.add(headlight);
+    return g;
+  }
+  function robotShape(g) {
     const dark = std({ color: 0x2b2f3a, roughness: 0.6, metalness: 0.4 }), blue = phys({ color: paint, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.2 });
     for (const s of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.62, 0.18, 0.17), dark, 0, 0.09, s * 0.22));
-    const body = mesh(new THREE.BoxGeometry(0.5, 0.44, 0.48), blue, 0, 0.42, 0); g.add(body); g.userData.body = body;
+    const body = mesh(new THREE.BoxGeometry(0.5, 0.44, 0.48), blue, 0, 0.42, 0); g.add(body);
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.26, 0.38), std({ color: 0x0d1222, roughness: 0.15, metalness: 0.3 }), 0.26, 0.48, 0));
     const eye = std({ color: new THREE.Color(look.eyes), emissive: new THREE.Color(look.eyes), emissiveIntensity: 2.5 });
     g.add(mesh(new THREE.SphereGeometry(0.045, 10, 8), eye, 0.28, 0.52, -0.1)); g.add(mesh(new THREE.SphereGeometry(0.045, 10, 8), eye, 0.28, 0.52, 0.1));
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.05, 0.22), std({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 1.5 }), 0.26, 0.3, 0));
     g.add(mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 6), dark, 0, 0.74, 0)); g.add(mesh(new THREE.SphereGeometry(0.04, 10, 8), std({ color: 0xff5e5e, emissive: 0xff2d2d, emissiveIntensity: 2 }), 0, 0.86, 0));
     for (const s of [-1, 1]) { const a = mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 8), dark, 0.05, 0.4, s * 0.3); a.rotation.x = s * 0.4; g.add(a); }
-    const hat = hatMesh(look.hat); if (hat) { g.add(hat); g.userData.hat = hat; }
-    headlight = new THREE.SpotLight(0xfff1cc, 6, 5.5, 0.5, 0.6, 1.2); headlight.position.set(0.2, 0.5, 0); const tgt = new THREE.Object3D(); tgt.position.set(3, -0.4, 0); g.add(tgt); headlight.target = tgt; g.add(headlight);
-    return g;
   }
 
   // ---------- build a level ----------
   function clearWorld() {
-    world.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); });
+    world.traverse(o => { if (o.userData.shared) return; if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); });
     world.clear(); crabs = {}; items = {}; switches = {}; doors = {}; gates = {}; pads = []; propsList = [];
   }
   function neighborsWall(x, y) { const g = state.grid; const at = (xx, yy) => (g[yy] && g[yy][xx]) === "#"; return at(x - 1, y) && at(x + 1, y); }
@@ -370,7 +431,7 @@ const Render3D = (() => {
     for (const k in gates) { const d = gates[k]; d.position.y += (d.userData.target - d.position.y) * Math.min(1, dt * 5); }
     for (const id in crabs) { const c = crabs[id]; c.position.y = Math.abs(Math.sin(clock * 9 + Number(id))) * 0.02; }
     for (const p of propsList) { if (p.userData.spin) p.userData.spin.rotation.y += dt * 0.8; if (p.userData.bob) p.position.y = Math.sin(clock * 2 + p.position.x) * 0.02; }
-    if (robot) { robot.userData.body.position.y = 0.42 + Math.sin(clock * 3) * 0.008; const h = robot.userData.hat; if (h) { if (h.userData.spin) h.userData.spin.rotation.y += dt * 14; if (h.userData.bob) h.userData.bob.position.y = 0.36 + Math.sin(clock * 2) * 0.03; } }
+    if (robot) { robot.userData.body.position.y = robot.userData.bodyY + Math.sin(clock * 3) * 0.008; const h = robot.userData.hat; if (h) { if (h.userData.spin) h.userData.spin.rotation.y += dt * 14; if (h.userData.bob) h.userData.bob.position.y = 0.36 + Math.sin(clock * 2) * 0.03; } }
     stepParticles(dt);
     // camera: intro sweep, gentle sway, soft follow, user orbit
     cam.introK = Math.min(1, cam.introK + dt / 1.1); const ik = 1 - Math.pow(1 - cam.introK, 3);
