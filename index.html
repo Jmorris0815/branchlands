@@ -42,6 +42,7 @@
     <section class="stagecol">
       <div id="mode-robot" class="mode panel" hidden>
         <div class="worldwrap"><canvas id="world" width="352" height="220"></canvas><canvas id="fx" width="352" height="220"></canvas></div>
+        <div class="camhint muted">drag to look around · scroll to zoom · ⚙️ Settings → Graphics</div>
       </div>
 
       <div id="mode-git" class="mode panel" hidden>
@@ -138,7 +139,7 @@
 <div id="modal" hidden><div id="modalBody"></div></div>
 <div id="toasts"></div>
 
-<footer>Branchlands · Python runs in your browser via Skulpt, JavaScript in a Web Worker · progress is saved in this browser (export it in ⚙️ Settings)</footer>
+<footer>Branchlands · Python runs in your browser via Skulpt, JavaScript in a Web Worker, the island is drawn by Three.js · progress is saved in this browser (export it in ⚙️ Settings)</footer>
 
 <script src="js/levels.js"></script>
 <script src="js/sim.js"></script>
@@ -151,5 +152,6 @@
 <script src="js/quests.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/game.js"></script>
+<script type="module" async src="js/render3d.js"></script>
 </body>
 </html>

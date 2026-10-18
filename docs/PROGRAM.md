@@ -1,6 +1,6 @@
 # Branchlands: company program
 
-*Version 0.2, 17 October 2026. Owner: Justin Morris.*
+*Version 0.3, 18 October 2026. Owner: Justin Morris.*
 
 ## 1. The one-line pitch
 
@@ -50,12 +50,55 @@ Combat theming (Common Sense Media flags CodeCombat for it). Gems/loot boxes. Le
 | 2. Real Git zone | 6–12 | Zone 5 reads the player's actual repo via a tiny local helper (`branchlands serve`); today the game already verifies commits and merged PRs through the public GitHub API | first local commit marks 5-1 done in-game without GitHub |
 | 3. Co-op | 12–20 | two browsers, one world: author/reviewer roles, live PR review on a shared level, deliberate merge-conflict level | two families outside ours finish Zone 6 together |
 | 4. The real Oracle | 20–26 | 7-3 (Ollama system-prompt Oracle) ships in the prototype; next: the Oracle becomes an NPC inside the robot world, plus 7-4: train a tiny classifier (Machine Learning for Kids pattern) | NPC in the kid's own game answers from a model running on their machine |
-| 5. Content + art | 26–40 | 60+ levels (35 and a level editor exist), community level packs from share links, pixel art pass, music | 2 hours of play per zone |
+| 5. Content + art | 26–40 | 60+ levels (35 and a level editor exist), community level packs from share links, realism pass per §3.6 (HDRI skies, rigged robot, zone-intro clips), music | 2 hours of play per zone |
 | 6. Launch | 40–52 | public web app, homeschool co-op pilots, Discord | 500 families, 20 paying |
 
 ### 3.5 Technical stack (keep it boring)
 
 Static HTML/CSS/JS, no build step (so a kid can read every file). Skulpt for Python-in-browser (same engine Hedy uses). GitHub Pages for hosting. Later: a small Node helper for the real-Git zone, Ollama for local models, Supabase (already in the family's toolbox) for optional accounts and shared worlds. REA was evaluated and is not part of the product; it is a teardown tool (see §6).
+
+### 3.6 Visual direction
+
+**What "realistic" means here, and what shipped.** The prototype now renders every level with the same
+techniques a modern engine uses, scaled to a browser: physically based materials (roughness, metalness,
+clearcoat), a physically based sky model whose light also feeds reflections, a sun with soft shadow maps,
+filmic tone mapping, bloom on emissive objects, exponential fog, a displaced-wave water shader with Fresnel
+and sun glitter, a spotlight headlight on the robot, instanced floor tiles, and an orbit camera with an
+intro sweep. Each zone has its own sun height, haze and palette, so Fog Bridge is a grey overcast morning
+and the Workshop is a warm evening. It is `js/render3d.js`, about 330 lines, loads Three.js from a CDN,
+needs no build step, and falls back to the 2D renderer when WebGL or the network is missing.
+
+**Why it is not Unreal Engine.** Unreal is the right tool for a different product. It is a native engine
+(C++ and Blueprints, tens of gigabytes installed, hundreds of megabytes shipped); it has not supported a
+browser target since 4.23; and the thing Branchlands sells is a kid typing Python into a page and watching
+it run, inside a repo he can read end to end. An Unreal build would mean the kid cannot read the engine,
+cannot open a pull request against the game from a Chromebook, and cannot run it in the same tab as his
+editor. If Branchlands ever has a native "deluxe" edition, Unreal (or Godot, which is open source and a kid
+can read) is the candidate; Phase 5, not Phase 1.
+
+**Where Seedance, Kling, Higgsfield and friends fit.** AI video models make clips, not interactive worlds,
+so they belong to three jobs: (1) the eight **zone-intro cutscenes** (5–10 seconds each, played in the
+zone-unlock modal, compressed to roughly 2 MB WebM and stored under `assets/intro/`); (2) the **trailer**
+for the Show HN post and any store page; (3) **concept art** the 3D models are built to match. AI image
+models have a fourth, more technical use that directly multiplies realism: an equirectangular 360° sky
+image per zone, used as the environment map and background instead of the procedural sky. Cost and access:
+these run through paid APIs or Figma Weave (not yet linked on the family account); generating a full set
+is an afternoon and tens of dollars, and should be approved per batch.
+
+**Next steps for realism, in order of payoff per hour:**
+
+1. HDRI skies: one generated 360° sky per zone (cheapest large jump in realism).
+2. A rigged robot: a GLTF model of Bolt with idle, walk, turn, pick and ouch animations (Blender or Mixamo).
+3. Screen-space ambient occlusion and contact shadows under objects.
+4. Zone atmosphere particles: fog wisps on Fog Bridge, fireflies in the Orchard at dusk, snow on Mirror Sea.
+5. Water refraction and depth-tinted shallows (needs a depth pre-pass).
+6. God rays from the low sun on Fog Bridge and the Oracle.
+7. A day–night cycle tied to progress through a zone; cinematic camera when a zone unlocks.
+8. Zone-intro clips from a video model, behind a parent-approved budget.
+
+**Performance budget.** 60 fps at 800×500 on an integrated GPU for "realistic"; "fast 3D" drops shadows,
+bloom and device-pixel scaling for Chromebooks; "classic 2D" always works. A level never ships with more
+than about 250 draw calls.
 
 ## 4. Business
 

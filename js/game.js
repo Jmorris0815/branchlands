@@ -3,7 +3,7 @@
 const Game = (() => {
   const SAVE_KEY = "branchlands.v2", OLD_KEY = "branchlands.v1";
   const DEFAULTS = () => ({ v: 2, completed: {}, xp: 0, code: {}, hintsUsed: {}, gems: {}, ach: {}, quests: {}, intro: false,
-    settings: { sound: true, speed: "normal", theme: "system", name: "", repo: "Jmorris0815/branchlands", ghName: "", ollama: "http://localhost:11434", model: "" } });
+    settings: { sound: true, speed: "normal", theme: "system", name: "", repo: "Jmorris0815/branchlands", ghName: "", ollama: "http://localhost:11434", model: "", gfx: "realistic" } });
   let save = DEFAULTS();
   let current = null, sim = null, grid = null, git = null, review = null, oracleModule = null, authorState = null;
   let ol = { model: "", history: [], ok: false };
@@ -72,6 +72,25 @@ const Game = (() => {
   function starsText(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
   function resolveGrid(l) { return l.generate ? l.generate() : l.grid; }
   function themeOf(l) { return (ZONES[(l.zone || 1) - 1] || ZONES[0]).theme; }
+  // Renderer switch: the realistic 3D renderer (js/render3d.js, Three.js) when it has loaded and the
+  // Graphics setting allows it, otherwise the 2D canvas renderer (js/render.js). Same interface either way.
+  let r3dInited = false;
+  const R = {
+    init() { Render.init($("world"), $("fx")); R.init3d(); },
+    init3d() { if (!r3dInited && window.Render3D) { r3dInited = true; Render3D.init($("world"), $("fx")); } },
+    pick() {
+      const has = r3dInited && Render3D.ok, want = has && save.settings.gfx !== "classic";
+      if (has) { Render3D.setQuality(save.settings.gfx === "fast" ? "fast" : "realistic"); Render3D.setActive(want); }
+      return want ? Render3D : Render;
+    },
+    load(s, t) { R.pick().load(s, t); },
+    play(e, sp, cb) { return R.pick().play(e, sp, cb); },
+    cancel() { Render.cancel(); if (r3dInited) Render3D.cancel(); },
+    confetti() { Render.confetti(); R.celebrate(); },
+    celebrate() { if (r3dInited && Render3D.ok && save.settings.gfx !== "classic") Render3D.celebrate(); },
+    reload() { if (current && current.mode === "robot" && !$("screen-level").hidden && !$("runBtn").disabled && grid) { R.cancel(); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); } },
+  };
+  window.addEventListener("render3d-ready", () => { if (save) { R.init3d(); R.reload(); } });
   function applySettings() {
     const t = save.settings.theme; if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
     Audio_.enabled = save.settings.sound; $("soundBtn").textContent = save.settings.sound ? "🔊" : "🔇";
@@ -83,7 +102,7 @@ const Game = (() => {
   function showScreen(name) {
     for (const s of ["map", "level", "editor"]) $("screen-" + s).hidden = s !== name;
     if (name === "map") { WorldMap.start(); renderMapInfo(null); renderQuests(); } else WorldMap.stop();
-    if (name !== "level") { Render.cancel(); location.hash = name === "map" ? "" : name; }
+    if (name !== "level") { R.cancel(); location.hash = name === "map" ? "" : name; }
   }
   function renderMapInfo(zone) {
     const el = $("mapInfo");
@@ -170,7 +189,7 @@ const Game = (() => {
   }
 
   function openLevel(l) {
-    current = l; Render.cancel(); showScreen("level");
+    current = l; R.cancel(); showScreen("level");
     if (l.id !== "custom" && !l.sandbox) location.hash = l.id; else if (l.sandbox) location.hash = "sandbox";
     renderLevels(); renderMission();
     document.querySelectorAll(".mode").forEach(e => e.hidden = true);
@@ -182,11 +201,11 @@ const Game = (() => {
   // ---------- ROBOT mode (Python or JavaScript) ----------
   function setupRobot() {
     $("mode-robot").hidden = false; $("mode-code").hidden = false;
-    grid = resolveGrid(current); sim = new Sim(current, grid); Render.load(sim.snapshot(), themeOf(current));
+    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
     $("code").value = save.code[current.id] || current.starter;
     $("langSel").value = current.lang; updateLineCount();
     $("runBtn").textContent = "▶ Run (Ctrl+Enter)"; $("runBtn").onclick = () => runRobot();
-    $("resetBtn").onclick = () => { Render.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); Render.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
+    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
     $("starterBtn").onclick = () => { $("code").value = current.starter; updateLineCount(); };
     $("langSel").onchange = () => { current.lang = $("langSel").value; current.starter = current.lang === "js" ? "// everything: move jump turn_left turn_right turn_around pick press wait say sees scan done has_key\nrobot.say(\"hello world\");\nrobot.move(3);\n" : SANDBOX_LEVEL.starter; $("code").value = current.starter; updateLineCount(); };
   }
@@ -202,14 +221,14 @@ const Game = (() => {
     const lines = countLines(code, current.lang);
     if (current.maxLines && lines > current.maxLines) { log(`Too long: ${lines} lines, limit is ${current.maxLines}. A loop would make this shorter.`, "err"); sfx("error"); return false; }
     if (current.requireDef && !hasDefAndCall(code, current.lang)) { log(`This level needs a function: define one with ${current.lang === "js" ? "function" : "def"} and call it at least once.`, "err"); sfx("error"); return false; }
-    Render.cancel();
-    grid = resolveGrid(current); sim = new Sim(current, grid); Render.load(sim.snapshot(), themeOf(current));
+    R.cancel();
+    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
     $("runBtn").disabled = true;
     let events, error, output, evalMsg, gems;
     if (current.lang === "js") { const r = await JSR.run(code, current, grid); events = r.events || []; error = r.error; output = r.output; evalMsg = r.evalMsg; gems = r.gems || 0; }
     else { const r = await PY.run(code, sim); events = sim.events; error = r.error; output = r.output; evalMsg = sim.evaluate(); gems = sim.gems; }
     if (output) log(output.trimEnd(), "out");
-    await Render.play(events, $("speed").value, ev => { sfx(ev.type === "pick" && ev.item === "*" ? "gem" : ev.type === "pick" ? "pick" : ev.type); if (ev.type === "say") log("🤖 " + ev.text, "out"); });
+    await R.play(events, $("speed").value, ev => { sfx(ev.type === "pick" && ev.item === "*" ? "gem" : ev.type === "pick" ? "pick" : ev.type); if (ev.type === "say") log("🤖 " + ev.text, "out"); });
     $("runBtn").disabled = false;
     if (error) { log(error.raw, "err"); if (error.tip) log("Tip: " + error.tip, "tip"); sfx("error"); return false; }
     if (evalMsg === "sandbox") { log("Sandbox: robot ended at (" + (sim ? sim.robot.x : "?") + ", " + (sim ? sim.robot.y : "?") + "). Nothing to win here.", "tip"); return false; }
@@ -242,7 +261,7 @@ const Game = (() => {
   // ---------- REVIEW mode ----------
   function setupReview() {
     $("mode-review").hidden = false; $("mode-robot").hidden = false; $("mode-code").hidden = false;
-    grid = resolveGrid(current); sim = new Sim(current, grid); Render.load(sim.snapshot(), themeOf(current));
+    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
     review = { requested: false }; const pr = current.pr;
     $("prHead").innerHTML = `<b>Pull request</b> · <span class="branch">${pr.branch}</span> → <span class="branch">main</span><br><span class="muted">${pr.author} wants to merge 1 commit: “${pr.title}”</span>`;
     $("code").value = pr.code; $("code").disabled = true; updateLineCount();
@@ -252,7 +271,7 @@ const Game = (() => {
       const ok = await runRobot($("code").value);
       if (!ok && pr.correct) log("Dad: it worked when I ran it. Try Reset world and run again before approving.", "dad");
     };
-    $("resetBtn").onclick = () => { Render.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); Render.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
+    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
     $("starterBtn").onclick = () => { $("code").value = pr.code; updateLineCount(); };
     $("requestBtn").onclick = () => {
       const c = $("reviewComment").value.trim();
@@ -267,12 +286,12 @@ const Game = (() => {
   // ---------- AUTHOR mode: write code AND the pull request ----------
   function setupAuthor() {
     $("mode-author").hidden = false; $("mode-robot").hidden = false; $("mode-code").hidden = false;
-    grid = resolveGrid(current); sim = new Sim(current, grid); Render.load(sim.snapshot(), themeOf(current));
+    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
     authorState = { tested: false };
     $("code").value = save.code[current.id] || current.starter; updateLineCount();
     $("prTitle").value = ""; $("prBody").value = ""; $("prTested").checked = false; $("prStatus").textContent = "";
     $("runBtn").textContent = "▶ Run (test it first)"; $("runBtn").onclick = async () => { const ok = await runRobotNoComplete(); authorState.tested = ok; if (ok) log("It works. Now write the pull request on the right and open it.", "tip"); };
-    $("resetBtn").onclick = () => { Render.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); Render.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
+    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
     $("starterBtn").onclick = () => { $("code").value = current.starter; updateLineCount(); };
     $("openPrBtn").onclick = async () => {
       const title = $("prTitle").value.trim(), body = $("prBody").value.trim();
@@ -399,9 +418,10 @@ const Game = (() => {
       html += `<div class="unlock"><div class="big">${z.emoji}</div><h3>Reason unlocked</h3><p class="reasonline">“${z.reason}”</p>
         <p class="questbox"><b>Real-world quest:</b> ${QUESTS[z.n]}</p>
         ${next ? `<p>Zone ${next.zone}: <b>${ZONES[next.zone - 1].name}</b> is open on the map.</p>` : "<p>You finished every zone. Make your own in the Level Editor and open a pull request.</p>"}</div>`;
-      Render.confetti(); sfx("unlock");
+      R.confetti(); sfx("unlock");
     } else sfx("win");
     html += `<div class="row">${next && levelUnlocked(next) ? `<button id="nextBtn" class="primary">Next: ${next.id} ${next.title} →</button>` : ""}<button id="mapBtn2">World map</button><button id="closeBtn">Stay here</button></div>`;
+    R.celebrate();
     showModal(html);
     if (next && levelUnlocked(next)) $("nextBtn").onclick = () => { hideModal(); openLevel(next); };
     $("mapBtn2").onclick = () => { hideModal(); showScreen("map"); };
@@ -425,14 +445,15 @@ const Game = (() => {
       <div class="row2"><label>Player name<input id="sName" type="text" value="${s.name.replace(/"/g, "&quot;")}" placeholder="Sonny"></label>
       <label>Theme<select id="sTheme"><option value="system" ${s.theme === "system" ? "selected" : ""}>system</option><option value="light" ${s.theme === "light" ? "selected" : ""}>light</option><option value="dark" ${s.theme === "dark" ? "selected" : ""}>dark</option></select></label></div>
       <div class="row2"><label>Sound<select id="sSound"><option value="1" ${s.sound ? "selected" : ""}>on</option><option value="0" ${!s.sound ? "selected" : ""}>off</option></select></label>
-      <label>Default speed<select id="sSpeed"><option value="slow" ${s.speed === "slow" ? "selected" : ""}>slow</option><option value="normal" ${s.speed === "normal" ? "selected" : ""}>normal</option><option value="fast" ${s.speed === "fast" ? "selected" : ""}>fast</option></select></label></div>
+      <label>Graphics<select id="sGfx"><option value="realistic" ${s.gfx !== "fast" && s.gfx !== "classic" ? "selected" : ""}>realistic 3D (shadows, bloom)</option><option value="fast" ${s.gfx === "fast" ? "selected" : ""}>fast 3D</option><option value="classic" ${s.gfx === "classic" ? "selected" : ""}>classic 2D</option></select></label></div>
+      <div class="row2"><label>Default speed<select id="sSpeed"><option value="slow" ${s.speed === "slow" ? "selected" : ""}>slow</option><option value="normal" ${s.speed === "normal" ? "selected" : ""}>normal</option><option value="fast" ${s.speed === "fast" ? "selected" : ""}>fast</option></select></label></div>
       <h3 style="margin:6px 0 0;font:500 13px var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Real-world quests</h3>
       <div class="row2"><label>Family repo (owner/name)<input id="sRepo" type="text" value="${s.repo}"></label><label>Your GitHub login or git user.name<input id="sGh" type="text" value="${s.ghName.replace(/"/g, "&quot;")}" placeholder="Jmorris0815"></label></div>
       <label>Ollama endpoint<input id="sOl" type="text" value="${s.ollama}"></label>
       <h3 style="margin:6px 0 0;font:500 13px var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Progress</h3>
       <label>Export / import (copy this to move progress to another computer)<textarea id="sData" rows="3">${JSON.stringify(save)}</textarea></label>
       <div class="row"><button id="sImport" class="small">Import from box</button><button id="sReset" class="danger small">Reset all progress</button><span class="sp"></span><button id="sSave" class="primary">Save</button></div></div>`);
-    $("sSave").onclick = () => { Object.assign(save.settings, { name: $("sName").value.trim(), theme: $("sTheme").value, sound: $("sSound").value === "1", speed: $("sSpeed").value, repo: $("sRepo").value.trim(), ghName: $("sGh").value.trim(), ollama: $("sOl").value.trim() }); persist(); applySettings(); hideModal(); if (!$("screen-map").hidden) { renderMapInfo(null); renderQuests(); } };
+    $("sSave").onclick = () => { Object.assign(save.settings, { name: $("sName").value.trim(), theme: $("sTheme").value, sound: $("sSound").value === "1", speed: $("sSpeed").value, repo: $("sRepo").value.trim(), ghName: $("sGh").value.trim(), ollama: $("sOl").value.trim(), gfx: $("sGfx").value }); persist(); applySettings(); hideModal(); R.reload(); if (!$("screen-map").hidden) { renderMapInfo(null); renderQuests(); } };
     $("sImport").onclick = () => { try { const d = JSON.parse($("sData").value); if (d && d.completed) { save = { ...DEFAULTS(), ...d }; persist(); location.reload(); } } catch (e) { $("sData").value = "That wasn't valid progress data."; } };
     $("sReset").onclick = () => { if ($("sReset").textContent !== "Really reset?") { $("sReset").textContent = "Really reset?"; return; } localStorage.removeItem(SAVE_KEY); localStorage.removeItem(OLD_KEY); location.hash = ""; location.reload(); };
   }
@@ -478,7 +499,7 @@ const Game = (() => {
   function init() {
     LEVELS.forEach(l => { if (l.mode === "ollama") l.optional = true; });
     loadSave(); applySettings();
-    Render.init($("world"), $("fx")); editorTabs($("code"));
+    R.init($("world"), $("fx")); editorTabs($("code"));
     WorldMap.init($("map"), zoneStatus, (z) => { const st = zoneStatus(z.n); if (st.unlocked) { sfx("click"); openLevel(zoneLevels(z.n).find(l => !save.completed[l.id]) || zoneLevels(z.n)[0]); } else renderMapInfo(z); }, (z) => renderMapInfo(z));
     $("homeBtn").onclick = $("mapBtn").onclick = () => showScreen("map");
     $("backBtn").onclick = $("edBack").onclick = () => showScreen("map");

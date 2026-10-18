@@ -83,6 +83,10 @@ main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.
 .worldwrap { position: relative; width: fit-content; max-width: 100%; margin: 0 auto; }
 #world, #fx { max-width: 100%; height: auto; border-radius: 8px; display: block; }
 #fx { position: absolute; inset: 0; pointer-events: none; }
+#world3d { display: block; width: 800px; max-width: 100%; height: auto; border-radius: 10px; cursor: grab; touch-action: none; }
+#world3d:active { cursor: grabbing; }
+#world3d[hidden], #world[hidden] { display: none; }
+.camhint { font-size: 12px; text-align: center; margin-top: 6px; }
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .toolbar .sp { flex: 1; }
 #lineCount { color: var(--muted); font-size: 12px; } #lineCount.over { color: var(--err); font-weight: 700; }
