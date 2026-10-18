@@ -11,7 +11,7 @@ repositories, commits, branches, reviews and "things that think" are reasons to 
 It is also the family project itself: this repo is meant to be worked on by two people, with branches,
 pull requests and reviews, and the game checks GitHub to see that you really did it. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Play:** https://jmorris0815.github.io/branchlands/
+**Play:** https://branchlands.netlify.app (latest build) · https://jmorris0815.github.io/branchlands/ (what is merged to main)
 
 ## What's in the game
 
