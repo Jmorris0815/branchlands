@@ -6,6 +6,7 @@
 <title>Branchlands</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/style.css">
+<script src="js/device.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
 </head>
@@ -60,6 +61,7 @@
     <section class="stagecol">
       <div id="mode-robot" class="mode panel" hidden>
         <div class="worldwrap"><canvas id="world" width="352" height="220"></canvas><canvas id="fx" width="352" height="220"></canvas></div>
+        <div id="dpad" hidden><button data-d="0,-1" aria-label="up">▲</button><button data-d="-1,0" aria-label="left">◀</button><button data-d="e" class="primary" aria-label="talk or enter">E</button><button data-d="1,0" aria-label="right">▶</button><button data-d="0,1" aria-label="down">▼</button></div>
         <div class="camhint muted">drag to look around or tilt · scroll to zoom · edge numbers are x and y · footprints count each move · ⚙️ Settings → Graphics</div>
       </div>
 
@@ -112,7 +114,8 @@
           <span id="lineCount"></span>
           <select id="speed"><option value="slow">slow</option><option value="normal" selected>normal</option><option value="fast">fast</option></select>
         </div>
-        <textarea id="code" spellcheck="false"></textarea>
+        <div id="symbar" class="symbar"></div>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"></textarea>
         <div id="console"></div>
       </div>
     </section>

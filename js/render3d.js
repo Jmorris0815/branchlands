@@ -12,7 +12,8 @@ import { OutputPass } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/
 import { Sky } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/objects/Sky.js/+esm";
 
 const Render3D = (() => {
-  const W = 800, H = 500;
+  const phone = document.documentElement.dataset.device === "phone";
+  const W = phone ? 640 : 800, H = phone ? 640 : 500; // a square frame on phones: more board, less sky
   const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   let fx, fctx, canvas2d, canvas, renderer, scene, camera, composer, bloom, sky, sun, hemi, pmrem, world, ocean;
   let state, theme = "sand", th, ok = false, active = false, quality = "realistic", cancelFlag = false, bubble = null;
@@ -341,7 +342,7 @@ const Render3D = (() => {
     const wu = ocean.material.uniforms; wu.uDeep.value.set(th.water[0]); wu.uShallow.value.set(th.water[1]); wu.uSky.value.set(th.fog[0]); wu.uSunDir.value.copy(sunDir); wu.uFogColor.value.set(th.fog[0]); wu.uFogDensity.value = th.fog[1];
     ocean.position.set(center.x, -0.1, center.z);
     // camera
-    cam.center.copy(center); cam.dist = Math.max(w * 0.95, h * 1.45) + 2.5; cam.el = 0.82; cam.az = 0.35; cam.azV = 0; cam.introK = document.hidden ? 1 : 0; cam.look.copy(center); cam.follow.copy(center);
+    cam.center.copy(center); cam.dist = (Math.max(w * 0.95, h * 1.45) + 2.5) * (phone ? 0.62 : 1); cam.el = phone ? 0.95 : 0.82; cam.az = 0.35; cam.azV = 0; cam.introK = document.hidden ? 1 : 0; cam.look.copy(center); cam.follow.copy(center);
     sync();
   }
 
@@ -376,7 +377,7 @@ const Render3D = (() => {
     cam.az += cam.azV * dt; cam.azV *= 0.9;
     const sway = Math.sin(clock * 0.25) * 0.03;
     if (robot) cam.follow.lerp(new THREE.Vector3(robot.position.x, 0, robot.position.z), dt * 1.5);
-    cam.look.copy(cam.center).lerp(cam.follow, 0.25);
+    cam.look.copy(cam.center).lerp(cam.follow, phone ? 0.85 : 0.25); // on a phone the camera follows Bolt closely
     const dist = cam.dist * (1 + (1 - ik) * 0.9), el = cam.el + (1 - ik) * 0.35, az = cam.az + sway - (1 - ik) * 0.6;
     camera.position.set(cam.look.x + Math.sin(az) * Math.cos(el) * dist, Math.sin(el) * dist + 0.3, cam.look.z + Math.cos(az) * Math.cos(el) * dist);
     camera.lookAt(cam.look.x, 0.2, cam.look.z);

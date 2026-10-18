@@ -223,6 +223,7 @@ const Hub = (() => {
     catch (e) { return "(The free-talk line is down: " + (e.message || e) + ". Is Ollama running with OLLAMA_ORIGINS set?)"; }
   }
 
-  return { init, open, close, walkTo, get active() { return active; }, GRID, PROPS };
+  function pressE() { const f = propAt(pos.x + DIRS[dir][0], pos.y + DIRS[dir][1]) || nearby()[0]; if (f) interact(f); }
+  return { init, open, close, walkTo, step, pressE, get active() { return active; }, GRID, PROPS };
 })();
 window.Hub = Hub;

@@ -189,3 +189,50 @@ footer { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: cen
 .zonechip { display: inline-block; font: 500 12px var(--display); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 #nearby { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 700px) { .slots { grid-template-columns: 1fr; } }
+
+/* ---------- phone mode (data-device is set by js/device.js, or by the games hub's shared/device.js) ---------- */
+:root[data-device="phone"] body { padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); font-size: 15px; }
+:root[data-device="phone"] header { gap: 6px 8px; padding: 8px 0; }
+:root[data-device="phone"] header h1 { font-size: 22px; }
+:root[data-device="phone"] header .tag { display: none; }
+:root[data-device="phone"] header button, :root[data-device="phone"] .levelbar button, :root[data-device="phone"] .toolbar button, :root[data-device="phone"] .row button { min-height: 40px; padding: 8px 12px; }
+:root[data-device="phone"] button.small { min-height: 36px; }
+:root[data-device="phone"] main, :root[data-device="phone"] .maprow, :root[data-device="phone"] .edgrid { grid-template-columns: 1fr; }
+:root[data-device="phone"] .screen { gap: 10px; }
+:root[data-device="phone"] .panel { padding: 10px; border-radius: 10px; }
+:root[data-device="phone"] #levels { gap: 6px; } :root[data-device="phone"] .lvl { min-height: 36px; }
+:root[data-device="phone"] .levelbar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 6px 0; }
+:root[data-device="phone"] .worldwrap { width: 100%; max-width: 560px; }
+:root[data-device="phone"] #world, :root[data-device="phone"] #fx, :root[data-device="phone"] #graph, :root[data-device="phone"] #map { width: 100%; height: auto; }
+:root[data-device="phone"] #edCanvas { max-width: 100%; height: auto; }
+:root[data-device="phone"] input, :root[data-device="phone"] textarea, :root[data-device="phone"] select { font-size: 16px; }
+:root[data-device="phone"] #code { font-size: 16px; line-height: 1.5; min-height: 160px; }
+:root[data-device="phone"] #console { max-height: 140px; font-size: 13px; }
+:root[data-device="phone"] #term { height: 200px; }
+:root[data-device="phone"] #termIn, :root[data-device="phone"] #chatIn, :root[data-device="phone"] #olChatIn { font-size: 16px; padding: 10px; }
+:root[data-device="phone"] #chat, :root[data-device="phone"] #olChat { height: 200px; }
+:root[data-device="phone"] .toolbar { gap: 6px; }
+:root[data-device="phone"] .toolbar select { min-height: 40px; }
+:root[data-device="phone"] #modal { padding: 8px; align-items: flex-end; }
+:root[data-device="phone"] #modalBody { max-width: none; width: 100%; max-height: 92vh; border-radius: 14px 14px 10px 10px; padding: 16px; }
+:root[data-device="phone"] #toasts { right: 8px; left: 8px; bottom: 8px; }
+:root[data-device="phone"] .quest { font-size: 13px; }
+:root[data-device="phone"] .mission, :root[data-device="phone"] #mission { font-size: 14px; }
+:root[data-device="phone"] footer { font-size: 11px; padding: 0 8px; }
+
+:root[data-device="phone"] #mission { order: 2; } :root[data-device="phone"] .stagecol { order: 1; }
+:root[data-device="phone"] #world3d { width: 100%; max-width: none; }
+:root[data-device="phone"] .camhint, :root[data-device="phone"] footer { display: none; }
+:root[data-device="phone"] .home { margin: 8px auto; } :root[data-device="phone"] .home .hero h2 { font-size: 30px; }
+:root[data-device="phone"] .cards { grid-template-columns: 1fr 1fr; gap: 8px; } :root[data-device="phone"] .card { font-size: 13px; }
+:root[data-device="phone"] .tabs button { padding: 8px 10px; font-size: 13px; }
+:root[data-device="phone"] .topics button { min-height: 40px; }
+:root[data-device="phone"] #screen-level .levelbar { position: static; }
+.symbar { display: none; gap: 4px; flex-wrap: wrap; margin: 6px 0; }
+.symbar button { font: 500 14px var(--mono); min-height: 36px; padding: 4px 9px; }
+.symbar button.kw { font: 600 13px var(--body); }
+:root[data-device="phone"] .symbar { display: flex; }
+#dpad { display: none; }
+:root[data-device="phone"] #dpad:not([hidden]) { display: grid; grid-template-columns: 56px 56px 56px; grid-template-rows: 56px 56px 56px; gap: 6px; justify-content: center; margin: 10px auto 0; }
+#dpad button { font-size: 20px; min-height: 0; padding: 0; }
+#dpad [data-d="0,-1"] { grid-column: 2; grid-row: 1; } #dpad [data-d="-1,0"] { grid-column: 1; grid-row: 2; } #dpad [data-d="e"] { grid-column: 2; grid-row: 2; } #dpad [data-d="1,0"] { grid-column: 3; grid-row: 2; } #dpad [data-d="0,1"] { grid-column: 2; grid-row: 3; }

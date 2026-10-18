@@ -4,7 +4,7 @@ const Game = (() => {
   const OLD_KEY = "branchlands.v1", LEGACY_KEY = "branchlands.v2", ACTIVE_KEY = "branchlands.active", slotKey = (i) => "branchlands.slot" + i;
   let slot = Number(localStorage.getItem(ACTIVE_KEY)) || 1;
   const DEFAULTS = () => ({ v: 2, completed: {}, xp: 0, code: {}, hintsUsed: {}, gems: {}, ach: {}, quests: {}, intro: false,
-    settings: { sound: true, speed: "normal", theme: "system", name: "", repo: "Jmorris0815/branchlands", ghName: "", ollama: "http://localhost:11434", model: "", gfx: "realistic" } });
+    settings: { sound: true, speed: "normal", theme: "system", name: "", repo: "Jmorris0815/branchlands", ghName: "", ollama: "http://localhost:11434", model: "", gfx: "auto" } });
   let save = DEFAULTS();
   let current = null, sim = null, grid = null, git = null, review = null, oracleModule = null, authorState = null;
   let ol = { model: "", history: [], ok: false };
@@ -84,8 +84,10 @@ const Game = (() => {
     init() { Render.init($("world"), $("fx")); R.init3d(); },
     init3d() { if (!r3dInited && window.Render3D) { r3dInited = true; Render3D.init($("world"), $("fx")); } },
     pick() {
-      const has = r3dInited && Render3D.ok, want = has && save.settings.gfx !== "classic";
-      if (has) { Render3D.setQuality(save.settings.gfx === "fast" ? "fast" : "realistic"); Render3D.setActive(want); }
+      const isPhone = document.documentElement.dataset.device === "phone";
+      const g = !save.settings.gfx || save.settings.gfx === "auto" ? (isPhone ? "fast" : "realistic") : save.settings.gfx;
+      const has = r3dInited && Render3D.ok, want = has && g !== "classic";
+      if (has) { Render3D.setQuality(g === "fast" ? "fast" : "realistic"); Render3D.setActive(want); }
       return want ? Render3D : Render;
     },
     load(s, t) { const r = R.pick(); if (r.setLook) r.setLook(RPG.look()); r.load(s, t); },
@@ -126,7 +128,7 @@ const Game = (() => {
     document.querySelectorAll(".mode").forEach(e => e.hidden = true); $("mode-robot").hidden = false;
     $("levels").innerHTML = `<button id="hubTown">📜 Quest board</button><button id="hubMap">🗺️ World map</button><button id="hubSaves">💾 Saves</button>`;
     $("hubTown").onclick = () => hubApi.openTown("board"); $("hubMap").onclick = () => showScreen("map"); $("hubSaves").onclick = () => showScreen("home");
-    Hub.open(); window.scrollTo({ top: 0 });
+    $("dpad").hidden = false; Hub.open(); window.scrollTo({ top: 0 });
   }
   function applySettings() {
     const t = save.settings.theme; if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
@@ -234,6 +236,7 @@ const Game = (() => {
     document.querySelectorAll(".mode").forEach(e => e.hidden = true);
     $("console").textContent = ""; $("langSel").hidden = !l.sandbox; $("code").disabled = false;
     ({ robot: setupRobot, git: setupGit, review: setupReview, author: setupAuthor, oracle: setupOracle, ollama: setupOllama })[l.mode]();
+    buildSymbar(l.lang); $("dpad").hidden = true;
     window.scrollTo({ top: 0 });
   }
 
@@ -246,7 +249,7 @@ const Game = (() => {
     $("runBtn").textContent = "▶ Run (Ctrl+Enter)"; $("runBtn").onclick = () => runRobot();
     $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
     $("starterBtn").onclick = () => { $("code").value = current.starter; updateLineCount(); };
-    $("langSel").onchange = () => { current.lang = $("langSel").value; current.starter = current.lang === "js" ? "// everything: move jump turn_left turn_right turn_around pick press wait say sees scan done has_key\nrobot.say(\"hello world\");\nrobot.move(3);\n" : SANDBOX_LEVEL.starter; $("code").value = current.starter; updateLineCount(); };
+    $("langSel").onchange = () => { current.lang = $("langSel").value; current.starter = current.lang === "js" ? "// everything: move jump turn_left turn_right turn_around pick press wait say sees scan done has_key\nrobot.say(\"hello world\");\nrobot.move(3);\n" : SANDBOX_LEVEL.starter; $("code").value = current.starter; updateLineCount(); buildSymbar(current.lang); };
   }
   function updateLineCount() {
     const n = countLines($("code").value, current.lang); const lc = $("lineCount");
@@ -485,15 +488,16 @@ const Game = (() => {
       <div class="row2"><label>Player name<input id="sName" type="text" value="${s.name.replace(/"/g, "&quot;")}" placeholder="Sonny"></label>
       <label>Theme<select id="sTheme"><option value="system" ${s.theme === "system" ? "selected" : ""}>system</option><option value="light" ${s.theme === "light" ? "selected" : ""}>light</option><option value="dark" ${s.theme === "dark" ? "selected" : ""}>dark</option></select></label></div>
       <div class="row2"><label>Sound<select id="sSound"><option value="1" ${s.sound ? "selected" : ""}>on</option><option value="0" ${!s.sound ? "selected" : ""}>off</option></select></label>
-      <label>Graphics<select id="sGfx"><option value="realistic" ${s.gfx !== "fast" && s.gfx !== "classic" ? "selected" : ""}>realistic 3D (shadows, bloom)</option><option value="fast" ${s.gfx === "fast" ? "selected" : ""}>fast 3D</option><option value="classic" ${s.gfx === "classic" ? "selected" : ""}>classic 2D</option></select></label></div>
-      <div class="row2"><label>Default speed<select id="sSpeed"><option value="slow" ${s.speed === "slow" ? "selected" : ""}>slow</option><option value="normal" ${s.speed === "normal" ? "selected" : ""}>normal</option><option value="fast" ${s.speed === "fast" ? "selected" : ""}>fast</option></select></label></div>
+      <label>Graphics<select id="sGfx"><option value="auto" ${!s.gfx || s.gfx === "auto" ? "selected" : ""}>auto (3D on PC, fast 3D on phone)</option><option value="realistic" ${s.gfx === "realistic" ? "selected" : ""}>realistic 3D (shadows, bloom)</option><option value="fast" ${s.gfx === "fast" ? "selected" : ""}>fast 3D</option><option value="classic" ${s.gfx === "classic" ? "selected" : ""}>classic 2D</option></select></label></div>
+      <div class="row2"><label>Screen<select id="sDev"><option value="auto">auto-detect</option><option value="phone" ${localStorage.getItem("bh-device") === "phone" ? "selected" : ""}>phone</option><option value="desktop" ${localStorage.getItem("bh-device") === "desktop" ? "selected" : ""}>desktop</option></select></label>
+      <label>Default speed<select id="sSpeed"><option value="slow" ${s.speed === "slow" ? "selected" : ""}>slow</option><option value="normal" ${s.speed === "normal" ? "selected" : ""}>normal</option><option value="fast" ${s.speed === "fast" ? "selected" : ""}>fast</option></select></label></div>
       <h3 style="margin:6px 0 0;font:500 13px var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Real-world quests</h3>
       <div class="row2"><label>Family repo (owner/name)<input id="sRepo" type="text" value="${s.repo}"></label><label>Your GitHub login or git user.name<input id="sGh" type="text" value="${s.ghName.replace(/"/g, "&quot;")}" placeholder="Jmorris0815"></label></div>
       <label>Ollama endpoint<input id="sOl" type="text" value="${s.ollama}"></label>
       <h3 style="margin:6px 0 0;font:500 13px var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Progress</h3>
       <label>Export / import (copy this to move progress to another computer)<textarea id="sData" rows="3">${JSON.stringify(save)}</textarea></label>
       <div class="row"><button id="sImport" class="small">Import from box</button><button id="sReset" class="danger small">Reset all progress</button><span class="sp"></span><button id="sSave" class="primary">Save</button></div></div>`);
-    $("sSave").onclick = () => { Object.assign(save.settings, { name: $("sName").value.trim(), theme: $("sTheme").value, sound: $("sSound").value === "1", speed: $("sSpeed").value, repo: $("sRepo").value.trim(), ghName: $("sGh").value.trim(), ollama: $("sOl").value.trim(), gfx: $("sGfx").value }); persist(); applySettings(); hideModal(); R.reload(); if (!$("screen-map").hidden) { renderMapInfo(null); renderQuests(); } };
+    $("sSave").onclick = () => { const dev = $("sDev").value, cur = localStorage.getItem("bh-device") || "auto"; if (dev !== cur) { BHDevice.set(dev === "auto" ? "" : dev); persist(); location.reload(); return; } Object.assign(save.settings, { name: $("sName").value.trim(), theme: $("sTheme").value, sound: $("sSound").value === "1", speed: $("sSpeed").value, repo: $("sRepo").value.trim(), ghName: $("sGh").value.trim(), ollama: $("sOl").value.trim(), gfx: $("sGfx").value }); persist(); applySettings(); hideModal(); R.reload(); if (!$("screen-map").hidden) { renderMapInfo(null); renderQuests(); } };
     $("sImport").onclick = () => { try { const d = JSON.parse($("sData").value); if (d && d.completed) { save = { ...DEFAULTS(), ...d }; persist(); location.reload(); } } catch (e) { $("sData").value = "That wasn't valid progress data."; } };
     $("sReset").onclick = () => { if ($("sReset").textContent !== "Really reset?") { $("sReset").textContent = "Really reset?"; return; } localStorage.removeItem(slotKey(slot)); localStorage.removeItem(OLD_KEY); location.hash = ""; location.reload(); };
   }
@@ -514,6 +518,20 @@ const Game = (() => {
   function playCustom(lv) { lv.id = "custom"; lv.mode = "robot"; openLevel(lv); location.hash = "lvl=" + Editor.encode(lv); }
 
   // ---------- editor keys ----------
+  // ---------- phone symbol bar: the keys a phone keyboard hides, plus the robot's vocabulary ----------
+  const SYMS = {
+    py: [["⇥", "    "], ["(", "("], [")", ")"], [":", ":"], ['"', '"'], ["=", " = "], [",", ", "], [".", "."], ["robot.", "robot."], ["move()", "move()", 1], ["turn_left()", "turn_left()"], ["turn_right()", "turn_right()"], ["pick()", "pick()"], ['sees("")', 'sees("")', 2], ["for", "for i in range(3):\n    "], ["while", 'while not robot.sees("wall"):\n    '], ["if", 'if robot.sees(""):\n    ', 8], ["def", "def name():\n    "]],
+    js: [["{", "{"], ["}", "}"], ["(", "("], [")", ")"], [";", ";"], ['"', '"'], ["=", " = "], [".", "."], ["robot.", "robot."], ["move()", "move()", 1], ["turn_left()", "turn_left()"], ["pick()", "pick()"], ['sees("")', 'sees("")', 2], ["for", "for (let i = 0; i < 3; i++) {\n    "], ["if", 'if (robot.sees("")) {\n    ', 10], ["function", "function name() {\n    "]],
+  };
+  function buildSymbar(lang) {
+    const bar = $("symbar"); if (!bar) return; bar.innerHTML = "";
+    for (const [label, text, back] of SYMS[lang === "js" ? "js" : "py"]) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = label; if (text.length > 3) b.className = "kw";
+      b.onmousedown = e => e.preventDefault();
+      b.onclick = () => { const ta = $("code"); const s = ta.selectionStart, en = ta.selectionEnd; ta.value = ta.value.slice(0, s) + text + ta.value.slice(en); ta.selectionStart = ta.selectionEnd = s + text.length - (back || 0); ta.focus(); if (current && current.mode !== "ollama") updateLineCount(); };
+      bar.appendChild(b);
+    }
+  }
   function editorTabs(ta) {
     ta.addEventListener("keydown", e => {
       if (e.key === "Tab") { e.preventDefault(); const s = ta.selectionStart; ta.value = ta.value.slice(0, s) + "    " + ta.value.slice(ta.selectionEnd); ta.selectionStart = ta.selectionEnd = s + 4; }
@@ -545,6 +563,7 @@ const Game = (() => {
     R.init($("world"), $("fx")); editorTabs($("code"));
     $("world").addEventListener("click", e => { if (Hub.active) { const t = Render.pickTile(e); if (t) Hub.walkTo(t.x, t.y); } });
     document.addEventListener("tileclick", e => { if (Hub.active && e.detail) Hub.walkTo(e.detail.x, e.detail.y); });
+    $("dpad").querySelectorAll("button").forEach(b => b.onclick = () => { const d = b.dataset.d; if (d === "e") Hub.pressE(); else { const [dx, dy] = d.split(",").map(Number); Hub.step(dx, dy); } });
     WorldMap.init($("map"), zoneStatus, (z) => { const st = zoneStatus(z.n); if (st.unlocked) { sfx("click"); openLevel(zoneLevels(z.n).find(l => !save.completed[l.id]) || zoneLevels(z.n)[0]); } else renderMapInfo(z); }, (z) => renderMapInfo(z));
     $("homeBtn").onclick = () => showScreen("home"); $("mapBtn").onclick = () => showScreen("map"); $("hubBtn").onclick = openHub; $("townBack").onclick = openHub;
     $("backBtn").onclick = openHub; $("edBack").onclick = () => showScreen("map");
