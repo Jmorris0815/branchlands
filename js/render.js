@@ -4,6 +4,9 @@ const Render = (() => {
   const T = 44;
   let canvas, ctx, fx, fctx, state, theme = "sand", bubble = null, cancelFlag = false, particles = [], crabPos = {}, tickNo = 0, paint = "#3b4a9e";
   function setPaint(c) { paint = c; }
+  let look = { hat: "none", eyes: null, trail: null };
+  const HAT_GLYPH = { cap: "🧢", straw: "👒", hardhat: "⛑️", crown: "👑", pirate: "🏴‍☠️", wizard: "🧙", lantern: "🏮", antlers: "🦌", propeller: "🚁", halo: "😇" };
+  function setLook(l) { if (l.paint) paint = l.paint; look = Object.assign(look, l); }
   function pickTile(e) { if (!state) return null; const r = canvas.getBoundingClientRect(); return { x: Math.floor((e.clientX - r.left) / r.width * state.w), y: Math.floor((e.clientY - r.top) / r.height * state.h) }; }
 
   const THEMES = {
@@ -75,11 +78,12 @@ const Render = (() => {
     ctx.fillStyle = paint; ctx.strokeStyle = "rgba(0,0,0,0.45)"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect(-T * 0.3, -T * 0.3, T * 0.6, T * 0.6, 8); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#dfe6ff"; ctx.beginPath(); ctx.roundRect(-T * 0.22, -T * 0.22, T * 0.44, T * 0.3, 5); ctx.fill();
-    const ex = dx * 4, ey = dy * 3; ctx.fillStyle = "#1d2560";
+    const ex = dx * 4, ey = dy * 3; ctx.fillStyle = look.eyes && look.eyes !== "#5de0ff" ? look.eyes : "#1d2560";
     ctx.beginPath(); ctx.arc(-T * 0.1 + ex, -T * 0.08 + ey, 3.2, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(T * 0.1 + ex, -T * 0.08 + ey, 3.2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#ffcc00"; ctx.fillRect(-T * 0.12, T * 0.14, T * 0.24, 4);
     ctx.beginPath(); ctx.arc(dx * T * 0.36, dy * T * 0.36, 4, 0, Math.PI * 2); ctx.fill();
+    if (HAT_GLYPH[look.hat]) { ctx.font = "15px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(HAT_GLYPH[look.hat], 0, -T * 0.52); }
     ctx.restore();
   }
   function drawCrab(cx, cy) {
@@ -146,7 +150,7 @@ const Render = (() => {
       if (cancelFlag) break;
       if (onEvent) onEvent(ev);
       switch (ev.type) {
-        case "move": await tween(ev.from, ev.to, base); state.robot.x = ev.to.x; state.robot.y = ev.to.y; break;
+        case "move": if (look.trail) { burst(ev.from.x, ev.from.y, look.trail, 5, 1.2); fxStart(); } await tween(ev.from, ev.to, base); state.robot.x = ev.to.x; state.robot.y = ev.to.y; break;
         case "jump": await tween(ev.from, ev.to, base * 1.6, true); state.robot.x = ev.to.x; state.robot.y = ev.to.y; break;
         case "teleport": burst(ev.from.x, ev.from.y, "#c9a7ff", 16); fxStart(); await sleep(base * 1.2); state.robot.x = ev.to.x; state.robot.y = ev.to.y; burst(ev.to.x, ev.to.y, "#c9a7ff", 16); fxStart(); draw(); await sleep(base); break;
         case "turn": state.robot.dir = ev.dir; draw(); await sleep(base * 0.6); break;
@@ -176,6 +180,6 @@ const Render = (() => {
     (function f() { if (!c.isConnected) return; g.clearRect(0, 0, c.width, c.height); for (const p of ps) { p.x += p.vx; p.y += p.vy; p.a += 0.1; g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.fillStyle = p.color; g.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6); g.restore(); } if (++frames < 150 && performance.now() - t0 < 3500) requestAnimationFrame(f); else c.remove(); })();
     setTimeout(() => c.remove(), 4000);
   }
-  return { init, load, draw, play, cancel, confetti, setPaint, pickTile, T };
+  return { init, load, draw, play, cancel, confetti, setPaint, setLook, pickTile, T };
 })();
 window.Render = Render;

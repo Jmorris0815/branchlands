@@ -19,6 +19,8 @@ const Render3D = (() => {
   let clock = 0, lastNow = 0, loopStarted = false;
   let robot, headlight, crabs = {}, items = {}, switches = {}, doors = {}, gates = {}, pads = [], trail, moveN = 0, propsList = [], paint = new THREE.Color(0x3b55c8);
   function setPaint(c) { paint = new THREE.Color(c); }
+  let look = { hat: "none", eyes: "#5de0ff", trail: null };
+  function setLook(l) { if (l.paint) setPaint(l.paint); look = Object.assign(look, l); }
   const cam = { center: new THREE.Vector3(), dist: 10, el: 0.82, az: 0.35, azV: 0, introK: 0, look: new THREE.Vector3(), follow: new THREE.Vector3() };
   let particles;
   const texCache = {};
@@ -248,17 +250,37 @@ const Render3D = (() => {
     for (const s of [-1, 1]) { g.add(mesh(new THREE.SphereGeometry(0.04, 8, 8), std({ color: 0xffffff }), s * 0.09, 0.32, -0.18)); g.add(mesh(new THREE.SphereGeometry(0.02, 6, 6), std({ color: 0x111111 }), s * 0.09, 0.32, -0.215)); }
     return g;
   }
+  function hatMesh(id) {
+    const g = new THREE.Group(); g.position.y = 0.64;
+    const m = (geo, mat, x = 0, y = 0, z = 0) => { const o = mesh(geo, mat, x, y, z); g.add(o); return o; };
+    const goldm = () => std({ color: 0xe6b422, metalness: 0.9, roughness: 0.3 });
+    switch (id) {
+      case "cap": m(new THREE.CylinderGeometry(0.2, 0.22, 0.12, 16), std({ color: 0xc8553d }), 0, 0.06, 0); m(new THREE.BoxGeometry(0.2, 0.03, 0.26), std({ color: 0xa33e2c }), 0.26, 0.02, 0); break;
+      case "straw": m(new THREE.CylinderGeometry(0.42, 0.42, 0.03, 20), std({ color: 0xd9b86a }), 0, 0.015, 0); m(new THREE.CylinderGeometry(0.17, 0.2, 0.14, 16), std({ color: 0xcfae5c }), 0, 0.09, 0); break;
+      case "hardhat": m(new THREE.SphereGeometry(0.24, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), std({ color: 0xf2c230, roughness: 0.4 })); m(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 16), std({ color: 0xf2c230 }), 0, 0.01, 0); break;
+      case "crown": m(new THREE.CylinderGeometry(0.2, 0.2, 0.14, 8, 1, true), std({ color: 0xe6b422, metalness: 0.9, roughness: 0.3, side: THREE.DoubleSide }), 0, 0.07, 0); for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; m(new THREE.ConeGeometry(0.04, 0.1, 6), goldm(), Math.cos(a) * 0.19, 0.18, Math.sin(a) * 0.19); } m(new THREE.SphereGeometry(0.04, 8, 8), std({ color: 0xff3b5c, emissive: 0xff3b5c, emissiveIntensity: 0.6 }), 0.19, 0.1, 0); break;
+      case "pirate": m(new THREE.CylinderGeometry(0.2, 0.22, 0.14, 16), std({ color: 0x1b1b24 }), 0, 0.07, 0); { const b = m(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 3), std({ color: 0x1b1b24 }), 0, 0.02, 0); b.rotation.y = Math.PI / 6; } m(new THREE.SphereGeometry(0.035, 8, 8), std({ color: 0xffffff }), 0.19, 0.08, 0); break;
+      case "wizard": m(new THREE.ConeGeometry(0.2, 0.5, 16), std({ color: 0x5a3fa0 }), 0, 0.27, 0); m(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 16), std({ color: 0x4a3390 }), 0, 0.015, 0); m(new THREE.SphereGeometry(0.03, 8, 8), std({ color: 0xffd866, emissive: 0xffd866, emissiveIntensity: 1.5 }), 0.08, 0.3, 0.12); break;
+      case "lantern": m(new THREE.BoxGeometry(0.12, 0.16, 0.12), std({ color: 0xffe9a8, emissive: 0xffb347, emissiveIntensity: 2.5, transparent: true, opacity: 0.9 }), 0, 0.3, 0); m(new THREE.CylinderGeometry(0.01, 0.01, 0.24, 6), std({ color: 0x2b2f3a }), 0, 0.12, 0); { const l = new THREE.PointLight(0xffb347, 2, 3, 2); l.position.set(0, 0.32, 0); g.add(l); } break;
+      case "antlers": for (const s of [-1, 1]) { const a = m(new THREE.CylinderGeometry(0.02, 0.03, 0.3, 6), std({ color: 0x7a5436 }), 0, 0.14, s * 0.16); a.rotation.x = s * 0.5; const t = m(new THREE.CylinderGeometry(0.015, 0.02, 0.16, 6), std({ color: 0x7a5436 }), 0.05, 0.22, s * 0.22); t.rotation.z = -0.9; } break;
+      case "propeller": m(new THREE.CylinderGeometry(0.2, 0.22, 0.1, 16), std({ color: 0x3b8ad8 }), 0, 0.05, 0); m(new THREE.CylinderGeometry(0.015, 0.015, 0.1, 6), std({ color: 0x2b2f3a }), 0, 0.14, 0); { const p = new THREE.Group(); p.position.y = 0.2; p.add(mesh(new THREE.BoxGeometry(0.36, 0.02, 0.06), std({ color: 0xff5e5e }))); p.add(mesh(new THREE.BoxGeometry(0.06, 0.02, 0.36), std({ color: 0xffd866 }))); g.add(p); g.userData.spin = p; } break;
+      case "halo": { const h = m(new THREE.TorusGeometry(0.2, 0.025, 8, 32), std({ color: 0xffe08a, emissive: 0xffd24a, emissiveIntensity: 2.5 }), 0, 0.36, 0); h.rotation.x = Math.PI / 2; g.userData.bob = h; break; }
+      default: return null;
+    }
+    return g;
+  }
   function robotMesh() {
     const g = new THREE.Group();
     const dark = std({ color: 0x2b2f3a, roughness: 0.6, metalness: 0.4 }), blue = phys({ color: paint, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.2 });
     for (const s of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.62, 0.18, 0.17), dark, 0, 0.09, s * 0.22));
     const body = mesh(new THREE.BoxGeometry(0.5, 0.44, 0.48), blue, 0, 0.42, 0); g.add(body); g.userData.body = body;
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.26, 0.38), std({ color: 0x0d1222, roughness: 0.15, metalness: 0.3 }), 0.26, 0.48, 0));
-    const eye = std({ color: 0x9df0ff, emissive: 0x5de0ff, emissiveIntensity: 2.5 });
+    const eye = std({ color: new THREE.Color(look.eyes), emissive: new THREE.Color(look.eyes), emissiveIntensity: 2.5 });
     g.add(mesh(new THREE.SphereGeometry(0.045, 10, 8), eye, 0.28, 0.52, -0.1)); g.add(mesh(new THREE.SphereGeometry(0.045, 10, 8), eye, 0.28, 0.52, 0.1));
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.05, 0.22), std({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 1.5 }), 0.26, 0.3, 0));
     g.add(mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 6), dark, 0, 0.74, 0)); g.add(mesh(new THREE.SphereGeometry(0.04, 10, 8), std({ color: 0xff5e5e, emissive: 0xff2d2d, emissiveIntensity: 2 }), 0, 0.86, 0));
     for (const s of [-1, 1]) { const a = mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 8), dark, 0.05, 0.4, s * 0.3); a.rotation.x = s * 0.4; g.add(a); }
+    const hat = hatMesh(look.hat); if (hat) { g.add(hat); g.userData.hat = hat; }
     headlight = new THREE.SpotLight(0xfff1cc, 6, 5.5, 0.5, 0.6, 1.2); headlight.position.set(0.2, 0.5, 0); const tgt = new THREE.Object3D(); tgt.position.set(3, -0.4, 0); g.add(tgt); headlight.target = tgt; g.add(headlight);
     return g;
   }
@@ -347,7 +369,7 @@ const Render3D = (() => {
     for (const k in gates) { const d = gates[k]; d.position.y += (d.userData.target - d.position.y) * Math.min(1, dt * 5); }
     for (const id in crabs) { const c = crabs[id]; c.position.y = Math.abs(Math.sin(clock * 9 + Number(id))) * 0.02; }
     for (const p of propsList) { if (p.userData.spin) p.userData.spin.rotation.y += dt * 0.8; if (p.userData.bob) p.position.y = Math.sin(clock * 2 + p.position.x) * 0.02; }
-    if (robot) robot.userData.body.position.y = 0.42 + Math.sin(clock * 3) * 0.008;
+    if (robot) { robot.userData.body.position.y = 0.42 + Math.sin(clock * 3) * 0.008; const h = robot.userData.hat; if (h) { if (h.userData.spin) h.userData.spin.rotation.y += dt * 14; if (h.userData.bob) h.userData.bob.position.y = 0.36 + Math.sin(clock * 2) * 0.03; } }
     stepParticles(dt);
     // camera: intro sweep, gentle sway, soft follow, user orbit
     cam.introK = Math.min(1, cam.introK + dt / 1.1); const ik = 1 - Math.pow(1 - cam.introK, 3);
@@ -400,7 +422,7 @@ const Render3D = (() => {
       if (onEvent) onEvent(ev);
       if (!ok) continue;
       switch (ev.type) {
-        case "move": await moveRobot(ev.from, ev.to, base); state.robot.x = ev.to.x; state.robot.y = ev.to.y; footprint(++moveN, ev.to.x, ev.to.y); break;
+        case "move": if (look.trail) burst(ev.from.x, ev.from.y, look.trail, 6, 0.8); await moveRobot(ev.from, ev.to, base); state.robot.x = ev.to.x; state.robot.y = ev.to.y; footprint(++moveN, ev.to.x, ev.to.y); break;
         case "jump": await moveRobot(ev.from, ev.to, base * 1.6, true); if (ev.over && state.grid[ev.over.y] && state.grid[ev.over.y][ev.over.x] === "~") burst(ev.over.x, ev.over.y, th.water[1], 14, 1.6); state.robot.x = ev.to.x; state.robot.y = ev.to.y; footprint(++moveN, ev.to.x, ev.to.y); break;
         case "teleport": burst(ev.from.x, ev.from.y, 0xc9a7ff, 24); await tween(base * 0.6, k => robot.scale.setScalar(1 - k * 0.98)); robot.position.x = ev.to.x; robot.position.z = ev.to.y; state.robot.x = ev.to.x; state.robot.y = ev.to.y; burst(ev.to.x, ev.to.y, 0xc9a7ff, 24); await tween(base * 0.6, k => robot.scale.setScalar(0.02 + k * 0.98)); robot.scale.setScalar(1); await sleep(base * 0.5); moveN = 0; break;
         case "turn": await turnRobot(ev.dir, base * 0.6); state.robot.dir = ev.dir; moveN = 0; break;
@@ -422,7 +444,7 @@ const Render3D = (() => {
   function cancel() { cancelFlag = true; }
   function celebrate() { if (!ok || !state || !state.goal) return; for (let i = 0; i < 4; i++) setTimeout(() => burst(state.goal.x, state.goal.y, [0x5fcf8f, 0xf0b24a, 0x7fb3ff, 0xff7b72][i], 30, 3), i * 180); }
 
-  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, setPaint, pickTile, get ok() { return ok; } };
+  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, setPaint, setLook, pickTile, get ok() { return ok; } };
 })();
 window.Render3D = Render3D;
 window.dispatchEvent(new Event("render3d-ready"));

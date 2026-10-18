@@ -28,7 +28,7 @@ const Hub = (() => {
     { kind: "npc", id: "clock", x: 13, y: 9, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", x: 6, y: 9, label: "🧔 Dad", color: "#3f7a6a" },
     { kind: "npc", id: "oracle", x: 3, y: 9, label: "🔮 Oracle", color: "#5fb8b0" }, { kind: "npc", id: "nyx", x: 3, y: 5, label: "🏴‍☠️ Nyx", color: "#2f3e5c" },
     { kind: "stall", tab: "market", x: 6, y: 5, label: "🏪 Market" }, { kind: "stall", tab: "workshop", x: 11, y: 5, label: "🔧 Workshop" },
-    { kind: "stall", tab: "paint", x: 14, y: 7, label: "🎨 Paint" }, { kind: "stall", tab: "pack", x: 1, y: 1, label: "🎒 Storehouse" },
+    { kind: "stall", tab: "paint", x: 14, y: 7, label: "🎨 Style" }, { kind: "stall", tab: "pack", x: 1, y: 1, label: "🎒 Storehouse" },
     { kind: "stall", tab: "board", x: 10, y: 6, label: "📜 Quest board" }, { kind: "stall", tab: "skills", x: 6, y: 1, label: "📈 Skills" },
     { kind: "sign", x: 8, y: 1, label: "🗺️ World map" },
   ];

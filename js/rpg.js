@@ -59,6 +59,39 @@ const RPG = (() => {
     { id: "ghost", name: "Ghost White", color: "#e8ecf4", cost: 250, req: ["review", 3] },
     { id: "gold", name: "Gold Plate", color: "#d8a520", cost: 600, req: ["total", 50] },
   ];
+  const COSMETICS = {
+    hat: [
+      { id: "none", name: "No hat", icon: "🤖", cost: 0 },
+      { id: "cap", name: "Harbor Cap", icon: "🧢", cost: 60 },
+      { id: "propeller", name: "Propeller Beanie", icon: "🚁", cost: 90 },
+      { id: "hardhat", name: "Tinker's Hard Hat", icon: "⛑️", cost: 120, req: ["functions", 4] },
+      { id: "antlers", name: "Antlers", icon: "🦌", cost: 150 },
+      { id: "lantern", name: "Fog Lantern", icon: "🏮", cost: 200, req: ["logic", 6] },
+      { id: "halo", name: "Halo", icon: "😇", cost: 400, req: ["total", 40] },
+      { id: "straw", name: "Pip's Straw Hat", icon: "👒", quest: "Orchard Perfect" },
+      { id: "pirate", name: "Captain's Tricorn", icon: "🏴‍☠️", quest: "Bilingual" },
+      { id: "wizard", name: "Oracle's Hood", icon: "🧙", quest: "Real Voice" },
+      { id: "crown", name: "Keeper's Crown", icon: "👑", quest: "Keeper of the Light" },
+    ],
+    eyes: [
+      { id: "cyan", name: "Cyan", icon: "🔵", color: "#5de0ff", cost: 0 },
+      { id: "white", name: "Headlamp White", icon: "⚪", color: "#ffffff", cost: 60 },
+      { id: "green", name: "Orchard Green", icon: "🟢", color: "#5fff8a", cost: 80 },
+      { id: "gold", name: "Lighthouse Gold", icon: "🟡", color: "#ffd24a", quest: "Island Hopper" },
+      { id: "violet", name: "Timeline Violet", icon: "🟣", color: "#c57bff", quest: "Fifty Commits" },
+      { id: "red", name: "Mirror Red", icon: "🔴", color: "#ff5a5a", quest: "Glass Trader" },
+    ],
+    trail: [
+      { id: "none", name: "No trail", icon: "·", cost: 0 },
+      { id: "sparkle", name: "Gold Sparkle", icon: "✨", color: "#ffd866", cost: 100 },
+      { id: "hearts", name: "Hearts", icon: "💗", color: "#ff7bb0", cost: 120 },
+      { id: "bubbles", name: "Sea Bubbles", icon: "🫧", color: "#7fd3ff", quest: "Fog Walker" },
+      { id: "leaves", name: "Orchard Leaves", icon: "🍃", color: "#7fd36a", quest: "Apple Baron" },
+      { id: "embers", name: "Oracle Embers", icon: "🔥", color: "#ff8a3d", quest: "Memory" },
+      { id: "stars", name: "Time Stars", icon: "🌟", color: "#c9a7ff", quest: "Time Merchant" },
+    ],
+  };
+  const COS_NAMES = { hat: "Hats", eyes: "Eyes", trail: "Trails" };
   const NPC = {
     marisol: { name: "Marisol, Harbor Master", icon: "⚓" }, pip: { name: "Old Pip, Orchard Keeper", icon: "🧑‍🌾" }, odo: { name: "Odo the Ferryman", icon: "🛶" },
     wrenna: { name: "Wrenna the Tinker", icon: "🔧" }, clock: { name: "The Clockwright", icon: "🕰️" }, dad: { name: "Dad", icon: "🧔" }, oracle: { name: "The Oracle", icon: "🔮" }, nyx: { name: "Captain Nyx", icon: "🏴‍☠️" },
@@ -78,10 +111,37 @@ const RPG = (() => {
     { id: "mirror", npc: "nyx", title: "Mirror Trade", zone: 8, story: "Same robot, same sea, different language. Ten panes of mirror glass, and prove you can run a shop: five hundred coins earned, lifetime.", steps: [{ type: "gather", good: "glass", n: 10 }, { type: "sell", coins: 500 }], reward: { coins: 500, xp: { js: 300 } } },
     { id: "merchant", npc: "marisol", title: "Merchant of the Harbor", after: "light", story: "A thousand coins through my market and forty levels of skill. Then you're not a castaway, you're a merchant.", steps: [{ type: "sell", coins: 1000 }, { type: "total", level: 40 }], reward: { coins: 400, title: "Merchant" } },
     { id: "builder", npc: "wrenna", title: "Master Builder", after: "prism", story: "Own every upgrade I make and I'll put your name on the workshop door.", steps: [{ type: "gear", id: "longArm" }, { type: "gear", id: "springTreads" }, { type: "gear", id: "wideScanner" }, { type: "gear", id: "crabShell" }, { type: "gear", id: "gemMagnet" }], reward: { coins: 1000, title: "Master Builder", paint: "gold" } },
+    // ---- second wave: the long game ----
+    { id: "stars5", npc: "marisol", title: "Three Stars Over the Harbor", after: "papers", story: "Anyone can finish a mission. Finishing it in the fewest lines is the craft. Show me five perfect runs.", steps: [{ type: "stars", n: 5 }], reward: { coins: 150, cos: "hat:cap" } },
+    { id: "contracts3", npc: "marisol", title: "Contract Worker", after: "papers", story: "The board posts three contracts a day. Do three and I'll know you come back.", steps: [{ type: "contracts", n: 3 }], reward: { coins: 200, xp: { commands: 80 } } },
+    { id: "saver", npc: "marisol", title: "Harbor Bank", after: "light", story: "Spending is easy. Hold five hundred coins at once without spending them and you've learned the harder thing.", steps: [{ type: "coins", n: 500 }], reward: { coins: 100, title: "Saver" } },
+    { id: "hopper", npc: "marisol", title: "Island Hopper", zone: 4, story: "Four islands lit from end to end: the rock, the orchard, the bridge and the workshop. Then your eyes get the lighthouse gold.", steps: [{ type: "zonedone", zone: 1 }, { type: "zonedone", zone: 2 }, { type: "zonedone", zone: 3 }, { type: "zonedone", zone: 4 }], reward: { coins: 400, cos: "eyes:gold" } },
+    { id: "grind10", npc: "marisol", title: "Daily Grind", after: "contracts3", story: "Ten contracts. That's two weeks of showing up. Merchants are made of showing up.", steps: [{ type: "contracts", n: 10 }], reward: { coins: 500, xp: { commands: 150 } } },
+    { id: "keeper", npc: "marisol", title: "Keeper of the Light", zone: 8, story: "Every island. Every mission. When the last portal goes quiet, the lighthouse is yours, and so is the crown.", steps: [{ type: "zonedone", zone: 5 }, { type: "zonedone", zone: 6 }, { type: "zonedone", zone: 7 }, { type: "zonedone", zone: 8 }, { type: "missions", n: 35 }], reward: { coins: 1500, cos: "hat:crown", title: "Keeper of the Light" } },
+    { id: "baron", npc: "pip", title: "Apple Baron", after: "cider", story: "Forty apples. Not for me; for the whole harbor. Your loop doesn't get tired. Neither does the market, sadly for the price.", steps: [{ type: "gather", good: "apple", n: 40 }], reward: { coins: 300, xp: { loops: 250 }, cos: "trail:leaves" } },
+    { id: "orchardperfect", npc: "pip", title: "Orchard Perfect", after: "appledebt", story: "Every orchard mission in par lines or fewer. Then you get my hat, and I'll finally sit down.", steps: [{ type: "zonestars", zone: 2 }], reward: { coins: 350, xp: { loops: 300 }, cos: "hat:straw" } },
+    { id: "replay20", npc: "pip", title: "Practice Makes Loops", zone: 2, story: "Twenty runs to the end, any missions. Replays count. The first time you do a thing you learn it; the twentieth you own it.", steps: [{ type: "runs", n: 20 }], reward: { coins: 120, xp: { loops: 120 } } },
+    { id: "fogwalker", npc: "odo", title: "Fog Walker", zone: 3, story: "All five crossings. When you can do the bridge without seeing it, the sea leaves bubbles where you walk.", steps: [{ type: "zonedone", zone: 3 }], reward: { coins: 250, xp: { logic: 250 }, cos: "trail:bubbles" } },
+    { id: "gemdiver", npc: "odo", title: "Gem Diver", zone: 3, story: "Gems hide in the fog. Six of them, and keep them, don't sell them; Wrenna will want two for a prism.", steps: [{ type: "gather", good: "gem", n: 6 }], reward: { coins: 300, xp: { logic: 150 } } },
+    { id: "mason", npc: "odo", title: "Stone Mason", zone: 5, story: "Fog stone and a time shard make a clockstone. Two of them and the bridge posts stop sinking.", steps: [{ type: "craft", good: "clockstone", n: 2 }], reward: { coins: 400, xp: { logic: 200 }, cos: "eyes:green" } },
+    { id: "spring", npc: "wrenna", title: "Spring in Your Step", zone: 4, story: "Spring Treads. Two tiles in one jump. Buy them and clear the long gap on the fifth crossing.", steps: [{ type: "gear", id: "springTreads" }, { type: "complete", level: "3-5" }], reward: { coins: 200, xp: { functions: 150 } } },
+    { id: "magnet", npc: "wrenna", title: "Magnetic Personality", zone: 4, story: "The Gem Magnet doubles every gem you lift. Pays for itself in a week. Buy it and bring me four gems to prove it.", steps: [{ type: "gear", id: "gemMagnet" }, { type: "gather", good: "gem", n: 4 }], reward: { coins: 300, xp: { functions: 150 } } },
+    { id: "cratecompany", npc: "wrenna", title: "Crate Company", after: "order", story: "Five crates built, three hundred coins through the market. That's a business, not a hobby. Hard hat's yours.", steps: [{ type: "craft", good: "crate", n: 5 }, { type: "sell", coins: 300 }], reward: { coins: 350, xp: { functions: 200 }, cos: "hat:hardhat" } },
+    { id: "toolbelt", npc: "wrenna", title: "Full Toolbelt", zone: 4, story: "Functions to level ten. Make tools, use tools, until it's boring. Boring is the goal.", steps: [{ type: "skill", skill: "functions", level: 10 }], reward: { coins: 500, xp: { functions: 100 } } },
+    { id: "commits50", npc: "clock", title: "Fifty Commits", after: "shards", story: "Fifty moments saved. Small ones. People who commit in fifties never lose a day's work again, and they see time in violet.", steps: [{ type: "commits", n: 50 }], reward: { coins: 600, xp: { git: 400 }, cos: "eyes:violet" } },
+    { id: "timemerchant", npc: "clock", title: "Time Merchant", after: "shards", story: "Ten shards in your pack at once. Don't sell them the moment they drop; let them pile up and you'll see the stars.", steps: [{ type: "gather", good: "shard", n: 10 }], reward: { coins: 300, xp: { git: 200 }, cos: "trail:stars" } },
+    { id: "branchkeeper", npc: "clock", title: "Branch Keeper", zone: 5, story: "Every Tower mission: commit, checkout, branch, merge, a conflict resolved, a push after a pull. Then you've been a time traveler.", steps: [{ type: "zonedone", zone: 5 }], reward: { coins: 400, xp: { git: 300 }, title: "Time Traveler" } },
+    { id: "reviewer", npc: "dad", title: "Reviewer's Eye", zone: 6, story: "Review until it's a reflex. Review skill five.", steps: [{ type: "skill", skill: "review", level: 5 }], reward: { coins: 250, xp: { review: 150 } } },
+    { id: "shipit", npc: "dad", title: "Ship It", zone: 6, story: "All four Gate missions, and I'll stop hovering. Mostly.", steps: [{ type: "zonedone", zone: 6 }], reward: { coins: 300, xp: { review: 300 }, title: "Dad's Approval" } },
+    { id: "memory", npc: "oracle", title: "Memory", zone: 7, story: "…a bot that forgets is a parrot. AI skill five and your trail will glow like my embers.", steps: [{ type: "skill", skill: "ai", level: 5 }, { type: "complete", level: "7-2" }], reward: { coins: 300, xp: { ai: 200 }, cos: "trail:embers" } },
+    { id: "realvoice", npc: "oracle", title: "Real Voice", zone: 7, story: "…connect a model running on your own machine and write its personality. Then wear my hood.", steps: [{ type: "complete", level: "7-3" }], reward: { coins: 500, xp: { ai: 400 }, cos: "hat:wizard", title: "Mindmaker" } },
+    { id: "bilingual", npc: "nyx", title: "Bilingual", zone: 8, story: "Every Mirror Sea mission in JavaScript. Then you're a polyglot and you get the hat. The hat is non-negotiable.", steps: [{ type: "zonedone", zone: 8 }], reward: { coins: 500, xp: { js: 400 }, cos: "hat:pirate", title: "Polyglot" } },
+    { id: "glasstrader", npc: "nyx", title: "Glass Trader", after: "mirror", story: "Two thousand coins through the market, lifetime. Buy low, craft, sell on a HOT day. Red eyes for a real trader.", steps: [{ type: "sell", coins: 2000 }], reward: { coins: 800, xp: { js: 200 }, cos: "eyes:red" } },
+    { id: "captain", npc: "nyx", title: "Captain's Favor", zone: 8, story: "Total level eighty. Every skill pulling its weight. Then you outrank me, and I'll say so.", steps: [{ type: "total", level: 80 }], reward: { coins: 1000, title: "Captain" } },
   ];
 
   // ---------- state ----------
-  const fresh = () => ({ coins: 25, inv: {}, xp: {}, gear: {}, paints: { default: true }, paint: "default", quests: {}, titles: [], runsToday: {},
+  const fresh = () => ({ coins: 25, inv: {}, xp: {}, gear: {}, paints: { default: true }, paint: "default", cos: { hat: { owned: { none: true }, on: "none" }, eyes: { owned: { cyan: true }, on: "cyan" }, trail: { owned: { none: true }, on: "none" } }, quests: {}, titles: [], runsToday: {},
     stats: { runs: 0, commits: 0, sold: 0, soldToday: 0, crafted: {} }, market: { flood: {} }, daily: { date: "", tasks: [], done: {}, hot: "" } });
   function init(saveObj, apiObj) {
     save = saveObj; api = apiObj; if (!save.rpg) save.rpg = fresh(); S = save.rpg; const f = fresh(); for (const k in f) if (S[k] === undefined) S[k] = f[k];
@@ -143,6 +203,9 @@ const RPG = (() => {
   function buyGear(g) { if (!canBuyGear(g)) return false; S.coins -= g.cost; for (const m in g.mats || {}) take(m, g.mats[m]); S.gear[g.id] = true; persist(); hud(); return true; }
   function buyPaint(p) { if (S.paints[p.id]) { S.paint = p.id; persist(); return true; } if (!meets(p.req) || S.coins < p.cost) return false; S.coins -= p.cost; S.paints[p.id] = true; S.paint = p.id; persist(); hud(); return true; }
   const paintColor = () => (PAINTS.find(p => p.id === S.paint) || PAINTS[0]).color;
+  function cosItem(cat, id) { return COSMETICS[cat].find(c => c.id === id) || COSMETICS[cat][0]; }
+  function wearCos(cat, id) { const c = cosItem(cat, id), st = S.cos[cat]; if (st.owned[id]) { st.on = id; persist(); return true; } if (c.quest || !meets(c.req) || S.coins < c.cost) return false; S.coins -= c.cost; st.owned[id] = true; st.on = id; persist(); hud(); return true; }
+  function look() { return { paint: paintColor(), hat: S.cos.hat.on, eyes: cosItem("eyes", S.cos.eyes.on).color, trail: S.cos.trail.on === "none" ? null : cosItem("trail", S.cos.trail.on).color }; }
   const gear = () => ({ longArm: !!S.gear.longArm, springTreads: !!S.gear.springTreads, wideScanner: !!S.gear.wideScanner, crabShell: !!S.gear.crabShell });
 
   // ---------- quests ----------
@@ -158,6 +221,13 @@ const RPG = (() => {
       case "skill": return { done: skillLevel(st.skill) >= st.level, text: `Reach ${reqText([st.skill, st.level])}` };
       case "total": return { done: totalLevel() >= st.level, text: `Reach total level ${st.level} (now ${totalLevel()})` };
       case "gear": { const g = GEAR.find(x => x.id === st.id); return { done: !!S.gear[st.id], text: `Own the ${g.icon} ${g.name}` }; }
+      case "stars": { const n = Object.values(api.completed()).filter(c => c.stars === 3).length; return { done: n >= st.n, text: `Earn three stars on ${st.n} missions (${Math.min(n, st.n)}/${st.n})` }; }
+      case "zonedone": { const zl = LEVELS.filter(l => l.zone === st.zone && !l.optional); const d = zl.filter(l => api.completed()[l.id]).length; return { done: d === zl.length, text: `Finish every mission in ${ZONES[st.zone - 1].name} (${d}/${zl.length})` }; }
+      case "zonestars": { const zl = LEVELS.filter(l => l.zone === st.zone && !l.optional && l.par); const d = zl.filter(l => api.completed()[l.id] && api.completed()[l.id].stars === 3).length; return { done: d === zl.length, text: `Three stars on every ${ZONES[st.zone - 1].name} mission (${d}/${zl.length})` }; }
+      case "coins": return { done: S.coins >= st.n, text: `Hold ${st.n} coins at once (${Math.min(S.coins, st.n)}/${st.n})` };
+      case "contracts": return { done: (S.stats.contracts || 0) >= st.n, text: `Complete ${st.n} daily contracts (${Math.min(S.stats.contracts || 0, st.n)}/${st.n})` };
+      case "missions": { const n = Object.keys(api.completed()).length; return { done: n >= st.n, text: `Finish ${st.n} missions in total (${Math.min(n, st.n)}/${st.n})` }; }
+      case "runs": return { done: S.stats.runs >= st.n, text: `Run ${st.n} missions to the end, replays count (${Math.min(S.stats.runs, st.n)}/${st.n})` };
       case "commits": return { done: S.stats.commits >= st.n, text: `Make ${st.n} commits in the Time Tower (${Math.min(S.stats.commits, st.n)}/${st.n})` };
     }
     return { done: false, text: "?" };
@@ -167,15 +237,16 @@ const RPG = (() => {
     for (const s of q.steps) if (s.type === "gather") take(s.good, s.n);
     const r = q.reward; S.coins += r.coins || 0; for (const k in r.xp || {}) addXp(k, r.xp[k]);
     if (r.paint) S.paints[r.paint] = true; if (r.title && !S.titles.includes(r.title)) S.titles.push(r.title);
+    if (r.cos) { const [cat, id] = r.cos.split(":"); S.cos[cat].owned[id] = true; }
     S.quests[q.id] = today(); persist(); hud(); return true;
   }
-  function rewardText(r) { const out = []; if (r.coins) out.push(`🪙 ${r.coins}`); for (const k in r.xp || {}) out.push(`${SKILLS.find(s => s.id === k).icon} ${r.xp[k]} ${SKILLS.find(s => s.id === k).name} XP`); if (r.paint) out.push(`🎨 ${PAINTS.find(p => p.id === r.paint).name} paint`); if (r.title) out.push(`🏷️ title “${r.title}”`); return out.join(" · "); }
+  function rewardText(r) { const out = []; if (r.coins) out.push(`🪙 ${r.coins}`); for (const k in r.xp || {}) out.push(`${SKILLS.find(s => s.id === k).icon} ${r.xp[k]} ${SKILLS.find(s => s.id === k).name} XP`); if (r.paint) out.push(`🎨 ${PAINTS.find(p => p.id === r.paint).name} paint`); if (r.cos) { const [cat, id] = r.cos.split(":"); const c = cosItem(cat, id); out.push(`${c.icon} ${c.name}`); } if (r.title) out.push(`🏷️ title “${r.title}”`); return out.join(" · "); }
   function contractState(t) {
     if (t.type === "gather") return { done: have(t.good) >= t.n, text: `Deliver ${gname(t.good, t.n)} (${Math.min(have(t.good), t.n)}/${t.n})` };
     if (t.type === "run") { const lv = LEVEL_BY_ID[t.level]; return { done: (S.runsToday[t.level] || 0) > 0, text: `Finish ${t.level} ${lv ? lv.title : ""} today`, go: t.level }; }
     return { done: S.stats.soldToday >= t.coins, text: `Sell ${t.coins} coins of goods today (${Math.min(S.stats.soldToday, t.coins)}/${t.coins})` };
   }
-  function claim(i) { const d = daily(); const t = d.tasks[i]; if (!t || d.done[i] || !contractState(t).done) return false; if (t.type === "gather") take(t.good, t.n); S.coins += t.reward; d.done[i] = true; persist(); hud(); return true; }
+  function claim(i) { const d = daily(); const t = d.tasks[i]; if (!t || d.done[i] || !contractState(t).done) return false; if (t.type === "gather") take(t.good, t.n); S.coins += t.reward; d.done[i] = true; S.stats.contracts = (S.stats.contracts || 0) + 1; persist(); hud(); return true; }
 
   // ---------- hooks from the game ----------
   function onComplete(level, { first, lines, events }) {
@@ -256,9 +327,18 @@ const RPG = (() => {
     return h + "</div>";
   }
   function paint() {
-    let h = `<h3>Paint shop</h3><p class="muted">Bolt's colour, in 2D and 3D. Some paints come from quests.</p><div class="cards paints">`;
+    let h = `<h3>Style: paint</h3><p class="muted">Bolt's colour, hat, eyes and trail, in 2D and 3D. Quest rewards unlock the rare ones.</p><div class="cards paints">`;
     for (const p of PAINTS) { const own = !!S.paints[p.id], on = S.paint === p.id; h += `<div class="card ${on ? "done" : ""}"><div class="swatch" style="background:${p.color}"></div><b>${p.name}</b><div class="muted">${own ? (on ? "Wearing" : "Owned") : `🪙 ${p.cost}${p.req ? " · needs " + reqText(p.req) : ""}`}</div><button class="small ${on ? "" : "primary"}" data-act="paint" data-id="${p.id}" ${on || (!own && (!meets(p.req) || S.coins < p.cost)) ? "disabled" : ""}>${own ? "Wear" : "Buy"}</button></div>`; }
-    return h + "</div>";
+    h += "</div>";
+    for (const cat of ["hat", "eyes", "trail"]) {
+      h += `<h3>${COS_NAMES[cat]}</h3><div class="cards paints">`;
+      for (const c of COSMETICS[cat]) {
+        const own = !!S.cos[cat].owned[c.id], on = S.cos[cat].on === c.id, can = own || (!c.quest && meets(c.req) && S.coins >= c.cost);
+        h += `<div class="card ${on ? "done" : ""}"><div class="ct"><span class="big">${c.icon}</span> <b>${c.name}</b></div><div class="muted">${own ? (on ? "Wearing" : "Owned") : c.quest ? "Reward from the quest “" + c.quest + "”" : `🪙 ${c.cost}${c.req ? " · needs " + reqText(c.req) : ""}`}</div><button class="small ${on ? "" : "primary"}" data-act="cos" data-cat="${cat}" data-id="${c.id}" ${on || !can ? "disabled" : ""}>${own ? "Wear" : "Buy"}</button></div>`;
+      }
+      h += "</div>";
+    }
+    return h;
   }
   function click(e) {
     const b = e.target.closest("button[data-act]"); if (!b) return; const a = b.dataset.act; let msg = "";
@@ -268,6 +348,7 @@ const RPG = (() => {
     else if (a === "craftmax") { const r = RECIPES.find(x => x.id === b.dataset.r); let k = 0; while (craft(r)) k++; msg = `Crafted ${k}.`; api.sfx("pick"); }
     else if (a === "gear") { msg = buyGear(GEAR.find(g => g.id === b.dataset.id)) ? "Installed on Bolt." : "Can't buy that yet."; api.sfx("unlock"); }
     else if (a === "paint") { buyPaint(PAINTS.find(p => p.id === b.dataset.id)); api.sfx("click"); }
+    else if (a === "cos") { wearCos(b.dataset.cat, b.dataset.id); api.sfx("click"); }
     else if (a === "turnin") { const q = QUESTS.find(q => q.id === b.dataset.q); if (turnIn(q)) { api.sfx("win"); api.toast(`<b>Quest complete: ${q.title}</b>${rewardText(q.reward)}`); } }
     else if (a === "claim") { if (claim(+b.dataset.i)) { api.sfx("win"); msg = "Contract paid."; } }
     else if (a === "go") { api.openLevel(LEVEL_BY_ID[b.dataset.level]); return; }
@@ -279,6 +360,6 @@ const RPG = (() => {
   function questsFor(npc) { return QUESTS.filter(q => q.npc === npc && available(q)).map(q => { const steps = q.steps.map(stepState); return { id: q.id, title: q.title, story: q.story, steps, ready: steps.every(s => s.done), reward: rewardText(q.reward) }; }); }
   function turnInById(id) { const q = QUESTS.find(q => q.id === id); return q && turnIn(q) ? rewardText(q.reward) : ""; }
 
-  return { init, bind, renderTown, onComplete, onCommit, gear, paintColor, hud, skillLevel, totalLevel, questsFor, turnInById, SKILLS, GOODS, GEAR, QUESTS, NPC, get state() { return S; } };
+  return { init, bind, renderTown, onComplete, onCommit, gear, paintColor, look, hud, skillLevel, totalLevel, questsFor, turnInById, SKILLS, GOODS, GEAR, QUESTS, NPC, COSMETICS, get state() { return S; } };
 })();
 window.RPG = RPG;

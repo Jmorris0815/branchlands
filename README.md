@@ -52,8 +52,8 @@ You start every session on the Harbor, a walkable 3D town. Move Bolt with the **
   `robot`: **Long Arm** picks from the tile ahead, **Spring Treads** jump two tiles, **Wide Scanner** makes
   `robot.scan()` return three tiles, **Crab Shell** survives a pinch, **Gem Magnet** doubles gem loot.
   Upgrades have skill requirements, like any RPG.
-- **Paint (🎨).** Bolt's colour in 2D and 3D. Some paints only come from quests.
-- **Quest board (📜).** Fourteen multi-step missions from the townsfolk, plus three daily contracts that change
+- **Style (🎨).** Paints, hats, eye colours and movement trails, all visible on Bolt in 2D and 3D. The rare ones are quest rewards.
+- **Quest board (📜).** Forty multi-step missions from the townsfolk (three-star hunts, whole-zone clears, crafting runs, commit counts, trading targets, total-level milestones), plus three daily contracts that change
   every day. Rewards: coins, skill XP, paints, titles.
 
 **Saves.** The home screen has three save slots, like a console: new game, continue, delete. Everything,

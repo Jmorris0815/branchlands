@@ -88,7 +88,7 @@ const Game = (() => {
       if (has) { Render3D.setQuality(save.settings.gfx === "fast" ? "fast" : "realistic"); Render3D.setActive(want); }
       return want ? Render3D : Render;
     },
-    load(s, t) { const r = R.pick(); if (r.setPaint) r.setPaint(RPG.paintColor()); r.load(s, t); },
+    load(s, t) { const r = R.pick(); if (r.setLook) r.setLook(RPG.look()); r.load(s, t); },
     play(e, sp, cb) { return R.pick().play(e, sp, cb); },
     cancel() { Render.cancel(); if (r3dInited) Render3D.cancel(); },
     confetti() { Render.confetti(); R.celebrate(); },
