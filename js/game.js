@@ -1,7 +1,8 @@
 // Game controller (v2): screens, progression, stars, achievements, settings, and the play modes.
 
 const Game = (() => {
-  const SAVE_KEY = "branchlands.v2", OLD_KEY = "branchlands.v1";
+  const OLD_KEY = "branchlands.v1", LEGACY_KEY = "branchlands.v2", ACTIVE_KEY = "branchlands.active", slotKey = (i) => "branchlands.slot" + i;
+  let slot = Number(localStorage.getItem(ACTIVE_KEY)) || 1;
   const DEFAULTS = () => ({ v: 2, completed: {}, xp: 0, code: {}, hintsUsed: {}, gems: {}, ach: {}, quests: {}, intro: false,
     settings: { sound: true, speed: "normal", theme: "system", name: "", repo: "Jmorris0815/branchlands", ghName: "", ollama: "http://localhost:11434", model: "", gfx: "realistic" } });
   let save = DEFAULTS();
@@ -43,14 +44,18 @@ const Game = (() => {
 
   // ---------- persistence ----------
   function loadSave() {
+    save = DEFAULTS();
     try {
-      const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (s) { save = { ...DEFAULTS(), ...s, settings: { ...DEFAULTS().settings, ...(s.settings || {}) } }; return; }
+      const legacy = localStorage.getItem(LEGACY_KEY); // one save from before slots existed becomes Save 1
+      if (legacy && !localStorage.getItem(slotKey(1))) { localStorage.setItem(slotKey(1), legacy); localStorage.removeItem(LEGACY_KEY); }
+      const s = JSON.parse(localStorage.getItem(slotKey(slot)));
+      if (s) { save = { ...DEFAULTS(), ...s, settings: { ...DEFAULTS().settings, ...(s.settings || {}) } }; return true; }
       const old = JSON.parse(localStorage.getItem(OLD_KEY));
-      if (old) { save = DEFAULTS(); save.xp = old.xp || 0; save.code = old.code || {}; save.hintsUsed = old.hintsUsed || {}; for (const id in old.completed || {}) save.completed[id] = { stars: 1 }; save.intro = true; persist(); }
+      if (old && slot === 1) { save.xp = old.xp || 0; save.code = old.code || {}; save.hintsUsed = old.hintsUsed || {}; for (const id in old.completed || {}) save.completed[id] = { stars: 1 }; save.intro = true; persist(); return true; }
     } catch (e) { }
+    return false;
   }
-  function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { } }
+  function persist() { try { save.meta = { last: Date.now() }; localStorage.setItem(slotKey(slot), JSON.stringify(save)); } catch (e) { } }
 
   // ---------- progression ----------
   const zoneLevels = (n) => LEVELS.filter(l => l.zone === n);
@@ -83,14 +88,46 @@ const Game = (() => {
       if (has) { Render3D.setQuality(save.settings.gfx === "fast" ? "fast" : "realistic"); Render3D.setActive(want); }
       return want ? Render3D : Render;
     },
-    load(s, t) { R.pick().load(s, t); },
+    load(s, t) { const r = R.pick(); if (r.setPaint) r.setPaint(RPG.paintColor()); r.load(s, t); },
     play(e, sp, cb) { return R.pick().play(e, sp, cb); },
     cancel() { Render.cancel(); if (r3dInited) Render3D.cancel(); },
     confetti() { Render.confetti(); R.celebrate(); },
     celebrate() { if (r3dInited && Render3D.ok && save.settings.gfx !== "classic") Render3D.celebrate(); },
-    reload() { if (current && current.mode === "robot" && !$("screen-level").hidden && !$("runBtn").disabled && grid) { R.cancel(); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); } },
+    reload() { if (current && current.mode === "hub" && !$("screen-level").hidden) { Hub.open(); return; } if (current && current.mode === "robot" && !$("screen-level").hidden && !$("runBtn").disabled && grid) { R.cancel(); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current)); } },
   };
   window.addEventListener("render3d-ready", () => { if (save) { R.init3d(); R.reload(); } });
+
+  // ---------- save slots, home screen, Harbor Town hub ----------
+  function slotInfo(i) { try { const s = JSON.parse(localStorage.getItem(slotKey(i))); if (!s) return null; return { name: (s.settings && s.settings.name) || "Castaway", done: Object.keys(s.completed || {}).length, coins: s.rpg ? s.rpg.coins : 0, last: s.meta && s.meta.last, xp: s.xp || 0 }; } catch (e) { return null; } }
+  function renderHome() {
+    const el = $("slots"); el.innerHTML = "";
+    for (let i = 1; i <= 3; i++) {
+      const info = slotInfo(i); const d = document.createElement("div"); d.className = "slot" + (info ? "" : " empty");
+      d.innerHTML = info
+        ? `<h3>Save ${i} · ${info.name}</h3><div class="muted">${info.done}/${LEVELS.length} missions · ${info.xp} XP · 🪙 ${info.coins}</div><div class="muted">${info.last ? "Last played " + new Date(info.last).toLocaleString() : ""}</div><div class="row"><button class="primary" data-play="${i}">▶ Continue</button><button class="danger small" data-del="${i}">Delete</button></div>`
+        : `<h3>Save ${i}</h3><div class="muted">Empty</div><div class="row"><button class="primary" data-new="${i}">＋ New game</button></div>`;
+      el.appendChild(d);
+    }
+    el.querySelectorAll("[data-play]").forEach(b => b.onclick = () => { sfx("click"); startSlot(+b.dataset.play, false); });
+    el.querySelectorAll("[data-new]").forEach(b => b.onclick = () => { sfx("click"); startSlot(+b.dataset.new, true); });
+    el.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { if (b.textContent !== "Really delete?") { b.textContent = "Really delete?"; return; } localStorage.removeItem(slotKey(+b.dataset.del)); sfx("error"); renderHome(); });
+  }
+  function startSlot(i, fresh) {
+    slot = i; localStorage.setItem(ACTIVE_KEY, String(i));
+    if (fresh) { save = DEFAULTS(); persist(); } else loadSave();
+    applySettings(); RPG.init(save, rpgApi); $("xp").textContent = save.xp + " XP"; $("rank").textContent = rank();
+    if (!save.intro) showIntro(openHub); else openHub();
+  }
+  const rpgApi = { persist, sfx, toast, zoneUnlocked, levelUnlocked, openLevel: (l) => { hideModal(); openLevel(l); }, completed: () => save.completed };
+  const hubApi = { R, showModal, hideModal, openLevel: (l) => { hideModal(); openLevel(l); }, showScreen, openTown: (tab) => { showScreen("town"); RPG.renderTown(tab); }, zoneUnlocked, completed: () => save.completed, save: () => save, persistSave: persist, sfx, toast, ollama: () => ({ endpoint: save.settings.ollama, model: save.settings.model }) };
+  const HUB_LEVEL = { id: "hub", zone: 1, mode: "hub", title: "Harbor Town", hints: [], xp: 0 };
+  function openHub() {
+    current = HUB_LEVEL; R.cancel(); showScreen("level"); location.hash = "hub";
+    document.querySelectorAll(".mode").forEach(e => e.hidden = true); $("mode-robot").hidden = false;
+    $("levels").innerHTML = `<button id="hubTown">📜 Quest board</button><button id="hubMap">🗺️ World map</button><button id="hubSaves">💾 Saves</button>`;
+    $("hubTown").onclick = () => hubApi.openTown("board"); $("hubMap").onclick = () => showScreen("map"); $("hubSaves").onclick = () => showScreen("home");
+    Hub.open(); window.scrollTo({ top: 0 });
+  }
   function applySettings() {
     const t = save.settings.theme; if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
     Audio_.enabled = save.settings.sound; $("soundBtn").textContent = save.settings.sound ? "🔊" : "🔇";
@@ -100,9 +137,11 @@ const Game = (() => {
 
   // ---------- screens ----------
   function showScreen(name) {
-    for (const s of ["map", "level", "editor"]) $("screen-" + s).hidden = s !== name;
+    for (const s of ["home", "map", "level", "editor", "town"]) $("screen-" + s).hidden = s !== name;
     if (name === "map") { WorldMap.start(); renderMapInfo(null); renderQuests(); } else WorldMap.stop();
-    if (name !== "level") { R.cancel(); location.hash = name === "map" ? "" : name; }
+    if (name !== "level") { R.cancel(); Hub.close(); location.hash = name === "home" ? "" : name; }
+    if (name === "home") renderHome();
+    if (name === "town") RPG.renderTown();
   }
   function renderMapInfo(zone) {
     const el = $("mapInfo");
@@ -189,7 +228,7 @@ const Game = (() => {
   }
 
   function openLevel(l) {
-    current = l; R.cancel(); showScreen("level");
+    Hub.close(); current = l; R.cancel(); showScreen("level");
     if (l.id !== "custom" && !l.sandbox) location.hash = l.id; else if (l.sandbox) location.hash = "sandbox";
     renderLevels(); renderMission();
     document.querySelectorAll(".mode").forEach(e => e.hidden = true);
@@ -201,11 +240,11 @@ const Game = (() => {
   // ---------- ROBOT mode (Python or JavaScript) ----------
   function setupRobot() {
     $("mode-robot").hidden = false; $("mode-code").hidden = false;
-    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
+    grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current));
     $("code").value = save.code[current.id] || current.starter;
     $("langSel").value = current.lang; updateLineCount();
     $("runBtn").textContent = "▶ Run (Ctrl+Enter)"; $("runBtn").onclick = () => runRobot();
-    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
+    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
     $("starterBtn").onclick = () => { $("code").value = current.starter; updateLineCount(); };
     $("langSel").onchange = () => { current.lang = $("langSel").value; current.starter = current.lang === "js" ? "// everything: move jump turn_left turn_right turn_around pick press wait say sees scan done has_key\nrobot.say(\"hello world\");\nrobot.move(3);\n" : SANDBOX_LEVEL.starter; $("code").value = current.starter; updateLineCount(); };
   }
@@ -222,10 +261,10 @@ const Game = (() => {
     if (current.maxLines && lines > current.maxLines) { log(`Too long: ${lines} lines, limit is ${current.maxLines}. A loop would make this shorter.`, "err"); sfx("error"); return false; }
     if (current.requireDef && !hasDefAndCall(code, current.lang)) { log(`This level needs a function: define one with ${current.lang === "js" ? "function" : "def"} and call it at least once.`, "err"); sfx("error"); return false; }
     R.cancel();
-    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
+    grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current));
     $("runBtn").disabled = true;
     let events, error, output, evalMsg, gems;
-    if (current.lang === "js") { const r = await JSR.run(code, current, grid); events = r.events || []; error = r.error; output = r.output; evalMsg = r.evalMsg; gems = r.gems || 0; }
+    if (current.lang === "js") { const r = await JSR.run(code, current, grid, RPG.gear()); events = r.events || []; error = r.error; output = r.output; evalMsg = r.evalMsg; gems = r.gems || 0; }
     else { const r = await PY.run(code, sim); events = sim.events; error = r.error; output = r.output; evalMsg = sim.evaluate(); gems = sim.gems; }
     if (output) log(output.trimEnd(), "out");
     await R.play(events, $("speed").value, ev => { sfx(ev.type === "pick" && ev.item === "*" ? "gem" : ev.type === "pick" ? "pick" : ev.type); if (ev.type === "say") log("🤖 " + ev.text, "out"); });
@@ -234,7 +273,7 @@ const Game = (() => {
     if (evalMsg === "sandbox") { log("Sandbox: robot ended at (" + (sim ? sim.robot.x : "?") + ", " + (sim ? sim.robot.y : "?") + "). Nothing to win here.", "tip"); return false; }
     if (evalMsg) { log("Not yet: " + evalMsg, "warn"); sfx("error"); return false; }
     log("✅ Mission complete!" + (gems ? " +" + gems + " gem" + (gems > 1 ? "s" : "") : ""), "ok");
-    complete({ lines, gems }); return true;
+    complete({ lines, gems, events }); return true;
   }
 
   // ---------- GIT mode ----------
@@ -251,7 +290,7 @@ const Game = (() => {
       const line = input.value.trim(); input.value = ""; if (!line) return;
       termLine("$ " + line, "cmd"); sfx("click");
       if (line === "clear") { term.innerHTML = ""; return; }
-      git.run(line).forEach(s => termLine(s, s.startsWith("error") || s.startsWith("!") || s.startsWith("CONFLICT") ? "err" : ""));
+      const before = git.commitCount(); git.run(line).forEach(s => termLine(s, s.startsWith("error") || s.startsWith("!") || s.startsWith("CONFLICT") ? "err" : "")); if (git.commitCount() > before) RPG.onCommit(git.commitCount() - before);
       git.drawGraph($("graph"));
       if (!git.solved && current.check(git)) { git.solved = true; termLine("✅ The Tower door opens.", "ok"); complete({}); }
     };
@@ -261,7 +300,7 @@ const Game = (() => {
   // ---------- REVIEW mode ----------
   function setupReview() {
     $("mode-review").hidden = false; $("mode-robot").hidden = false; $("mode-code").hidden = false;
-    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
+    grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current));
     review = { requested: false }; const pr = current.pr;
     $("prHead").innerHTML = `<b>Pull request</b> · <span class="branch">${pr.branch}</span> → <span class="branch">main</span><br><span class="muted">${pr.author} wants to merge 1 commit: “${pr.title}”</span>`;
     $("code").value = pr.code; $("code").disabled = true; updateLineCount();
@@ -271,7 +310,7 @@ const Game = (() => {
       const ok = await runRobot($("code").value);
       if (!ok && pr.correct) log("Dad: it worked when I ran it. Try Reset world and run again before approving.", "dad");
     };
-    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
+    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
     $("starterBtn").onclick = () => { $("code").value = pr.code; updateLineCount(); };
     $("requestBtn").onclick = () => {
       const c = $("reviewComment").value.trim();
@@ -286,12 +325,12 @@ const Game = (() => {
   // ---------- AUTHOR mode: write code AND the pull request ----------
   function setupAuthor() {
     $("mode-author").hidden = false; $("mode-robot").hidden = false; $("mode-code").hidden = false;
-    grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current));
+    grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current));
     authorState = { tested: false };
     $("code").value = save.code[current.id] || current.starter; updateLineCount();
     $("prTitle").value = ""; $("prBody").value = ""; $("prTested").checked = false; $("prStatus").textContent = "";
     $("runBtn").textContent = "▶ Run (test it first)"; $("runBtn").onclick = async () => { const ok = await runRobotNoComplete(); authorState.tested = ok; if (ok) log("It works. Now write the pull request on the right and open it.", "tip"); };
-    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
+    $("resetBtn").onclick = () => { R.cancel(); grid = resolveGrid(current); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current)); $("console").textContent = ""; };
     $("starterBtn").onclick = () => { $("code").value = current.starter; updateLineCount(); };
     $("openPrBtn").onclick = async () => {
       const title = $("prTitle").value.trim(), body = $("prBody").value.trim();
@@ -398,7 +437,7 @@ const Game = (() => {
     for (const a of ACH) if (!save.ach[a.id] && a.test(save)) { save.ach[a.id] = Date.now(); got.push(a); }
     if (got.length) { persist(); got.forEach((a, i) => setTimeout(() => { toast(`<b>${a.icon} ${a.name}</b>${a.desc}`); sfx("star"); }, 600 + i * 900)); }
   }
-  let complete = function ({ lines, gems }) {
+  let complete = function ({ lines, gems, events }) {
     if (current.id === "custom" || current.sandbox) { sfx("win"); showModal(`<h2>Solved your custom level</h2><p>Nice. Export it from the editor and open a pull request so it lands in the real game.</p><div class="row"><button id="closeBtn">Close</button><button id="toEditor">Back to editor</button></div>`); $("closeBtn").onclick = hideModal; $("toEditor").onclick = () => { hideModal(); openEditor(current); }; return; }
     const prev = save.completed[current.id]; const first = !prev;
     const stars = starsFor(current, lines || 0);
@@ -420,11 +459,12 @@ const Game = (() => {
         ${next ? `<p>Zone ${next.zone}: <b>${ZONES[next.zone - 1].name}</b> is open on the map.</p>` : "<p>You finished every zone. Make your own in the Level Editor and open a pull request.</p>"}</div>`;
       R.confetti(); sfx("unlock");
     } else sfx("win");
-    html += `<div class="row">${next && levelUnlocked(next) ? `<button id="nextBtn" class="primary">Next: ${next.id} ${next.title} →</button>` : ""}<button id="mapBtn2">World map</button><button id="closeBtn">Stay here</button></div>`;
+    html += RPG.onComplete(current, { first, lines, events });
+    html += `<div class="row">${next && levelUnlocked(next) ? `<button id="nextBtn" class="primary">Next: ${next.id} ${next.title} →</button>` : ""}<button id="hubBtn2">⚓ Harbor</button><button id="mapBtn2">World map</button><button id="closeBtn">Stay here</button></div>`;
     R.celebrate();
     showModal(html);
     if (next && levelUnlocked(next)) $("nextBtn").onclick = () => { hideModal(); openLevel(next); };
-    $("mapBtn2").onclick = () => { hideModal(); showScreen("map"); };
+    $("mapBtn2").onclick = () => { hideModal(); showScreen("map"); }; $("hubBtn2").onclick = () => { hideModal(); openHub(); };
     $("closeBtn").onclick = hideModal;
     checkAchievements();
   };
@@ -455,15 +495,15 @@ const Game = (() => {
       <div class="row"><button id="sImport" class="small">Import from box</button><button id="sReset" class="danger small">Reset all progress</button><span class="sp"></span><button id="sSave" class="primary">Save</button></div></div>`);
     $("sSave").onclick = () => { Object.assign(save.settings, { name: $("sName").value.trim(), theme: $("sTheme").value, sound: $("sSound").value === "1", speed: $("sSpeed").value, repo: $("sRepo").value.trim(), ghName: $("sGh").value.trim(), ollama: $("sOl").value.trim(), gfx: $("sGfx").value }); persist(); applySettings(); hideModal(); R.reload(); if (!$("screen-map").hidden) { renderMapInfo(null); renderQuests(); } };
     $("sImport").onclick = () => { try { const d = JSON.parse($("sData").value); if (d && d.completed) { save = { ...DEFAULTS(), ...d }; persist(); location.reload(); } } catch (e) { $("sData").value = "That wasn't valid progress data."; } };
-    $("sReset").onclick = () => { if ($("sReset").textContent !== "Really reset?") { $("sReset").textContent = "Really reset?"; return; } localStorage.removeItem(SAVE_KEY); localStorage.removeItem(OLD_KEY); location.hash = ""; location.reload(); };
+    $("sReset").onclick = () => { if ($("sReset").textContent !== "Really reset?") { $("sReset").textContent = "Really reset?"; return; } localStorage.removeItem(slotKey(slot)); localStorage.removeItem(OLD_KEY); location.hash = ""; location.reload(); };
   }
-  function showIntro() {
+  function showIntro(after) {
     showModal(`<h2>Branchlands</h2><p>You wash up on an island with a robot named Bolt. Bolt's battery is dead and the island is broken: the lighthouse is dark, the orchard is overgrown, the bridge is missing planks, and the Time Tower, which runs on something called Git, has fractured into timelines.</p>
       <p>Bolt will do anything you type. Exactly what you type. Nothing else. That turns out to be the whole trick.</p>
       <p>Each zone you fix teaches one <b>reason</b> people write code, and hands you a quest to do the same thing for real on your own computer.</p>
       <label style="display:block;margin:10px 0;font-size:13px;color:var(--muted)">What should Bolt call you?<input id="introName" type="text" style="width:100%;font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)" placeholder="your name"></label>
       <div class="row"><button id="introGo" class="primary">Wake up Bolt →</button></div>`);
-    $("introGo").onclick = () => { save.settings.name = $("introName").value.trim(); save.intro = true; persist(); hideModal(); sfx("doors"); openLevel(LEVELS[0]); };
+    $("introGo").onclick = () => { save.settings.name = $("introName").value.trim(); save.intro = true; persist(); hideModal(); sfx("doors"); (after || openHub)(); };
   }
 
   // ---------- editor ----------
@@ -493,24 +533,28 @@ const Game = (() => {
     if (h.startsWith("lvl=")) { try { const lv = Editor.decode(h.slice(4)); lv.id = "custom"; lv.mode = "robot"; openLevel(lv); return; } catch (e) { } }
     if (h === "editor") { openEditor(); return; }
     if (h === "sandbox") { openLevel(SANDBOX_LEVEL); return; }
+    if (h === "map") { showScreen("map"); return; }
+    if (h === "hub") { openHub(); return; }
+    if (h === "town") { showScreen("town"); return; }
     const l = LEVEL_BY_ID[h]; if (l && levelUnlocked(l)) { openLevel(l); return; }
-    showScreen("map");
+    showScreen("home");
   }
   function init() {
     LEVELS.forEach(l => { if (l.mode === "ollama") l.optional = true; });
-    loadSave(); applySettings();
+    loadSave(); applySettings(); RPG.init(save, rpgApi); RPG.bind(); Hub.init(hubApi);
     R.init($("world"), $("fx")); editorTabs($("code"));
+    $("world").addEventListener("click", e => { if (Hub.active) { const t = Render.pickTile(e); if (t) Hub.walkTo(t.x, t.y); } });
+    document.addEventListener("tileclick", e => { if (Hub.active && e.detail) Hub.walkTo(e.detail.x, e.detail.y); });
     WorldMap.init($("map"), zoneStatus, (z) => { const st = zoneStatus(z.n); if (st.unlocked) { sfx("click"); openLevel(zoneLevels(z.n).find(l => !save.completed[l.id]) || zoneLevels(z.n)[0]); } else renderMapInfo(z); }, (z) => renderMapInfo(z));
-    $("homeBtn").onclick = $("mapBtn").onclick = () => showScreen("map");
-    $("backBtn").onclick = $("edBack").onclick = () => showScreen("map");
+    $("homeBtn").onclick = () => showScreen("home"); $("mapBtn").onclick = () => showScreen("map"); $("hubBtn").onclick = openHub; $("townBack").onclick = openHub;
+    $("backBtn").onclick = openHub; $("edBack").onclick = () => showScreen("map");
     $("codexBtn").onclick = showCodex; $("settingsBtn").onclick = showSettings;
     $("soundBtn").onclick = () => { save.settings.sound = !save.settings.sound; persist(); applySettings(); sfx("click"); };
     $("remixBtn").onclick = () => openEditor(current);
     $("speed").onchange = () => { save.settings.speed = $("speed").value; persist(); };
     $("modal").addEventListener("click", e => { if (e.target === $("modal")) hideModal(); });
-    window.addEventListener("hashchange", () => { const h = location.hash.replace("#", ""); if (h === "" && !$("screen-map").hidden) return; if (h === "" ) showScreen("map"); });
+    window.addEventListener("hashchange", () => { const h = location.hash.replace("#", ""); if (h === "" && !$("screen-home").hidden) return; if (h === "") showScreen("home"); });
     route();
-    if (!save.intro && !location.hash.startsWith("#lvl=")) showIntro();
     if (typeof Sk === "undefined") toast("<b>Python engine didn't load</b>Check your internet connection and refresh.");
   }
   return { init, openLevel, openEditor, showScreen, get save() { return save; } };

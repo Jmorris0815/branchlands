@@ -16,14 +16,32 @@
   <span class="sp"></span>
   <span id="rank" class="rank"></span>
   <span id="xp">0 XP</span>
+  <span id="coins" class="rank" title="coins">🪙 0</span>
+  <button id="hubBtn">⚓ Harbor</button>
   <button id="mapBtn">🗺️ Map</button>
   <button id="codexBtn">📜 Codex</button>
   <button id="soundBtn" title="sound on/off">🔊</button>
   <button id="settingsBtn" title="settings">⚙️</button>
 </header>
 
+<!-- ============ HOME: save slots ============ -->
+<section id="screen-home" class="screen" hidden>
+  <div class="home">
+    <div class="hero"><h2>🌿 Branchlands</h2><p>A world you fix by writing real code. Pick a save, or start a new game. Three slots, like a real console.</p></div>
+    <div id="slots" class="slots"></div>
+    <p class="muted">Saves live in this browser. Export one from ⚙️ Settings to carry it to another computer.</p>
+  </div>
+</section>
+
+<!-- ============ HARBOR TOWN: quest board, skills, storehouse, market, workshop, paint ============ -->
+<section id="screen-town" class="screen" hidden>
+  <div class="levelbar"><button id="townBack">← Harbor</button><h2 class="edh">⚓ Harbor Town</h2><span id="townCoins" class="muted"></span></div>
+  <div id="townTabs" class="tabs"><button data-tab="board">📜 Quest board</button><button data-tab="skills">📈 Skills</button><button data-tab="pack">🎒 Storehouse</button><button data-tab="market">🏪 Market</button><button data-tab="workshop">🔧 Workshop</button><button data-tab="paint">🎨 Paint</button></div>
+  <div id="townBody" class="panel"></div>
+</section>
+
 <!-- ============ WORLD MAP ============ -->
-<section id="screen-map" class="screen">
+<section id="screen-map" class="screen" hidden>
   <div class="mapwrap panel"><canvas id="map" width="900" height="480"></canvas></div>
   <div class="maprow">
     <div id="mapInfo" class="panel"></div>
@@ -34,7 +52,7 @@
 <!-- ============ LEVEL ============ -->
 <section id="screen-level" class="screen" hidden>
   <div class="levelbar">
-    <button id="backBtn">← Map</button>
+    <button id="backBtn">← Harbor</button>
     <div id="levels"></div>
   </div>
   <main>
@@ -151,6 +169,8 @@
 <script src="js/map.js"></script>
 <script src="js/quests.js"></script>
 <script src="js/editor.js"></script>
+<script src="js/rpg.js"></script>
+<script src="js/hub.js"></script>
 <script src="js/game.js"></script>
 <script type="module" async src="js/render3d.js"></script>
 </body>

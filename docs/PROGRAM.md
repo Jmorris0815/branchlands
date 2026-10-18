@@ -1,6 +1,6 @@
 # Branchlands: company program
 
-*Version 0.3, 18 October 2026. Owner: Justin Morris.*
+*Version 0.4, 18 October 2026. Owner: Justin Morris.*
 
 ## 1. The one-line pitch
 
@@ -45,7 +45,7 @@ Combat theming (Common Sense Media flags CodeCombat for it). Gems/loot boxes. Le
 
 | Phase | Weeks | Ships | Done when |
 |---|---|---|---|
-| 0. Prototype | done | this repo: 35 levels, 8 zones, editor, Ollama Oracle, JS zone, GitHub quest check | a kid can play 1-1 through 8-5 unassisted |
+| 0. Prototype | done | this repo: 35 levels, 8 zones, editor, Ollama Oracle, JS zone, GitHub quest check, realistic 3D, Harbor Town hub with economy/skills/quests/NPCs, save slots | a kid can play 1-1 through 8-5 unassisted |
 | 1. Family alpha | 1–6 | Justin + son use the repo for real: his branches, his PRs, his levels | 10 merged PRs authored by the kid; 3 new levels he designed |
 | 2. Real Git zone | 6–12 | Zone 5 reads the player's actual repo via a tiny local helper (`branchlands serve`); today the game already verifies commits and merged PRs through the public GitHub API | first local commit marks 5-1 done in-game without GitHub |
 | 3. Co-op | 12–20 | two browsers, one world: author/reviewer roles, live PR review on a shared level, deliberate merge-conflict level | two families outside ours finish Zone 6 together |
@@ -99,6 +99,39 @@ is an afternoon and tens of dollars, and should be approved per batch.
 **Performance budget.** 60 fps at 800×500 on an integrated GPU for "realistic"; "fast 3D" drops shadows,
 bloom and device-pixel scaling for Chromebooks; "classic 2D" always works. A level never ships with more
 than about 250 draw calls.
+
+### 3.7 Progression and economy (the RuneScape layer)
+
+**Design rule: every system is downstream of writing code.** Skills level only by finishing or replaying
+missions (and committing in the Time Tower). Loot only comes from what the robot's code picked up or
+finished. Coins only come from selling that loot, from quests, and from first-completion bounties. Nothing
+for sale skips a lesson: upgrades add power to `robot` but the line limits, the `def` requirement and the
+par-based stars still decide the rating, so a kid with a Long Arm still has to write the loop.
+
+**What shipped in the prototype (October 2026):**
+
+| System | Shape | Teaches |
+|---|---|---|
+| Home screen | three save slots, new / continue / delete, legacy save migrated to slot 1 | ownership of "my game" |
+| Harbor hub | walkable 3D town on the same renderer as levels; arrow keys / click-to-walk with BFS pathing; portals, 8 NPCs, 6 stalls, map sign | spatial sense of the world; portals make unlocking visible |
+| Conversations | scripted topics per NPC with computed clues ("next is 1-3, hint: …"), quest hand-ins in dialog, free chat via local Ollama in character | contextual help instead of a help page |
+| Skills | 8 skills, level = f(xp) with xp(L) = 25·(L−1)^1.5, first clear ×2, par bonus ×1.25, replays ×0.4 | mastery as a number the kid owns |
+| Loot | pick events → apples/gems/lenses/scrap; zone drops per clear; a shard per Git commit; backpack cap 20/60/200; drops halve after 5 clears of a level per day | persistence pays, grinding is bounded |
+| Market | daily seeded prices ±25%, one HOT good +40%, −2% per unit sold until tomorrow (floor 35%), buy = sell × 1.5 | supply, demand, planning, arbitrage over days |
+| Workshop | 4 recipes with skill gates, 7 upgrades (5 change the sim, 2 enlarge the pack) | compounding: cheap → dear |
+| Paint | 7 colours, 3 quest-only, applied to the robot in 2D and 3D | identity |
+| Quests | 14 NPC quests with typed steps (complete, par, gather, craft, sell, gear, commits, total level); 3 daily contracts | curriculum sequencing in disguise |
+
+**Why single-player first.** A shared economy needs accounts and a server, which drags COPPA and moderation
+in (§5). The single-player economy is deterministic per day (seeded by the date), which already makes two
+siblings' markets identical and comparable without any networking. Phase 3 puts the economy in Supabase
+(already in the family toolbox): family-scoped markets, trading between the two accounts, an opt-in family
+leaderboard, and PR-review quests that are actually assigned to the other player.
+
+**Content budget to feel like RuneScape, not a demo:** 40+ quests (14 now), 12+ upgrades, 3 recipe tiers,
+cosmetic hats and trails, a bank with tabs, a "collection log", NPC schedules (Pip is in the orchard in the
+morning), and a soundtrack per zone. All of it is data in `js/rpg.js` and `js/hub.js`, which is the point:
+the kid can add a quest by adding an object.
 
 ## 4. Business
 

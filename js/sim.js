@@ -9,8 +9,8 @@ const MAX_STEPS = 800;
 class RobotFail extends Error { constructor(msg) { super(msg); this.name = "RobotFail"; } }
 
 class Sim {
-  constructor(level, resolvedGrid) {
-    this.level = level;
+  constructor(level, resolvedGrid, gear) {
+    this.level = level; this.gear = gear || {}; this.shieldUsed = false;
     const rows = resolvedGrid || (level.generate ? level.generate() : level.grid);
     this.grid = rows.map(r => (typeof r === "string" ? r.split("") : r.slice()));
     this.h = this.grid.length; this.w = this.grid[0].length;
@@ -81,8 +81,11 @@ class Sim {
       if (this.blocked(nx, c.y) || this.tile(nx, c.y) === "~") { c.dx = -c.dx; nx = c.x + c.dx; if (this.blocked(nx, c.y) || this.tile(nx, c.y) === "~") continue; }
       const from = { x: c.x, y: c.y }; c.x = nx;
       this.events.push({ type: "crab", id: c.id, from, to: { x: c.x, y: c.y } });
-      if (c.x === this.robot.x && c.y === this.robot.y) { this.events.push({ type: "pinch", x: c.x, y: c.y }); throw new RobotFail("Pinched! A crab walked into the robot at (" + c.x + ", " + c.y + "). Use robot.sees(\"crab\") and robot.wait()."); }
+      if (c.x === this.robot.x && c.y === this.robot.y) { if (this.shield(c)) continue; this.events.push({ type: "pinch", x: c.x, y: c.y }); throw new RobotFail("Pinched! A crab walked into the robot at (" + c.x + ", " + c.y + "). Use robot.sees(\"crab\") and robot.wait()."); }
     }
+  }
+  shield(c) { // Crab Shell upgrade: survive one pinch per run, the crab scuttles off
+    if (!this.gear.crabShell || this.shieldUsed) return false; this.shieldUsed = true; this.crabs = this.crabs.filter(x => x !== c); this.events.push({ type: "shield", id: c.id, x: c.x, y: c.y }); return true;
   }
   crabWillEnter(x, y) { return this.crabs.some(c => c.y === y && c.x + c.dx === x && !this.blocked(c.x + c.dx, c.y)); }
 
@@ -92,7 +95,8 @@ class Sim {
     const t = this.tile(to.x, to.y), k = this.key(to);
     this.events.push({ type: how, from, to: { ...to }, over: how === "jump" ? this.ahead(-1) : undefined });
     if (t === "~") throw new RobotFail("Splash! The robot fell in the water at (" + to.x + ", " + to.y + "). Use robot.sees(\"water\") and robot.jump().");
-    if (this.crabAt(to.x, to.y)) { this.events.push({ type: "pinch", x: to.x, y: to.y }); throw new RobotFail("Pinched! The robot walked into a crab at (" + to.x + ", " + to.y + ")."); }
+    const crab = this.crabAt(to.x, to.y);
+    if (crab && !this.shield(crab)) { this.events.push({ type: "pinch", x: to.x, y: to.y }); throw new RobotFail("Pinched! The robot walked into a crab at (" + to.x + ", " + to.y + ")."); }
     if (this.pads[k]) {
       const twin = Object.keys(this.pads).find(kk => kk !== k && this.pads[kk] === this.pads[k]);
       if (twin) { const [tx, ty] = twin.split(",").map(Number); const f = { x: this.robot.x, y: this.robot.y }; this.robot.x = tx; this.robot.y = ty; this.events.push({ type: "teleport", from: f, to: { x: tx, y: ty } }); }
@@ -113,7 +117,8 @@ class Sim {
   }
   jump() {
     this.tick();
-    const to = this.ahead(2);
+    let to = this.ahead(2);
+    if ((this.blocked(to.x, to.y) || this.tile(to.x, to.y) === "~") && this.gear.springTreads) { const far = this.ahead(3); if (!this.blocked(far.x, far.y) && this.tile(far.x, far.y) !== "~") to = far; } // Spring Treads upgrade
     if (this.blocked(to.x, to.y) || this.tile(to.x, to.y) === "~") { this.events.push({ type: "bump", x: this.robot.x, y: this.robot.y, dir: this.robot.dir, what: "nothing to land on" }); this.afterAction(); return; }
     this.enter(to, "jump");
     this.afterAction();
@@ -130,6 +135,10 @@ class Sim {
       delete this.items[k];
       if (it === "*") this.gems++; else if (it === "K") this.keys++; else this.bag++;
       this.events.push({ type: "pick", x: this.robot.x, y: this.robot.y, item: it });
+    } else if (this.gear.longArm && this.items[this.key(this.ahead())]) { // Long Arm upgrade: grab from the tile ahead
+      const p = this.ahead(), k2 = this.key(p), it2 = this.items[k2]; delete this.items[k2];
+      if (it2 === "*") this.gems++; else if (it2 === "K") this.keys++; else this.bag++;
+      this.events.push({ type: "pick", x: p.x, y: p.y, item: it2, reach: true });
     } else this.events.push({ type: "nothing", x: this.robot.x, y: this.robot.y });
     this.afterAction();
   }
@@ -165,7 +174,7 @@ class Sim {
       default: throw new RobotFail("robot.sees() doesn't know '" + what + "'. Try: wall, water, apple, gem, key, item, goal, switch, door, gate, teleporter, crab, floor.");
     }
   }
-  scan() { this.tick(); const p = this.ahead(); return this.nameOf(p.x, p.y); }
+  scan() { this.tick(); if (this.gear.wideScanner) return [1, 2, 3].map(n => { const p = this.ahead(n); return this.nameOf(p.x, p.y); }); const p = this.ahead(); return this.nameOf(p.x, p.y); }
   done() { this.tick(); return !!this.goal && this.robot.x === this.goal.x && this.robot.y === this.goal.y; }
   has_key() { return this.keys > 0; }
   facing() { return DIR_NAMES[this.robot.dir]; }

@@ -31,6 +31,34 @@ a sandbox with every tile, a **level editor** that exports levels for a pull req
 synthesized sound, light and dark themes, and **real-world quests** that the game verifies against the
 family GitHub repo (your commits, your merged PRs).
 
+## Harbor Town: the RuneScape layer
+
+You start every session on the Harbor, a walkable 3D town. Move Bolt with the **arrow keys / WASD** or
+**click a tile**; walk up to someone and press **E** (or click them). Around the harbor:
+
+- **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
+- **Townsfolk with real conversations.** Marisol (harbor master), Old Pip (loops), Odo (decisions and crabs),
+  Wrenna (functions and upgrades), the Clockwright (Git), Dad (reviews and pull requests), the Oracle (bots),
+  Captain Nyx (JavaScript). Each has topics that hand out clues, lore and quests. When Ollama is connected,
+  every one of them also answers anything you type, in character, from a model on your own computer.
+- **Skills (📈).** Eight skills that level from 1 to 99 by doing the thing: Commands, Loops, Logic, Functions,
+  Git, Review, AI, JavaScript. First completions pay double, three-star runs pay 25% more, replays keep paying.
+- **Loot and the Storehouse (🎒).** Everything Bolt picks up is yours (apples, gems, lenses, scrap), every
+  mission drops zone goods (fog stone, planks, Oracle ink, mirror glass) and every Time Tower commit drops a
+  time shard. Backpacks have a cap; bigger packs are an upgrade.
+- **Market (🏪).** Prices drift every day, one good is HOT (+40%), and dumping a lot of one thing drops its
+  price until tomorrow. Buying costs more than selling. That is the whole lesson in supply and demand.
+- **Workshop (🔧).** Craft cheap goods into dear ones (3 apples → cider), and buy upgrades that really change
+  `robot`: **Long Arm** picks from the tile ahead, **Spring Treads** jump two tiles, **Wide Scanner** makes
+  `robot.scan()` return three tiles, **Crab Shell** survives a pinch, **Gem Magnet** doubles gem loot.
+  Upgrades have skill requirements, like any RPG.
+- **Paint (🎨).** Bolt's colour in 2D and 3D. Some paints only come from quests.
+- **Quest board (📜).** Fourteen multi-step missions from the townsfolk, plus three daily contracts that change
+  every day. Rewards: coins, skill XP, paints, titles.
+
+**Saves.** The home screen has three save slots, like a console: new game, continue, delete. Everything,
+including Harbor Town, lives in the slot; export it from ⚙️ Settings to move it to another computer.
+
 ## Graphics: a real 3D island
 
 Every level is drawn by a realistic 3D renderer (`js/render3d.js`, built on [Three.js](https://threejs.org)):
@@ -81,7 +109,9 @@ js/map.js         the world map
 js/editor.js      level editor, export, share links
 js/quests.js      GitHub quest verification, Ollama client
 js/audio.js       synthesized sound effects
-js/game.js        progression, stars, achievements, settings, and the seven play modes
+js/game.js        save slots, screens, progression, stars, achievements, settings, and the play modes
+js/rpg.js         Harbor Town economy: skills, loot, market, crafting, upgrades, paint, quests, daily contracts
+js/hub.js         the walkable hub: grid, props, movement, NPC conversations (scripted + Ollama)
 docs/             company program, competitor teardown (with REA), research report
 ```
 
@@ -101,7 +131,7 @@ item, goal, switch, door, gate, teleporter, crab, floor.
 
 ## Status
 
-Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer with a 2D fallback. Not built yet: accounts,
+Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer with a 2D fallback, Harbor Town hub with economy, skills, quests and NPCs, three save slots. Not built yet: accounts,
 two-browser co-op, Git against your real local folder, an LLM NPC inside the robot world, a rigged robot model, music.
 The plan is in [docs/PROGRAM.md](docs/PROGRAM.md).
 

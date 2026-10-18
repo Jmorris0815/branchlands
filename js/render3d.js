@@ -17,7 +17,8 @@ const Render3D = (() => {
   let fx, fctx, canvas2d, canvas, renderer, scene, camera, composer, bloom, sky, sun, hemi, pmrem, world, ocean;
   let state, theme = "sand", th, ok = false, active = false, quality = "realistic", cancelFlag = false, bubble = null;
   let clock = 0, lastNow = 0, loopStarted = false;
-  let robot, headlight, crabs = {}, items = {}, switches = {}, doors = {}, gates = {}, pads = [], trail, moveN = 0;
+  let robot, headlight, crabs = {}, items = {}, switches = {}, doors = {}, gates = {}, pads = [], trail, moveN = 0, propsList = [], paint = new THREE.Color(0x3b55c8);
+  function setPaint(c) { paint = new THREE.Color(c); }
   const cam = { center: new THREE.Vector3(), dist: 10, el: 0.82, az: 0.35, azV: 0, introK: 0, look: new THREE.Vector3(), follow: new THREE.Vector3() };
   let particles;
   const texCache = {};
@@ -58,13 +59,43 @@ const Render3D = (() => {
   const labelCache = {};
   function labelTex(text, bg) {
     const key = text + bg; if (labelCache[key]) return labelCache[key];
-    const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
-    g.fillStyle = bg; g.beginPath(); g.arc(32, 32, 29, 0, 7); g.fill();
-    g.fillStyle = "#fff"; g.font = "700 36px Nunito, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(text, 32, 35);
+    const long = text.length > 2, c = document.createElement("canvas"); c.width = long ? 256 : 64; c.height = 64; const g = c.getContext("2d");
+    g.font = `700 ${long ? 28 : 36}px Nunito, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    const tw = long ? Math.min(248, g.measureText(text).width + 30) : 60;
+    g.fillStyle = bg; g.beginPath(); g.roundRect((c.width - tw) / 2, 2, tw, 60, 30); g.fill();
+    g.fillStyle = "#fff"; g.fillText(text, c.width / 2, 34, 236);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return labelCache[key] = t;
   }
-  function label(text, x, z, size) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(text, "rgba(22,30,44,0.8)"), transparent: true, depthWrite: false })); s.position.set(x, 0.28, z); s.scale.setScalar(size); return s; }
+  function label(text, x, z, size, y = 0.28) { const tex = labelTex(text, "rgba(22,30,44,0.8)"); const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); s.position.set(x, y, z); s.scale.set(size * tex.image.width / 64, size, 1); return s; }
+  // hub props: zone portals, townsfolk, market stalls, the map signpost
+  function propMesh(p) {
+    const g = new THREE.Group(), name = p.label.replace(/^\S+\s/, "");
+    if (p.kind === "portal") {
+      const c = new THREE.Color(p.locked ? 0x555a66 : p.color);
+      const ring = mesh(new THREE.TorusGeometry(0.42, 0.06, 12, 40), std({ color: c, emissive: c, emissiveIntensity: p.locked ? 0.05 : 1.4, roughness: 0.3 }), 0, 0.62, 0); g.add(ring); g.userData.spin = ring;
+      g.add(mesh(new THREE.CircleGeometry(0.36, 32), std({ color: c, emissive: c, emissiveIntensity: p.locked ? 0 : 0.8, transparent: true, opacity: p.locked ? 0.25 : 0.55, side: THREE.DoubleSide }), 0, 0.62, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.5, 0.55, 0.1, 24), std({ color: 0x3a3f47, metalness: 0.4 }), 0, 0.05, 0));
+      g.add(label((p.locked ? "🔒 " : "") + name, 0, 0, 0.5, 1.3));
+      if (!p.locked) { const l = new THREE.PointLight(c, 1.5, 3, 2); l.position.set(0, 0.7, 0); g.add(l); }
+    } else if (p.kind === "npc") {
+      const c = new THREE.Color(p.color);
+      g.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4, clearcoat: 0.6 }), 0, 0.45, 0));
+      g.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.19, 0.23, 0.08, 16), std({ color: c.clone().multiplyScalar(0.6) }), 0, 0.99, 0));
+      g.add(label(name, 0, 0, 0.5, 1.35)); g.userData.bob = true;
+    } else {
+      const m = std({ color: 0x8a5a3a, roughness: 0.85, map: texture("planks", 0x8a5a3a) });
+      g.add(mesh(new THREE.BoxGeometry(0.8, 0.5, 0.6), m, 0, 0.25, 0));
+      g.add(mesh(new THREE.BoxGeometry(1.0, 0.06, 0.9), std({ color: p.kind === "sign" ? 0x4a6b86 : 0xc8553d, roughness: 0.8 }), 0, 0.95, 0));
+      for (const s of [-1, 1]) g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.95, 6), std({ color: 0x5a3a1a }), s * 0.42, 0.47, -0.35));
+      g.add(label(name, 0, 0, 0.5, 1.3));
+    }
+    return g;
+  }
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+  function pickTile(e) { const r = canvas.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera); if (!ray.ray.intersectPlane(floorPlane, hit)) return null; return { x: Math.round(hit.x), y: Math.round(hit.z) }; }
   function footprint(n, x, z) {
+    if (state && state.hub) return;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), new THREE.MeshBasicMaterial({ map: labelTex(String(n), "rgba(240,178,74,0.92)"), transparent: true, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012 + trail.children.length * 0.0004, z); m.renderOrder = 2; trail.add(m);
   }
@@ -97,7 +128,7 @@ const Render3D = (() => {
     let drag = null;
     canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, az: cam.az, el: cam.el }; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener("pointermove", e => { if (drag) { cam.az = drag.az + (e.clientX - drag.x) * 0.008; cam.el = Math.min(1.3, Math.max(0.4, drag.el + (e.clientY - drag.y) * 0.006)); cam.azV = 0; } });
-    canvas.addEventListener("pointerup", () => drag = null); canvas.addEventListener("pointercancel", () => drag = null);
+    canvas.addEventListener("pointerup", e => { if (drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) canvas.dispatchEvent(new CustomEvent("tileclick", { bubbles: true, detail: pickTile(e) })); drag = null; }); canvas.addEventListener("pointercancel", () => drag = null);
     canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.max(4, Math.min(40, cam.dist * (e.deltaY > 0 ? 1.08 : 0.93))); }, { passive: false });
     ok = true;
     if (!loopStarted) { loopStarted = true; requestAnimationFrame(frame); }
@@ -219,7 +250,7 @@ const Render3D = (() => {
   }
   function robotMesh() {
     const g = new THREE.Group();
-    const dark = std({ color: 0x2b2f3a, roughness: 0.6, metalness: 0.4 }), blue = phys({ color: 0x3b55c8, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.2 });
+    const dark = std({ color: 0x2b2f3a, roughness: 0.6, metalness: 0.4 }), blue = phys({ color: paint, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.2 });
     for (const s of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.62, 0.18, 0.17), dark, 0, 0.09, s * 0.22));
     const body = mesh(new THREE.BoxGeometry(0.5, 0.44, 0.48), blue, 0, 0.42, 0); g.add(body); g.userData.body = body;
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.26, 0.38), std({ color: 0x0d1222, roughness: 0.15, metalness: 0.3 }), 0.26, 0.48, 0));
@@ -235,7 +266,7 @@ const Render3D = (() => {
   // ---------- build a level ----------
   function clearWorld() {
     world.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && !o.material.map) o.material.dispose(); });
-    world.clear(); crabs = {}; items = {}; switches = {}; doors = {}; gates = {}; pads = [];
+    world.clear(); crabs = {}; items = {}; switches = {}; doors = {}; gates = {}; pads = []; propsList = [];
   }
   function neighborsWall(x, y) { const g = state.grid; const at = (xx, yy) => (g[yy] && g[yy][xx]) === "#"; return at(x - 1, y) && at(x + 1, y); }
   function load(snapshot, themeName) {
@@ -273,6 +304,7 @@ const Render3D = (() => {
     trail = new THREE.Group(); world.add(trail); moveN = 0;
     for (const k in state.items) { const [x, y] = k.split(",").map(Number); const m = item(state.items[k]); m.position.set(x, 0, y); m.userData.phase = Math.random() * 6; world.add(m); items[k] = m; }
     for (const c of state.crabs || []) { const m = crabMesh(); m.position.set(c.x, 0, c.y); world.add(m); crabs[c.id] = m; }
+    for (const p of state.props || []) { const m = propMesh(p); m.position.set(p.x, 0, p.y); world.add(m); propsList.push(m); }
     robot = robotMesh(); robot.position.set(state.robot.x, 0, state.robot.y); robot.rotation.y = -state.robot.dir * Math.PI / 2; world.add(robot);
     // weather
     const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - th.sun.el), THREE.MathUtils.degToRad(th.sun.az));
@@ -314,6 +346,7 @@ const Render3D = (() => {
     for (const k in doors) { const d = doors[k]; d.position.y += (d.userData.target - d.position.y) * Math.min(1, dt * 5); }
     for (const k in gates) { const d = gates[k]; d.position.y += (d.userData.target - d.position.y) * Math.min(1, dt * 5); }
     for (const id in crabs) { const c = crabs[id]; c.position.y = Math.abs(Math.sin(clock * 9 + Number(id))) * 0.02; }
+    for (const p of propsList) { if (p.userData.spin) p.userData.spin.rotation.y += dt * 0.8; if (p.userData.bob) p.position.y = Math.sin(clock * 2 + p.position.x) * 0.02; }
     if (robot) robot.userData.body.position.y = 0.42 + Math.sin(clock * 3) * 0.008;
     stepParticles(dt);
     // camera: intro sweep, gentle sway, soft follow, user orbit
@@ -380,6 +413,7 @@ const Render3D = (() => {
         case "bump": { bubble = ev.what === "door" ? "locked door" : ev.what === "gate" ? "need a key" : "bonk"; const [dx, dy] = DIRS[ev.dir || 0]; const ox = robot.position.x, oz = robot.position.z; await tween(base * 0.8, k => { const s = Math.sin(k * Math.PI) * 0.18; robot.position.x = ox + dx * s; robot.position.z = oz + dy * s; }); bubble = null; break; }
         case "say": bubble = ev.text; await sleep(base * 4); bubble = null; break;
         case "crab": moveCrab(ev.id, ev.from, ev.to, base * 0.9); break;
+        case "shield": if (crabs[ev.id]) crabs[ev.id].visible = false; bubble = "shield!"; burst(ev.x, ev.y, 0x7fb3ff, 20); await sleep(base * 1.5); bubble = null; break;
         case "pinch": bubble = "ouch!"; burst(ev.x, ev.y, 0xe0523a, 20); await tween(base * 2, k => { robot.rotation.z = Math.sin(k * Math.PI * 6) * 0.15 * (1 - k); }); robot.rotation.z = 0; await sleep(base); break;
       }
     }
@@ -388,7 +422,7 @@ const Render3D = (() => {
   function cancel() { cancelFlag = true; }
   function celebrate() { if (!ok || !state || !state.goal) return; for (let i = 0; i < 4; i++) setTimeout(() => burst(state.goal.x, state.goal.y, [0x5fcf8f, 0xf0b24a, 0x7fb3ff, 0xff7b72][i], 30, 3), i * 180); }
 
-  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, get ok() { return ok; } };
+  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, setPaint, pickTile, get ok() { return ok; } };
 })();
 window.Render3D = Render3D;
 window.dispatchEvent(new Event("render3d-ready"));

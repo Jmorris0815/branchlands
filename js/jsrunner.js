@@ -13,7 +13,7 @@ const JSR = (() => {
     return { raw: s, tip: null };
   }
 
-  function run(code, level, grid, timeoutMs = 3000) {
+  function run(code, level, grid, gear, timeoutMs = 3000) {
     return new Promise((resolve) => {
       let worker;
       try { worker = new Worker("js/worker.js"); }
@@ -22,7 +22,7 @@ const JSR = (() => {
       const timer = setTimeout(() => { worker.terminate(); resolve({ error: { raw: "Your code ran for more than 3 seconds.", tip: "A while loop that never ends? Make sure the condition eventually becomes false." }, events: [], output: "" }); }, timeoutMs);
       worker.onmessage = (e) => { clearTimeout(timer); worker.terminate(); const d = e.data; resolve({ events: d.events, output: d.output, error: d.error ? friendly(d.error) : null, evalMsg: d.evalMsg, gems: d.gems }); };
       worker.onerror = (e) => { clearTimeout(timer); worker.terminate(); resolve({ error: { raw: e.message || "Worker error", tip: null }, events: [], output: "" }); };
-      worker.postMessage({ grid, level: plainLevel, code });
+      worker.postMessage({ grid, level: plainLevel, code, gear: gear || {} });
     });
   }
   return { run };

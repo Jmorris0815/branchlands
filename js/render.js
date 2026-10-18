@@ -2,7 +2,9 @@
 
 const Render = (() => {
   const T = 44;
-  let canvas, ctx, fx, fctx, state, theme = "sand", bubble = null, cancelFlag = false, particles = [], crabPos = {}, tickNo = 0;
+  let canvas, ctx, fx, fctx, state, theme = "sand", bubble = null, cancelFlag = false, particles = [], crabPos = {}, tickNo = 0, paint = "#3b4a9e";
+  function setPaint(c) { paint = c; }
+  function pickTile(e) { if (!state) return null; const r = canvas.getBoundingClientRect(); return { x: Math.floor((e.clientX - r.left) / r.width * state.w), y: Math.floor((e.clientY - r.top) / r.height * state.h) }; }
 
   const THEMES = {
     sand: { floor: "#e3d3a8", floor2: "#dccb9c", wall: "#6b5a46", wallTop: "#8a7558" },
@@ -50,13 +52,27 @@ const Render = (() => {
   }
   function glyph(g, px, py, s = 0.6) { ctx.font = Math.floor(T * s) + "px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(g, px + T / 2, py + T / 2 + 2); }
 
+  function drawProp(p) {
+    const px = p.x * T, py = p.y * T, icon = p.label.split(" ")[0], name = p.label.replace(/^\S+\s/, "");
+    if (p.kind === "portal") { ctx.strokeStyle = p.locked ? "#8a8a8a" : p.color; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(px + T / 2, py + T / 2 - 3, T * 0.34, 0, Math.PI * 2); if (!p.locked) { ctx.fillStyle = p.color + "77"; ctx.fill(); } ctx.stroke(); glyph(p.locked ? "🔒" : icon, px, py - 3, 0.42); }
+    else if (p.kind === "npc") { ctx.fillStyle = p.color; rr(px + 11, py + 10, T - 22, T - 18, 8); ctx.fill(); glyph(icon, px, py - 4, 0.5); }
+    else { ctx.fillStyle = "#8a5a3a"; rr(px + 6, py + 12, T - 12, T - 20, 4); ctx.fill(); ctx.fillStyle = p.kind === "sign" ? "#4a6b86" : "#c8553d"; ctx.fillRect(px + 4, py + 8, T - 8, 5); glyph(icon, px, py - 2, 0.48); }
+    ctx.font = "700 9px Nunito, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillRect(px + 2, py + T - 12, T - 4, 11); ctx.fillStyle = "#222"; ctx.fillText(name.slice(0, 11), px + T / 2, py + T - 3);
+  }
+  function drawProp(p) {
+    const px = p.x * T, py = p.y * T, icon = p.label.split(" ")[0], name = p.label.replace(/^\S+\s/, "");
+    if (p.kind === "portal") { ctx.strokeStyle = p.locked ? "#8a8a8a" : p.color; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(px + T / 2, py + T / 2 - 3, T * 0.34, 0, Math.PI * 2); if (!p.locked) { ctx.fillStyle = p.color + "77"; ctx.fill(); } ctx.stroke(); glyph(p.locked ? "🔒" : icon, px, py - 3, 0.42); }
+    else if (p.kind === "npc") { ctx.fillStyle = p.color; rr(px + 11, py + 10, T - 22, T - 18, 8); ctx.fill(); glyph(icon, px, py - 4, 0.5); }
+    else { ctx.fillStyle = "#8a5a3a"; rr(px + 6, py + 12, T - 12, T - 20, 4); ctx.fill(); ctx.fillStyle = p.kind === "sign" ? "#4a6b86" : "#c8553d"; ctx.fillRect(px + 4, py + 8, T - 8, 5); glyph(icon, px, py - 2, 0.48); }
+    ctx.font = "700 9px Nunito, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillRect(px + 2, py + T - 12, T - 4, 11); ctx.fillStyle = "#222"; ctx.fillText(name.slice(0, 11), px + T / 2, py + T - 3);
+  }
   function drawRobot(cx, cy, dir) {
     const [dx, dy] = DIRS[dir];
     ctx.save(); ctx.translate(cx, cy);
     ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(0, T * 0.36, T * 0.3, T * 0.09, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "#8c8ca8"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -T * 0.3); ctx.lineTo(0, -T * 0.44); ctx.stroke();
     ctx.fillStyle = "#ff5e5e"; ctx.beginPath(); ctx.arc(0, -T * 0.46, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#3b4a9e"; ctx.strokeStyle = "#1d2560"; ctx.lineWidth = 2;
+    ctx.fillStyle = paint; ctx.strokeStyle = "rgba(0,0,0,0.45)"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect(-T * 0.3, -T * 0.3, T * 0.6, T * 0.6, 8); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#dfe6ff"; ctx.beginPath(); ctx.roundRect(-T * 0.22, -T * 0.22, T * 0.44, T * 0.3, 5); ctx.fill();
     const ex = dx * 4, ey = dy * 3; ctx.fillStyle = "#1d2560";
@@ -79,6 +95,8 @@ const Render = (() => {
   function draw(robotPos) {
     if (!state) return; tickNo++;
     for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) drawTile(x, y, state.grid[y][x]);
+    for (const p of state.props || []) drawProp(p);
+    for (const p of state.props || []) drawProp(p);
     for (const id in crabPos) drawCrab(crabPos[id].x * T + T / 2, crabPos[id].y * T + T / 2);
     const r = robotPos || state.robot;
     const cx = r.x * T + T / 2, cy = r.y * T + T / 2;
@@ -142,6 +160,8 @@ const Render = (() => {
         case "say": bubble = ev.text; draw(); await sleep(base * 4); bubble = null; break;
         case "crab": crabPos[ev.id] = { x: ev.to.x, y: ev.to.y }; draw(); break;
         case "pinch": bubble = "ouch!"; burst(ev.x, ev.y, "#e0523a", 14); fxStart(); draw(); await sleep(base * 3); break;
+        case "shield": delete crabPos[ev.id]; bubble = "shield!"; burst(ev.x, ev.y, "#7fb3ff", 14); fxStart(); draw(); await sleep(base * 1.5); bubble = null; break;
+        case "shield": delete crabPos[ev.id]; bubble = "shield!"; burst(ev.x, ev.y, "#7fb3ff", 14); fxStart(); draw(); await sleep(base * 1.5); bubble = null; break;
       }
     }
     draw();
@@ -156,6 +176,6 @@ const Render = (() => {
     (function f() { if (!c.isConnected) return; g.clearRect(0, 0, c.width, c.height); for (const p of ps) { p.x += p.vx; p.y += p.vy; p.a += 0.1; g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.fillStyle = p.color; g.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6); g.restore(); } if (++frames < 150 && performance.now() - t0 < 3500) requestAnimationFrame(f); else c.remove(); })();
     setTimeout(() => c.remove(), 4000);
   }
-  return { init, load, draw, play, cancel, confetti, T };
+  return { init, load, draw, play, cancel, confetti, setPaint, pickTile, T };
 })();
 window.Render = Render;

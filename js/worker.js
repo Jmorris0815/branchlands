@@ -3,8 +3,8 @@
 importScripts("sim.js");
 
 self.onmessage = (e) => {
-  const { grid, level, code } = e.data;
-  const sim = new Sim(level, grid);
+  const { grid, level, code, gear } = e.data;
+  const sim = new Sim(level, grid, gear);
   const robot = robotApi(sim);
   const out = [];
   const fakeConsole = { log: (...a) => out.push(a.map(String).join(" ")) };
