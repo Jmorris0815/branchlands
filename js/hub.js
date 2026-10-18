@@ -31,6 +31,7 @@ const Hub = (() => {
     { kind: "stall", tab: "paint", x: 14, y: 7, label: "🎨 Style" }, { kind: "stall", tab: "pack", x: 1, y: 1, label: "🎒 Storehouse" },
     { kind: "stall", tab: "board", x: 10, y: 6, label: "📜 Quest board" }, { kind: "stall", tab: "skills", x: 6, y: 1, label: "📈 Skills" },
     { kind: "sign", x: 8, y: 1, label: "🗺️ World map" },
+    { kind: "stall", tab: "family", x: 15, y: 1, label: "👨‍👩‍👦 Family" },
   ];
   let pos = { x: 9, y: 5 }, dir = 0, busy = false, active = false;
 

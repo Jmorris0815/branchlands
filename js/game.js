@@ -117,18 +117,25 @@ const Game = (() => {
   function startSlot(i, fresh) {
     slot = i; localStorage.setItem(ACTIVE_KEY, String(i));
     if (fresh) { save = DEFAULTS(); persist(); } else loadSave();
-    applySettings(); RPG.init(save, rpgApi); $("xp").textContent = save.xp + " XP"; $("rank").textContent = rank();
+    applySettings(); RPG.init(save, rpgApi); Family.init(save, famApi); if (Family.connected()) Family.sync(); $("xp").textContent = save.xp + " XP"; $("rank").textContent = rank();
     if (!save.intro) showIntro(openHub); else openHub();
   }
   const rpgApi = { persist, sfx, toast, zoneUnlocked, levelUnlocked, openLevel: (l) => { hideModal(); openLevel(l); }, completed: () => save.completed };
   const hubApi = { R, showModal, hideModal, openLevel: (l) => { hideModal(); openLevel(l); }, showScreen, openTown: (tab) => { showScreen("town"); RPG.renderTown(tab); }, zoneUnlocked, completed: () => save.completed, save: () => save, persistSave: persist, sfx, toast, ollama: () => ({ endpoint: save.settings.ollama, model: save.settings.model }) };
+  const famApi = { persist, toast, onReview(rv) {
+    if (rv.status === "approved") {
+      toast(`<b>${rv.reviewer_name} approved your pull request</b>${rv.comment || "Nice work."}`); sfx("win");
+      const lv = LEVEL_BY_ID[rv.level_id];
+      if (lv && !save.completed[lv.id]) { save.completed[lv.id] = { stars: 3, lines: 0 }; save.xp += lv.xp; RPG.addXp("review", lv.xp * 2); persist(); $("xp").textContent = save.xp + " XP"; $("rank").textContent = rank(); toast(`<b>${lv.id} ${lv.title} complete</b>A real review by a real person. +${lv.xp} XP`); if (current && current.id === lv.id) renderLevels(); }
+    } else { toast(`<b>${rv.reviewer_name} asked for changes</b>${rv.comment || ""}`); sfx("error"); }
+  } };
   const HUB_LEVEL = { id: "hub", zone: 1, mode: "hub", title: "Harbor Town", hints: [], xp: 0 };
   function openHub() {
     current = HUB_LEVEL; R.cancel(); showScreen("level"); location.hash = "hub";
     document.querySelectorAll(".mode").forEach(e => e.hidden = true); $("mode-robot").hidden = false;
     $("levels").innerHTML = `<button id="hubTown">📜 Quest board</button><button id="hubMap">🗺️ World map</button><button id="hubSaves">💾 Saves</button>`;
     $("hubTown").onclick = () => hubApi.openTown("board"); $("hubMap").onclick = () => showScreen("map"); $("hubSaves").onclick = () => showScreen("home");
-    $("dpad").hidden = false; Hub.open(); window.scrollTo({ top: 0 });
+    $("dpad").hidden = false; Hub.open(); window.scrollTo({ top: 0 }); if (Family.connected()) Family.sync();
   }
   function applySettings() {
     const t = save.settings.theme; if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
@@ -344,6 +351,14 @@ const Game = (() => {
       $("prStatus").textContent = "Dad is reviewing… (he runs it)";
       const ok = await runRobotNoComplete();
       if (!ok) { $("prStatus").textContent = "Dad requested changes: it doesn't reach the goal yet. Fix, re-test, and re-open."; log("Dad: Changes requested. See the 'Not yet' line above.", "dad"); sfx("error"); return; }
+      if (Family.connected() && Family.others().length) { // a real person reviews it, inside their own game
+        $("prStatus").textContent = "Sending to your family for review…";
+        try {
+          const rv = await Family.requestReview(current.id, title, body, $("code").value);
+          $("prStatus").textContent = `Sent to ${rv.reviewer_name}. The mission completes when they approve it (they'll see it in Harbor Town → Family). You can keep playing.`;
+          log(`Pull request sent to ${rv.reviewer_name} for review. 📬`, "dad"); sfx("unlock"); return;
+        } catch (e) { log("Couldn't reach the family server (" + e.message + "). Dad reviews it here instead.", "warn"); }
+      }
       $("prStatus").textContent = "Dad approved: “Clear title, good description, and it works. Merged.”";
       log("Dad approved and merged your pull request. 🎉", "dad");
       complete({ lines: countLines($("code").value, current.lang), gems: 0 });
@@ -559,7 +574,8 @@ const Game = (() => {
   }
   function init() {
     LEVELS.forEach(l => { if (l.mode === "ollama") l.optional = true; });
-    loadSave(); applySettings(); RPG.init(save, rpgApi); RPG.bind(); Hub.init(hubApi);
+    loadSave(); applySettings(); RPG.init(save, rpgApi); RPG.bind(); Hub.init(hubApi); Family.init(save, famApi); if (Family.connected()) Family.sync();
+    $("famBadge").onclick = () => hubApi.openTown("family");
     R.init($("world"), $("fx")); editorTabs($("code"));
     $("world").addEventListener("click", e => { if (Hub.active) { const t = Render.pickTile(e); if (t) Hub.walkTo(t.x, t.y); } });
     document.addEventListener("tileclick", e => { if (Hub.active && e.detail) Hub.walkTo(e.detail.x, e.detail.y); });

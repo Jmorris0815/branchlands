@@ -18,6 +18,7 @@
   <span id="rank" class="rank"></span>
   <span id="xp">0 XP</span>
   <span id="coins" class="rank" title="coins">🪙 0</span>
+  <button id="famBadge" hidden title="family inbox: reviews and offers">📬</button>
   <button id="hubBtn">⚓ Harbor</button>
   <button id="mapBtn">🗺️ Map</button>
   <button id="codexBtn">📜 Codex</button>
@@ -37,7 +38,7 @@
 <!-- ============ HARBOR TOWN: quest board, skills, storehouse, market, workshop, paint ============ -->
 <section id="screen-town" class="screen" hidden>
   <div class="levelbar"><button id="townBack">← Harbor</button><h2 class="edh">⚓ Harbor Town</h2><span id="townCoins" class="muted"></span></div>
-  <div id="townTabs" class="tabs"><button data-tab="board">📜 Quest board</button><button data-tab="skills">📈 Skills</button><button data-tab="pack">🎒 Storehouse</button><button data-tab="market">🏪 Market</button><button data-tab="workshop">🔧 Workshop</button><button data-tab="paint">🎨 Style</button></div>
+  <div id="townTabs" class="tabs"><button data-tab="board">📜 Quest board</button><button data-tab="skills">📈 Skills</button><button data-tab="pack">🎒 Storehouse</button><button data-tab="market">🏪 Market</button><button data-tab="workshop">🔧 Workshop</button><button data-tab="paint">🎨 Style</button><button data-tab="family">👨‍👩‍👦 Family</button></div>
   <div id="townBody" class="panel"></div>
 </section>
 
@@ -174,6 +175,7 @@
 <script src="js/editor.js"></script>
 <script src="js/rpg.js"></script>
 <script src="js/hub.js"></script>
+<script src="js/family.js"></script>
 <script src="js/game.js"></script>
 <script type="module" async src="js/render3d.js"></script>
 </body>

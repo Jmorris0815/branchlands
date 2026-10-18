@@ -172,6 +172,8 @@ const RPG = (() => {
   const gname = (g, n) => `${GOODS[g].icon} ${n !== undefined ? n + " " : ""}${GOODS[g].name}${n !== undefined && n !== 1 ? "s" : ""}`.replace("Mirror glasss", "Mirror glass").replace("Fog stones", "Fog stone");
 
   // ---------- market ----------
+  let extraFlood = null; // the whole family's sales today, from the family server
+  function setExtraFlood(f) { extraFlood = f || null; }
   function daily() {
     const d = today();
     if (S.daily.date !== d) {
@@ -187,12 +189,12 @@ const RPG = (() => {
   }
   const zoneOf = (g) => ({ lens: 1, scrap: 1, apple: 2, gem: 2, stone: 3, plank: 4, shard: 5, ink: 7, glass: 8 })[g] || 1;
   function highestZone() { let z = 1; for (let n = 1; n <= 8; n++) if (api.zoneUnlocked(n)) z = n; return z; }
-  function price(g) { const d = daily(); const r = rng(d.date + g)(); const hot = d.hot === g ? 1.4 : 1; const flood = S.market.flood[g] || 0; return Math.max(1, Math.round(GOODS[g].base * (0.75 + 0.5 * r) * hot * Math.max(0.35, 1 - 0.02 * flood))); }
+  function price(g) { const d = daily(); const r = rng(d.date + g)(); const hot = d.hot === g ? 1.4 : 1; const flood = Math.max(S.market.flood[g] || 0, (extraFlood && extraFlood[g]) || 0); return Math.max(1, Math.round(GOODS[g].base * (0.75 + 0.5 * r) * hot * Math.max(0.35, 1 - 0.02 * flood))); }
   const buyPrice = (g) => Math.round(price(g) * 1.5) + 1;
   function sell(g, n) {
     n = Math.min(n, have(g)); if (n <= 0) return 0; let got = 0;
     for (let i = 0; i < n; i++) { got += price(g); S.market.flood[g] = (S.market.flood[g] || 0) + 1; }
-    take(g, n); S.coins += got; S.stats.sold += got; S.stats.soldToday += got; persist(); hud(); return got;
+    take(g, n); S.coins += got; S.stats.sold += got; S.stats.soldToday += got; persist(); hud(); if (window.Family) Family.sold(g, n, got); return got;
   }
   function buy(g, n) { const p = buyPrice(g); if (S.coins < p * n || have(g) + n > cap()) return false; S.coins -= p * n; add(g, n); persist(); hud(); return true; }
 
@@ -280,7 +282,8 @@ const RPG = (() => {
     if (t) tab = t; daily(); hud();
     document.querySelectorAll("#townTabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
     const body = $("townBody");
-    body.innerHTML = ({ board, skills, pack, market, workshop, paint })[tab]();
+    const family = () => { if (window.Family && Family.connected() && !Family.last) Family.sync().then(() => { if (tab === "family") renderTown("family"); }); return window.Family ? Family.render() : ""; };
+    body.innerHTML = ({ board, skills, pack, market, workshop, paint, family })[tab]();
   }
   function board() {
     const open = QUESTS.filter(available); const done = QUESTS.filter(q => S.quests[q.id]); const d = daily();
@@ -341,6 +344,7 @@ const RPG = (() => {
     return h;
   }
   function click(e) {
+    const fb = e.target.closest("button[data-fam]"); if (fb) { Family.click(fb); return; }
     const b = e.target.closest("button[data-act]"); if (!b) return; const a = b.dataset.act; let msg = "";
     if (a === "sell") { const n = sell(b.dataset.g, +b.dataset.n); msg = n ? `Sold for 🪙 ${n}` : ""; api.sfx("gem"); }
     else if (a === "buy") { msg = buy(b.dataset.g, 1) ? "Bought." : "Not enough coins or no room."; api.sfx("click"); }
@@ -360,6 +364,9 @@ const RPG = (() => {
   function questsFor(npc) { return QUESTS.filter(q => q.npc === npc && available(q)).map(q => { const steps = q.steps.map(stepState); return { id: q.id, title: q.title, story: q.story, steps, ready: steps.every(s => s.done), reward: rewardText(q.reward) }; }); }
   function turnInById(id) { const q = QUESTS.find(q => q.id === id); return q && turnIn(q) ? rewardText(q.reward) : ""; }
 
-  return { init, bind, renderTown, onComplete, onCommit, gear, paintColor, look, hud, skillLevel, totalLevel, questsFor, turnInById, SKILLS, GOODS, GEAR, QUESTS, NPC, COSMETICS, get state() { return S; } };
+  return { init, bind, renderTown, onComplete, onCommit, gear, paintColor, look, hud, skillLevel, totalLevel, questsFor, turnInById, setExtraFlood, have, cap,
+    take: (g, n) => { const r = take(g, n); persist(); hud(); return r; }, add: (g, n) => { const r = add(g, n); persist(); hud(); return r; },
+    addCoins: (n) => { S.coins += n; persist(); hud(); }, spend: (n) => { if (S.coins < n) return false; S.coins -= n; persist(); hud(); return true; }, addXp: (id, n) => { addXp(id, n); persist(); },
+    SKILLS, GOODS, GEAR, QUESTS, NPC, COSMETICS, get state() { return S; } };
 })();
 window.RPG = RPG;

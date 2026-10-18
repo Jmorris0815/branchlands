@@ -1,6 +1,6 @@
 # Branchlands: company program
 
-*Version 0.4, 18 October 2026. Owner: Justin Morris.*
+*Version 0.5, 18 October 2026. Owner: Justin Morris.*
 
 ## 1. The one-line pitch
 
@@ -48,7 +48,7 @@ Combat theming (Common Sense Media flags CodeCombat for it). Gems/loot boxes. Le
 | 0. Prototype | done | this repo: 35 levels, 8 zones, editor, Ollama Oracle, JS zone, GitHub quest check, realistic 3D, Harbor Town hub with economy/skills/quests/NPCs, save slots | a kid can play 1-1 through 8-5 unassisted |
 | 1. Family alpha | 1–6 | Justin + son use the repo for real: his branches, his PRs, his levels | 10 merged PRs authored by the kid; 3 new levels he designed |
 | 2. Real Git zone | 6–12 | Zone 5 reads the player's actual repo via a tiny local helper (`branchlands serve`); today the game already verifies commits and merged PRs through the public GitHub API | first local commit marks 5-1 done in-game without GitHub |
-| 3. Co-op | 12–20 | two browsers, one world: author/reviewer roles, live PR review on a shared level, deliberate merge-conflict level | two families outside ours finish Zone 6 together |
+| 3. Co-op | shipped early (Oct 2026) | family code → shared market, board, trading post, and 6-4 pull requests reviewed by the other player inside their game (Supabase edge function, no accounts). Next: shared level-editor PRs, a deliberate two-player merge-conflict level | two families outside ours finish Zone 6 together |
 | 4. The real Oracle | 20–26 | 7-3 (Ollama system-prompt Oracle) ships in the prototype; next: the Oracle becomes an NPC inside the robot world, plus 7-4: train a tiny classifier (Machine Learning for Kids pattern) | NPC in the kid's own game answers from a model running on their machine |
 | 5. Content + art | 26–40 | 60+ levels (35 and a level editor exist), community level packs from share links, realism pass per §3.6 (HDRI skies, rigged robot, zone-intro clips), music | 2 hours of play per zone |
 | 6. Launch | 40–52 | public web app, homeschool co-op pilots, Discord | 500 families, 20 paying |
@@ -122,8 +122,7 @@ par-based stars still decide the rating, so a kid with a Long Arm still has to w
 | Paint | 7 colours, 3 quest-only, applied to the robot in 2D and 3D | identity |
 | Quests | 14 NPC quests with typed steps (complete, par, gather, craft, sell, gear, commits, total level); 3 daily contracts | curriculum sequencing in disguise |
 
-**Why single-player first.** A shared economy needs accounts and a server, which drags COPPA and moderation
-in (§5). The single-player economy is deterministic per day (seeded by the date), which already makes two
+**Shared world without accounts.** The family code model (a code plus a per-player token, nothing personal stored) keeps COPPA simple: no email, no login, a family of at most six. It shipped as `js/family.js` + the `bl-family` edge function. The single-player economy is deterministic per day (seeded by the date), which already makes two
 siblings' markets identical and comparable without any networking. Phase 3 puts the economy in Supabase
 (already in the family toolbox): family-scoped markets, trading between the two accounts, an opt-in family
 leaderboard, and PR-review quests that are actually assigned to the other player.

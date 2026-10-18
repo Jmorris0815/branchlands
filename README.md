@@ -59,6 +59,22 @@ You start every session on the Harbor, a walkable 3D town. Move Bolt with the **
 **Saves.** The home screen has three save slots, like a console: new game, continue, delete. Everything,
 including Harbor Town, lives in the slot; export it from ⚙️ Settings to move it to another computer.
 
+## Family world: one code, one world
+
+In Harbor Town, the **👨‍👩‍👦 Family** stall creates a family and hands you a six-letter code. Anyone who joins
+with that code (another device, another save slot) shares one world:
+
+- **One market.** Everyone's sales move the same prices, so dumping apples hurts your sibling's price too.
+- **A family board.** Total level, coins, missions, three-star count, titles, last seen.
+- **Trading post.** Offer goods to your family for coins; they buy from their game, you get paid on your next sync.
+- **Real pull-request reviews.** With a family connected, mission 6-4's pull request is not graded by the
+  scripted Dad: it goes to the other person, who reads the code inside their own game and approves it or asks
+  for changes with a comment. The mission completes when they approve. Reviewing pays Review XP.
+
+No accounts and no email: the code is the key, plus a per-player token kept in the save. The server is a
+single Supabase edge function (`bl-family`) over five `bl_` tables with row-level security and no public
+policies; only game state (coins, levels, goods, review text) ever leaves the browser.
+
 ## Graphics: a real 3D island
 
 Every level is drawn by a realistic 3D renderer (`js/render3d.js`, built on [Three.js](https://threejs.org)):
@@ -112,6 +128,8 @@ js/audio.js       synthesized sound effects
 js/game.js        save slots, screens, progression, stars, achievements, settings, and the play modes
 js/rpg.js         Harbor Town economy: skills, loot, market, crafting, upgrades, paint, quests, daily contracts
 js/hub.js         the walkable hub: grid, props, movement, NPC conversations (scripted + Ollama)
+js/family.js      shared family world: family code, shared market, board, trading, real PR reviews (Supabase edge function)
+js/device.js      phone/desktop detection (sets data-device for the phone layout)
 docs/             company program, competitor teardown (with REA), research report
 ```
 
@@ -131,8 +149,7 @@ item, goal, switch, door, gate, teleporter, crab, floor.
 
 ## Status
 
-Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer with a 2D fallback, Harbor Town hub with economy, skills, quests and NPCs, three save slots. Not built yet: accounts,
-two-browser co-op, Git against your real local folder, an LLM NPC inside the robot world, a rigged robot model, music.
+Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer with a 2D fallback, Harbor Town hub with economy, skills, quests and NPCs, three save slots, phone play, a shared family world with real two-person PR reviews. Not built yet: accounts, Git against your real local folder, an LLM NPC inside the robot world, a rigged robot model, music.
 The plan is in [docs/PROGRAM.md](docs/PROGRAM.md).
 
 ## License
