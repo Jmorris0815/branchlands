@@ -17,8 +17,8 @@ const Render3D = (() => {
   let fx, fctx, canvas2d, canvas, renderer, scene, camera, composer, bloom, sky, sun, hemi, pmrem, world, ocean;
   let state, theme = "sand", th, ok = false, active = false, quality = "realistic", cancelFlag = false, bubble = null;
   let clock = 0, lastNow = 0, loopStarted = false;
-  let robot, headlight, crabs = {}, items = {}, switches = {}, doors = {}, gates = {}, pads = [];
-  const cam = { center: new THREE.Vector3(), dist: 10, el: 0.66, az: 0.35, azV: 0, introK: 0, look: new THREE.Vector3(), follow: new THREE.Vector3() };
+  let robot, headlight, crabs = {}, items = {}, switches = {}, doors = {}, gates = {}, pads = [], trail, moveN = 0;
+  const cam = { center: new THREE.Vector3(), dist: 10, el: 0.82, az: 0.35, azV: 0, introK: 0, look: new THREE.Vector3(), follow: new THREE.Vector3() };
   let particles;
   const texCache = {};
 
@@ -54,6 +54,21 @@ const Render3D = (() => {
   const rnd = (a, b) => a + Math.random() * (b - a);
   function jitter(hex, amt = 0.08) { const c = new THREE.Color(hex); const hsl = {}; c.getHSL(hsl); c.setHSL(hsl.h, hsl.s, Math.min(1, Math.max(0, hsl.l + (Math.random() - 0.5) * amt))); return c; }
 
+  // text on a small canvas, used for edge coordinates (sprites) and footprints (flat discs)
+  const labelCache = {};
+  function labelTex(text, bg) {
+    const key = text + bg; if (labelCache[key]) return labelCache[key];
+    const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+    g.fillStyle = bg; g.beginPath(); g.arc(32, 32, 29, 0, 7); g.fill();
+    g.fillStyle = "#fff"; g.font = "700 36px Nunito, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(text, 32, 35);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return labelCache[key] = t;
+  }
+  function label(text, x, z, size) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(text, "rgba(22,30,44,0.8)"), transparent: true, depthWrite: false })); s.position.set(x, 0.28, z); s.scale.setScalar(size); return s; }
+  function footprint(n, x, z) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), new THREE.MeshBasicMaterial({ map: labelTex(String(n), "rgba(240,178,74,0.92)"), transparent: true, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012 + trail.children.length * 0.0004, z); m.renderOrder = 2; trail.add(m);
+  }
+
   // ---------- init ----------
   function init(c2d, overlay) {
     canvas2d = c2d; fx = overlay; fctx = overlay.getContext("2d");
@@ -80,8 +95,8 @@ const Render3D = (() => {
     setQuality(quality);
     // orbit with the mouse / finger, zoom with the wheel
     let drag = null;
-    canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, az: cam.az }; canvas.setPointerCapture(e.pointerId); });
-    canvas.addEventListener("pointermove", e => { if (drag) { cam.az = drag.az + (e.clientX - drag.x) * 0.008; cam.azV = 0; } });
+    canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, az: cam.az, el: cam.el }; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener("pointermove", e => { if (drag) { cam.az = drag.az + (e.clientX - drag.x) * 0.008; cam.el = Math.min(1.3, Math.max(0.4, drag.el + (e.clientY - drag.y) * 0.006)); cam.azV = 0; } });
     canvas.addEventListener("pointerup", () => drag = null); canvas.addEventListener("pointercancel", () => drag = null);
     canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.max(4, Math.min(40, cam.dist * (e.deltaY > 0 ? 1.08 : 0.93))); }, { passive: false });
     ok = true;
@@ -233,13 +248,13 @@ const Render3D = (() => {
     world.add(mesh(new THREE.BoxGeometry(w + 0.4, 1.4, h + 0.4), std({ color: 0xffffff, roughness: 1, map: cliffTex }), w / 2 - 0.5, -0.95, h / 2 - 0.5));
     // floor tiles (instanced, colour jitter per tile)
     let floorCount = 0; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (state.grid[y][x] !== "~") floorCount++;
-    const floor = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.3, 1), std({ color: 0xffffff, roughness: 0.9, map: texture(th.tex, th.floor) }), Math.max(1, floorCount));
+    const floor = new THREE.InstancedMesh(new THREE.BoxGeometry(0.94, 0.3, 0.94), std({ color: 0xffffff, roughness: 0.9, map: texture(th.tex, th.floor) }), Math.max(1, floorCount));
     floor.receiveShadow = true; floor.castShadow = false;
     const M = new THREE.Matrix4(); let i = 0;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (state.grid[y][x] === "~") continue;
       M.makeTranslation(x, -0.15 - Math.random() * 0.02, y); floor.setMatrixAt(i, M);
-      floor.setColorAt(i, new THREE.Color(0xffffff).multiplyScalar(((x + y) % 2 ? 0.93 : 1) * rnd(0.96, 1.02))); i++;
+      floor.setColorAt(i, new THREE.Color(0xffffff).multiplyScalar(((x + y) % 2 ? 0.84 : 1) * rnd(0.97, 1.02))); i++;
     }
     floor.instanceMatrix.needsUpdate = true; if (floor.instanceColor) floor.instanceColor.needsUpdate = true; world.add(floor);
     // tiles
@@ -252,6 +267,10 @@ const Render3D = (() => {
       else if (c === "X") { const m = gateMesh(neighborsWall(x, y)); m.position.set(x, 0, y); world.add(m); gates[k] = m; }
       else if ("1234".includes(c)) { const m = padMesh(c); m.position.set(x, 0, y); world.add(m); pads.push(m); }
     }
+    // numbers along two edges: the x of each column (top) and the y of each row (left), same as robot.x() / robot.y()
+    for (let x = 0; x < w; x++) world.add(label(String(x), x, -0.95, 0.56));
+    for (let y = 0; y < h; y++) world.add(label(String(y), -0.95, y, 0.56));
+    trail = new THREE.Group(); world.add(trail); moveN = 0;
     for (const k in state.items) { const [x, y] = k.split(",").map(Number); const m = item(state.items[k]); m.position.set(x, 0, y); m.userData.phase = Math.random() * 6; world.add(m); items[k] = m; }
     for (const c of state.crabs || []) { const m = crabMesh(); m.position.set(c.x, 0, c.y); world.add(m); crabs[c.id] = m; }
     robot = robotMesh(); robot.position.set(state.robot.x, 0, state.robot.y); robot.rotation.y = -state.robot.dir * Math.PI / 2; world.add(robot);
@@ -268,7 +287,7 @@ const Render3D = (() => {
     const wu = ocean.material.uniforms; wu.uDeep.value.set(th.water[0]); wu.uShallow.value.set(th.water[1]); wu.uSky.value.set(th.fog[0]); wu.uSunDir.value.copy(sunDir); wu.uFogColor.value.set(th.fog[0]); wu.uFogDensity.value = th.fog[1];
     ocean.position.set(center.x, -0.1, center.z);
     // camera
-    cam.center.copy(center); cam.dist = Math.max(w * 0.95, h * 1.45) + 2.5; cam.el = 0.66; cam.az = 0.35; cam.azV = 0; cam.introK = document.hidden ? 1 : 0; cam.look.copy(center); cam.follow.copy(center);
+    cam.center.copy(center); cam.dist = Math.max(w * 0.95, h * 1.45) + 2.5; cam.el = 0.82; cam.az = 0.35; cam.azV = 0; cam.introK = document.hidden ? 1 : 0; cam.look.copy(center); cam.follow.copy(center);
     sync();
   }
 
@@ -348,10 +367,10 @@ const Render3D = (() => {
       if (onEvent) onEvent(ev);
       if (!ok) continue;
       switch (ev.type) {
-        case "move": await moveRobot(ev.from, ev.to, base); state.robot.x = ev.to.x; state.robot.y = ev.to.y; break;
-        case "jump": await moveRobot(ev.from, ev.to, base * 1.6, true); if (ev.over && state.grid[ev.over.y] && state.grid[ev.over.y][ev.over.x] === "~") burst(ev.over.x, ev.over.y, th.water[1], 14, 1.6); state.robot.x = ev.to.x; state.robot.y = ev.to.y; break;
-        case "teleport": burst(ev.from.x, ev.from.y, 0xc9a7ff, 24); await tween(base * 0.6, k => robot.scale.setScalar(1 - k * 0.98)); robot.position.x = ev.to.x; robot.position.z = ev.to.y; state.robot.x = ev.to.x; state.robot.y = ev.to.y; burst(ev.to.x, ev.to.y, 0xc9a7ff, 24); await tween(base * 0.6, k => robot.scale.setScalar(0.02 + k * 0.98)); robot.scale.setScalar(1); await sleep(base * 0.5); break;
-        case "turn": await turnRobot(ev.dir, base * 0.6); state.robot.dir = ev.dir; break;
+        case "move": await moveRobot(ev.from, ev.to, base); state.robot.x = ev.to.x; state.robot.y = ev.to.y; footprint(++moveN, ev.to.x, ev.to.y); break;
+        case "jump": await moveRobot(ev.from, ev.to, base * 1.6, true); if (ev.over && state.grid[ev.over.y] && state.grid[ev.over.y][ev.over.x] === "~") burst(ev.over.x, ev.over.y, th.water[1], 14, 1.6); state.robot.x = ev.to.x; state.robot.y = ev.to.y; footprint(++moveN, ev.to.x, ev.to.y); break;
+        case "teleport": burst(ev.from.x, ev.from.y, 0xc9a7ff, 24); await tween(base * 0.6, k => robot.scale.setScalar(1 - k * 0.98)); robot.position.x = ev.to.x; robot.position.z = ev.to.y; state.robot.x = ev.to.x; state.robot.y = ev.to.y; burst(ev.to.x, ev.to.y, 0xc9a7ff, 24); await tween(base * 0.6, k => robot.scale.setScalar(0.02 + k * 0.98)); robot.scale.setScalar(1); await sleep(base * 0.5); moveN = 0; break;
+        case "turn": await turnRobot(ev.dir, base * 0.6); state.robot.dir = ev.dir; moveN = 0; break;
         case "wait": bubble = "..."; await sleep(base); bubble = null; break;
         case "pick": delete state.items[ev.x + "," + ev.y]; if (items[ev.x + "," + ev.y]) items[ev.x + "," + ev.y].visible = false; bubble = ev.item === "*" ? "gem!" : ev.item === "K" ? "a key!" : "got it!"; burst(ev.x, ev.y, ev.item === "*" ? 0x7fd3ff : 0xffd866, 16); await sleep(base); bubble = null; break;
         case "press": state.switches[ev.x + "," + ev.y] = true; sync(); burst(ev.x, ev.y, 0x5fcf8f, 10, 1.4); await sleep(base); break;
