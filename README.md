@@ -75,7 +75,10 @@ No accounts and no email: the code is the key, plus a per-player token kept in t
 single Supabase edge function (`bl-family`) over five `bl_` tables with row-level security and no public
 policies; only game state (coins, levels, goods, review text) ever leaves the browser.
 
-## Graphics: a real 3D island
+## Graphics
+
+The realistic renderer draws real 3D models from `assets/models/` (Bolt, the cottage, zone walls, crabs, pick-ups, townsfolk, market stalls). They were generated on the family's DGX Spark from text prompts with the pipeline in `tools/assets3d/` (concept picture → Hunyuan3D mesh → small textured glTF); `tools/assets3d/preview.html?all=1` shows the whole set. Anything without a model file falls back to a built-in shape.
+: a real 3D island
 
 Every level is drawn by a realistic 3D renderer (`js/render3d.js`, built on [Three.js](https://threejs.org)):
 an island in an ocean under a physically based sky, a sun that casts real shadows, a wave shader for the

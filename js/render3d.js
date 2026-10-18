@@ -35,9 +35,9 @@ const Render3D = (() => {
   const ASSETS = {
     bolt:     { fit: "h", size: 0.95, rotY: Math.PI / 2, tint: true },
     house:    { fit: "w", size: 0.92, rotY: Math.PI },
-    tree:     { fit: "h", size: 1.35 }, rock: { fit: "w", size: 0.9 }, crate: { fit: "w", size: 0.84 }, pillar: { fit: "h", size: 0.95 }, crystal: { fit: "h", size: 1.15 }, ice: { fit: "w", size: 0.86 },
-    crab:     { fit: "w", size: 0.62, rotY: Math.PI },
-    apple:    { fit: "h", size: 0.34, lift: 0.08 }, gem: { fit: "h", size: 0.42, lift: 0.15 }, key: { fit: "w", size: 0.4, lift: 0.18 }, lens: { fit: "h", size: 0.4, lift: 0.12 },
+    tree:     { fit: "h", size: 1.15 }, rock: { fit: "w", size: 0.92 }, crate: { fit: "w", size: 0.84 }, pillar: { fit: "h", size: 0.95 }, crystal: { fit: "w", size: 0.95 }, ice: { fit: "w", size: 0.86 },
+    crab:     { fit: "w", size: 0.62 },
+    apple:    { fit: "h", size: 0.34, lift: 0.08 }, key: { fit: "w", size: 0.42, lift: 0.18 }, lens: { fit: "w", size: 0.45, lift: 0.12 },
     villager: { fit: "h", size: 1.1 }, villager2: { fit: "h", size: 1.1 }, stall: { fit: "w", size: 1.05 },
   };
   const MODEL_BASE = "assets/models/", assetTpl = {}, assetWaiters = {}, gltfLoader = new GLTFLoader();
@@ -56,6 +56,7 @@ const Render3D = (() => {
   }
   // fill group g with the model (now, or as soon as it arrives); until then, or if there is no file, draw the built-in shape
   function useAsset(g, name, fallback) {
+    if (!name || !ASSETS[name]) { fallback(); return g; }
     loadAsset(name);
     const place = () => {
       const t = assetTpl[name]; if (!t) return false;
@@ -285,10 +286,10 @@ const Render3D = (() => {
     g.add(mesh(new THREE.BoxGeometry(0.02, 0.14, 0.14), std({ color: 0xffe9a8, emissive: 0xffb347, emissiveIntensity: 2.2 }), 0.34, 0.3, -0.15));
     g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 6), std({ color: 0x8a7b70 }), -0.18, 0.85, -0.15));
   }
-  const ITEM_MODEL = { A: "apple", "*": "gem", K: "key", L: "lens" };
+  const ITEM_MODEL = { A: "apple", K: "key", L: "lens" }; // gems stay built-in: the glowing octahedron blooms nicely
   function item(kind) {
     const g = new THREE.Group(); g.userData.kind = kind; g.userData.spin = kind === "A" ? 0.4 : 1.2;
-    return useAsset(g, ITEM_MODEL[kind] || "gem", () => itemShape(g, kind));
+    return useAsset(g, ITEM_MODEL[kind], () => itemShape(g, kind));
   }
   function itemShape(g, kind) {
     if (kind === "A") { g.add(mesh(new THREE.SphereGeometry(0.19, 20, 16), phys({ color: 0xd8322a, roughness: 0.35, clearcoat: 0.8 }), 0, 0.2, 0)); g.add(mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.12, 5), std({ color: 0x5a3a1a }), 0, 0.42, 0)); g.add(mesh(new THREE.BoxGeometry(0.12, 0.02, 0.06), std({ color: 0x4e9a3a }), 0.06, 0.44, 0)); }
