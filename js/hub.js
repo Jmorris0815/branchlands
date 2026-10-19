@@ -40,6 +40,11 @@ const Hub = (() => {
       { kind: "crate", x: -10.5, z: -7.5 }, { kind: "crate", x: -10, z: -5, ry: 0.6 }, { kind: "crate", x: -2.4, z: 13.2, ry: 0.3 }, { kind: "crate", x: 2.6, z: 15.5 },
       { kind: "crystal", x: -8.5, z: -15.5, s: 1.5 }, { kind: "crystal", x: -4.5, z: -16, s: 1.5 }, { kind: "crystal", x: -3.5, z: -12.5, s: 1.3 },
     ],
+    // places townsfolk and helper robots wander between (they find their own way)
+    spots: [{ x: 4, z: 5 }, { x: -4, z: 5 }, { x: -6, z: -3 }, { x: 6, z: -2 }, { x: 0, z: 8.5 }, { x: 0, z: 15 }, { x: 0, z: 20 }, { x: -6, z: 10 }, { x: 7, z: 12 },
+      { x: -12, z: 0 }, { x: 12, z: 0 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: 15, z: 7 }, { x: -17, z: 4 }, { x: 9, z: -9 }],
+    strollers: [{ from: 0 }, { from: 5 }, { from: 9 }, { from: 13, tint: 0xcfd8ff }, { from: 14 }],
+    bots: [{ from: 3, color: "#c8553d" }, { from: 7, color: "#3f9a6a", s: 0.7 }, { from: 11, color: "#e6b422", s: 0.75 }],
     get props() { return props().map(p => ({ ...p, x: p.wx, z: p.wz })); },
   };
   let active = false, nearProp = null, saveT = null; const keys = new Set();

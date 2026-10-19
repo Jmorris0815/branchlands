@@ -125,7 +125,7 @@ const Render3D = (() => {
       g.add(label((p.locked ? "🔒 " : "") + name, 0, 0, 0.5, 1.3));
       if (!p.locked) { const l = new THREE.PointLight(c, 1.5, 3, 2); l.position.set(0, 0.7, 0); g.add(l); }
     } else if (p.kind === "npc") {
-      const vis = new THREE.Group(); g.add(vis); g.add(label(name, 0, 0, 0.5, 1.35)); g.userData.bob = true;
+      const vis = new THREE.Group(); g.add(vis); g.add(label(name, 0, 0, 0.5, 1.35)); g.userData.vis = vis;
       useAsset(vis, name.length % 2 ? "villager" : "villager2", () => {
         const c = new THREE.Color(p.color);
         vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4, clearcoat: 0.6 }), 0, 0.45, 0));
@@ -603,6 +603,205 @@ const Render3D = (() => {
     r.path = path ? path.slice(0, -1) : []; const last = path ? path[path.length - 1] : { x, z };
     r.target = { x: last.x, z: last.z, prop: prop || null }; r.stuck = 0;
   }
+  // ---------- life in town: rigged townsfolk, strollers, helper robots, gulls, crabs, fish, track marks ----------
+  // The generated people are single sculpted meshes with no skeleton, so they are "rigged" in the vertex shader:
+  // below the hips the two legs swing about a sideways axis (left and right opposite), the arms swing the other
+  // way, the head turns about the neck, and the chest breathes. The cut-off points are fractions of the model's
+  // height, which works for any standing person the Spark makes.
+  function rigHuman(inst) {
+    const sets = [];
+    inst.traverse(o => {
+      if (!o.isMesh || o.userData.rigged) return; o.userData.rigged = true;
+      const g = o.geometry; g.computeBoundingBox(); const b = g.boundingBox, h = b.max.y - b.min.y, hw = (b.max.x - b.min.x) / 2;
+      const u = { uPhase: { value: 0 }, uAmp: { value: 0 }, uHead: { value: 0 }, uNod: { value: 0 }, uBreath: { value: 0 }, uHip: { value: b.min.y + h * 0.47 }, uNeck: { value: b.min.y + h * 0.83 }, uShoulder: { value: b.min.y + h * 0.78 }, uC: { value: new THREE.Vector2((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2) }, uH: { value: h }, uHW: { value: hw } };
+      o.material = o.material.clone(); // geometry stays shared with the template
+      o.material.onBeforeCompile = sh => {
+        Object.assign(sh.uniforms, u);
+        sh.vertexShader = "uniform float uPhase, uAmp, uHead, uNod, uBreath, uHip, uNeck, uShoulder, uH, uHW; uniform vec2 uC;\n" +
+          "vec2 rot2(vec2 v, float a){ float c = cos(a), s = sin(a); return vec2(c*v.x - s*v.y, s*v.x + c*v.y); }\n" +
+          sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+          {
+            vec3 p = transformed; float dx = p.x - uC.x;
+            // legs: a smooth left/right split so the crotch does not tear
+            float side = clamp(dx / (uHW * 0.18), -1.0, 1.0);
+            float legK = smoothstep(uHip, uHip - uH * 0.10, p.y);
+            float la = sin(uPhase) * uAmp * side * legK;
+            vec2 yz = rot2(vec2(p.y - uHip, p.z - uC.y), la); p.y = uHip + yz.x; p.z = uC.y + yz.y;
+            // knees: lift the lower leg on the forward swing
+            float knee = smoothstep(uHip - uH * 0.22, uHip - uH * 0.30, transformed.y) * max(0.0, sin(uPhase) * side) * uAmp * 0.12 * uH;
+            p.z += knee;
+            // arms: outer parts between the hips and the shoulders swing opposite the legs
+            float armK = smoothstep(uHW * 0.42, uHW * 0.62, abs(dx)) * smoothstep(uShoulder + uH * 0.04, uShoulder - uH * 0.02, p.y) * smoothstep(uHip - uH * 0.18, uHip, p.y);
+            float aa = -sin(uPhase) * uAmp * 0.7 * sign(dx) * armK;
+            vec2 ayz = rot2(vec2(p.y - uShoulder, p.z - uC.y), aa); p.y = mix(p.y, uShoulder + ayz.x, armK); p.z = mix(p.z, uC.y + ayz.y, armK);
+            // chest breathing
+            float chest = smoothstep(uHip, uHip + uH * 0.1, p.y) * smoothstep(uNeck, uNeck - uH * 0.06, p.y);
+            p.x = uC.x + (p.x - uC.x) * (1.0 + uBreath * 0.012 * chest); p.z = uC.y + (p.z - uC.y) * (1.0 + uBreath * 0.02 * chest);
+            // head: turn and nod about the neck
+            float headK = smoothstep(uNeck - uH * 0.02, uNeck + uH * 0.03, p.y);
+            vec2 hz = rot2(vec2(p.x - uC.x, p.z - uC.y), -uHead * headK); p.x = uC.x + hz.x; p.z = uC.y + hz.y;
+            vec2 ny = rot2(vec2(p.y - uNeck, p.z - uC.y), uNod * headK); p.y = uNeck + ny.x; p.z = uC.y + ny.y;
+            // a little up-and-down with each step
+            p.y += abs(sin(uPhase)) * uAmp * 0.04 * uH * (1.0 - legK);
+            transformed = p;
+          }`);
+      };
+      o.material.customProgramCacheKey = () => "rigHuman";
+      sets.push(u);
+    });
+    return sets;
+  }
+  function rigSet(sets, k, v) { if (sets) for (const u of sets) u[k].value = v; }
+  // fill group vis with a person model and rig it as soon as the model is there
+  function person(vis, model, fallbackColor) {
+    vis.userData.onModel = inst => { vis.userData.rig = rigHuman(inst); };
+    useAsset(vis, model, () => {
+      const c = new THREE.Color(fallbackColor);
+      vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4 }), 0, 0.45, 0));
+      vis.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
+    });
+    if (vis.userData.model && !vis.userData.rig) vis.userData.rig = rigHuman(vis.userData.model);
+    return vis;
+  }
+  const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+
+  function gullMesh() {
+    const g = new THREE.Group(), white = std({ color: 0xf4f4f0, roughness: 0.7 }), grey = std({ color: 0x9aa3ad, roughness: 0.7, side: THREE.DoubleSide });
+    const body = mesh(new THREE.CapsuleGeometry(0.06, 0.24, 4, 8), white); body.rotation.z = Math.PI / 2; g.add(body);
+    g.add(mesh(new THREE.SphereGeometry(0.06, 10, 8), white, 0.17, 0.03, 0));
+    const beak = mesh(new THREE.ConeGeometry(0.018, 0.07, 6), std({ color: 0xf0b030 }), 0.24, 0.02, 0); beak.rotation.z = -Math.PI / 2; g.add(beak);
+    const tail = mesh(new THREE.BoxGeometry(0.1, 0.01, 0.08), grey, -0.19, 0, 0); g.add(tail);
+    const wings = [];
+    for (const s of [-1, 1]) {
+      const piv = new THREE.Group(); piv.position.set(0.02, 0.03, s * 0.04); g.add(piv);
+      const w = mesh(new THREE.PlaneGeometry(0.16, 0.42), grey); w.rotation.x = -Math.PI / 2; w.position.z = s * 0.21; piv.add(w);
+      const tip = mesh(new THREE.PlaneGeometry(0.1, 0.12), std({ color: 0x2b2f36, side: THREE.DoubleSide })); tip.rotation.x = -Math.PI / 2; tip.position.set(-0.02, 0.001, s * 0.37); piv.add(tip);
+      piv.userData.s = s; wings.push(piv);
+    }
+    g.userData.wings = wings; g.traverse(o => { if (o.isMesh) o.castShadow = true; }); return g;
+  }
+  function fishMesh() {
+    const g = new THREE.Group(); const b = mesh(new THREE.SphereGeometry(0.1, 12, 8), std({ color: 0xc8d4dc, metalness: 0.8, roughness: 0.25 })); b.scale.set(2.2, 0.8, 0.6); g.add(b);
+    const t = mesh(new THREE.ConeGeometry(0.08, 0.12, 4), std({ color: 0x8fa0ac, metalness: 0.6, roughness: 0.3 }), -0.26, 0, 0); t.rotation.z = Math.PI / 2; g.add(t); return g;
+  }
+  // track marks: a ring buffer of flat dark strips laid behind Bolt's two tracks
+  function makeTracks() {
+    const N = 700, geo = new THREE.PlaneGeometry(0.14, 0.24); geo.rotateX(-Math.PI / 2);
+    const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0x2e2618, transparent: true, opacity: 0.2, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), N);
+    m.frustumCulled = false; m.renderOrder = 2; const M = new THREE.Matrix4().makeTranslation(0, -100, 0); for (let i = 0; i < N; i++) m.setMatrixAt(i, M);
+    return { mesh: m, N, next: 0, dist: 0 };
+  }
+  function dropTrack(r, x, z, yaw, onSand) {
+    const t = r.tracks, cy = Math.cos(yaw), sy = -Math.sin(yaw), q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw + Math.PI / 2), M = new THREE.Matrix4(), s = new THREE.Vector3(1, 1, onSand ? 1 : 0.7);
+    for (const side of [-1, 1]) {
+      const px = x - sy * side * 0.17, pz = z + cy * side * 0.17;
+      M.compose(new THREE.Vector3(px, r.height(px, pz) + 0.025, pz), q, s); t.mesh.setMatrixAt(t.next, M); t.next = (t.next + 1) % t.N;
+    }
+    t.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  function addLife(r) {
+    const town = r.town, height = r.height;
+    r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = [];
+    // the talking townsfolk: rig them so heads turn and chests breathe
+    for (const q of r.props) if (q.p.kind === "npc" && q.m.userData.vis) { const v = q.m.userData.vis; q.vis = v; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst); }; q.phase = Math.random() * 6; }
+    // strollers wander between spots around town
+    const SPOTS = town.spots || [];
+    const TINTS = [0xffffff, 0xd8e4ff, 0xffe2c8, 0xe2ffd8];
+    (town.strollers || []).forEach((st, i) => {
+      const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); person(vis, st.model || "villager", st.color || 0x6a8c3a);
+      if (st.tint) vis.userData.tint = st.tint; else vis.userData.tint = TINTS[i % TINTS.length];
+      const s0 = SPOTS[st.from % SPOTS.length]; g.position.set(s0.x, height(s0.x, s0.z), s0.z); world.add(g);
+      const w = { g, vis, spot: st.from % SPOTS.length, path: [], wait: 1 + Math.random() * 3, phase: 0, amp: 0, yaw: Math.random() * 6, head: 0, look: 0, speed: 0.85 + Math.random() * 0.25, r: 0.32 };
+      r.walkers.push(w); r.movers.push(w);
+    });
+    // helper robots: Bolt's cousins in other paint jobs, pottering between jobs
+    (town.bots || []).forEach((bt, i) => {
+      const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); const col = new THREE.Color(bt.color);
+      vis.userData.onModel = inst => tintModel(inst, col); useAsset(vis, "bolt", () => robotShape(vis)); if (vis.userData.model) tintModel(vis.userData.model, col);
+      g.scale.setScalar(bt.s || 0.8); const s0 = SPOTS[bt.from % SPOTS.length]; g.position.set(s0.x, height(s0.x, s0.z), s0.z); world.add(g);
+      const b = { g, vis, spot: bt.from % SPOTS.length, path: [], wait: Math.random() * 2, yaw: 0, speed: 1.8 + Math.random() * 0.5, r: 0.36, bot: true, beep: 0 };
+      r.bots.push(b); r.movers.push(b);
+    });
+    // gulls circle the harbour
+    for (let i = 0; i < (phone ? 4 : 7); i++) { const g = gullMesh(); world.add(g); r.gulls.push({ g, cx: rnd(-8, 8) + (i % 2 ? 6 : -4), cz: rnd(6, 22), rad: rnd(5, 11), hgt: rnd(4.5, 8.5), w: rnd(0.25, 0.45) * (i % 2 ? 1 : -1), a: Math.random() * 6, flap: Math.random() * 6 }); }
+    // crabs on the beach: find sand just above the waterline
+    for (let i = 0, tries = 0; i < 6 && tries < 400; tries++) {
+      const a = Math.random() * Math.PI * 2; let x = 0, z = 0, ok = false;
+      for (let rr = town.radius - 8; rr < town.radius + 5; rr += 0.25) { x = Math.cos(a) * rr; z = Math.sin(a) * rr; const y = height(x, z); if (y > 0.04 && y < 0.22) { ok = true; break; } }
+      if (!ok || r.colliders.some(c => Math.hypot(x - c.x, z - c.z) < c.r + 1)) continue;
+      const g = new THREE.Group(); useAsset(g, "crab", () => crabShape(g)); g.scale.setScalar(0.9); g.position.set(x, height(x, z), z); g.rotation.y = a + Math.PI / 2; world.add(g);
+      r.crabs.push({ g, home: { x, z }, a, t: 0, dir: 1, wait: Math.random() * 3, flee: 0 }); i++;
+    }
+    r.fish = { g: fishMesh(), t: -2 - Math.random() * 3 }; r.fish.g.visible = false; world.add(r.fish.g);
+    r.tracks = makeTracks(); world.add(r.tracks.mesh);
+    r.prevFwd = 0; r.pitch = 0;
+  }
+
+  function lifeFrame(r, dt, bx, bz) {
+    const SPOTS = r.town.spots || [];
+    // talking townsfolk: breathe, shift weight, and look at Bolt with the head first, then the body
+    for (const q of r.props) {
+      if (q.p.kind !== "npc") continue; const m = q.m, v = q.vis, rig = v && v.userData.rig;
+      const ex = bx - m.position.x, ez = bz - m.position.z, d = Math.hypot(ex, ez), want = d < 6 ? Math.atan2(ex, ez) : m.userData.home;
+      const rel = angDiff(want, m.rotation.y), lim = rig ? 1.0 : 0;
+      if (Math.abs(rel) > lim) m.rotation.y += Math.sign(rel) * Math.min(Math.abs(rel) - lim, dt * 2.2);
+      q.head = (q.head || 0) + (Math.max(-lim, Math.min(lim, angDiff(want, m.rotation.y))) - (q.head || 0)) * Math.min(1, dt * 4);
+      m.position.y = m.userData.baseY;
+      if (rig) { rigSet(rig, "uHead", q.head); rigSet(rig, "uBreath", Math.sin(clock * 1.7 + q.phase)); rigSet(rig, "uNod", d < 2.2 ? Math.sin(clock * 3 + q.phase) * 0.06 : 0); rigSet(rig, "uPhase", Math.sin(clock * 0.4 + q.phase) * 0.5); rigSet(rig, "uAmp", 0.05); }
+    }
+    // strollers and robots: walk a found path to a new spot, stop, look around, pick another
+    const walk = (w, isBot) => {
+      const p = w.g.position;
+      if (!w.path.length) {
+        w.wait -= dt; w.moving = false;
+        if (w.wait <= 0 && SPOTS.length && r.walk) {
+          let to = w.spot; while (to === w.spot) to = Math.floor(Math.random() * SPOTS.length);
+          const path = findPath(r, { x: p.x, z: p.z }, SPOTS[to]); if (path && path.length) { w.path = path; w.spot = to; } w.wait = isBot ? rnd(1, 3) : rnd(2.5, 7);
+        }
+      } else {
+        const wp = w.path[0], dx = wp.x - p.x, dz = wp.z - p.z, d = Math.hypot(dx, dz);
+        const toBolt = Math.hypot(bx - p.x, bz - p.z), ahead = (bx - p.x) * dx + (bz - p.z) * dz > 0;
+        const blocked = toBolt < 1.3 && ahead; // give way to Bolt
+        if (d < 0.3) w.path.shift();
+        else if (!blocked) { const st = Math.min(d, w.speed * dt); p.x += dx / d * st; p.z += dz / d * st; w.moving = true; w.dist = (w.dist || 0) + st; const ty = isBot ? Math.atan2(-dz, dx) : Math.atan2(dx, dz); w.yaw += angDiff(ty, w.yaw) * Math.min(1, dt * 6); }
+        else w.moving = false;
+      }
+      // other movers: a gentle push apart
+      for (const o of r.movers) if (o !== w) { const ex = p.x - o.g.position.x, ez = p.z - o.g.position.z, dd = Math.hypot(ex, ez), mn = w.r + o.r; if (dd < mn && dd > 1e-4) { p.x += ex / dd * (mn - dd) * 0.5; p.z += ez / dd * (mn - dd) * 0.5; } }
+      p.y += (r.height(p.x, p.z) - p.y) * Math.min(1, dt * 10); w.g.rotation.y = w.yaw;
+    };
+    for (const w of r.walkers) {
+      walk(w, false); const rig = w.vis.userData.rig;
+      w.amp += ((w.moving ? 0.42 : 0) - w.amp) * Math.min(1, dt * 5); w.phase = (w.dist || 0) * 4.6;
+      if (w.vis.userData.tint && w.vis.userData.model && !w.tinted) { w.tinted = true; w.vis.userData.model.traverse(o => { if (o.isMesh && o.material) o.material.color.multiply(new THREE.Color(w.vis.userData.tint)); }); }
+      const toB = Math.hypot(bx - w.g.position.x, bz - w.g.position.z);
+      const lookAt = toB < 4 ? Math.max(-1, Math.min(1, angDiff(Math.atan2(bx - w.g.position.x, bz - w.g.position.z), w.yaw))) : (w.moving ? 0 : Math.sin(clock * 0.5 + w.speed * 9) * 0.7);
+      w.head += (lookAt - w.head) * Math.min(1, dt * 3);
+      if (rig) { rigSet(rig, "uPhase", w.phase); rigSet(rig, "uAmp", w.amp); rigSet(rig, "uHead", w.head); rigSet(rig, "uBreath", Math.sin(clock * 1.9 + w.speed * 7)); }
+    }
+    for (const b of r.bots) { walk(b, true); b.vis.position.y = b.moving ? Math.abs(Math.sin(clock * 18 + b.speed)) * 0.012 : 0; b.vis.rotation.z += ((b.moving ? 0.05 : 0) - b.vis.rotation.z) * Math.min(1, dt * 4); }
+    // gulls: circle, flap, glide, bank into the turn
+    for (const s of r.gulls) {
+      s.a += s.w * dt; const x = s.cx + Math.cos(s.a) * s.rad, z = s.cz + Math.sin(s.a) * s.rad, y = s.hgt + Math.sin(s.a * 2) * 0.6;
+      s.g.position.set(x, y, z); const vx = -Math.sin(s.a) * s.w, vz = Math.cos(s.a) * s.w; s.g.rotation.set(0, Math.atan2(-vz, vx), 0); s.g.rotateX(Math.sign(s.w) * 0.35);
+      const gl = Math.sin(clock * 0.3 + s.flap) > 0.2; const f = gl ? 0.08 : Math.sin(clock * 10 + s.flap) * 0.7;
+      for (const wg of s.g.userData.wings) wg.rotation.x = -wg.userData.s * f;
+    }
+    // crabs: scuttle sideways along the beach, bolt when Bolt comes close
+    for (const c of r.crabs) {
+      const p = c.g.position, toB = Math.hypot(bx - p.x, bz - p.z);
+      if (toB < 2.2 && c.flee <= 0) { c.flee = 1.4; c.dir = Math.sign((p.x - bx) * Math.sin(c.a) - (p.z - bz) * Math.cos(c.a)) || 1; }
+      const speed = c.flee > 0 ? 2.2 : 0.5; c.flee -= dt;
+      if (c.wait > 0 && c.flee <= 0) c.wait -= dt;
+      else { c.t += c.dir * speed * dt; if (Math.abs(c.t) > 1.6) { c.dir = -Math.sign(c.t); c.t = Math.sign(c.t) * 1.6; c.wait = rnd(1, 4); } }
+      const tx = -Math.sin(c.a), tz = Math.cos(c.a), x = c.home.x + tx * c.t, z = c.home.z + tz * c.t; p.set(x, r.height(x, z) + Math.abs(Math.sin(clock * 30)) * 0.01 * (c.wait > 0 && c.flee <= 0 ? 0 : 1), z);
+    }
+    // a fish jumps in the bay now and then
+    const f = r.fish; f.t += dt;
+    if (f.t > 0 && !f.g.visible) { const a = rnd(-1.2, 1.2), d = rnd(6, 14); f.x = r.town.bay.x + Math.sin(a) * d * 0.6; f.z = r.town.bay.z + Math.cos(a) * d * 0.3 - 2; f.dir = Math.random() * 6; if (r.height(f.x, f.z) < -0.6) { f.g.visible = true; f.t = 0; burst(f.x, f.z, 0xdff4ff, 10, 1.2, -0.05); } else f.t = -0.5; }
+    if (f.g.visible) { const k = f.t / 0.9; if (k >= 1) { f.g.visible = false; f.t = -rnd(3, 7); burst(f.x + Math.cos(f.dir) * 0.9, f.z - Math.sin(f.dir) * 0.9, 0xdff4ff, 12, 1.4, -0.05); } else { f.g.position.set(f.x + Math.cos(f.dir) * 0.9 * k, -0.1 + Math.sin(k * Math.PI) * 0.9, f.z - Math.sin(f.dir) * 0.9 * k); f.g.rotation.set(0, f.dir, Math.cos(k * Math.PI) * 1.1); } }
+  }
   let OCEAN_BIG = null;
   function bigOceanGeo() { if (!OCEAN_BIG) { OCEAN_BIG = new THREE.PlaneGeometry(260, 260, phone ? 120 : 180, phone ? 120 : 180); OCEAN_BIG.rotateX(-Math.PI / 2); } return OCEAN_BIG; }
 
@@ -649,7 +848,7 @@ const Render3D = (() => {
     for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { o.material = o.material.clone(); o.material.sizeAttenuation = false; const asp = o.scale.x / o.scale.y; o.scale.set(0.055 * asp * H / W / q.s, 0.055 / q.s, 1); } });
     robot = robotMesh(); const sx = pose ? pose.x : town.start.x, sz = pose ? pose.z : town.start.z;
     robot.position.set(sx, height(sx, sz), sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot;
-    buildWalkGrid(r);
+    buildWalkGrid(r); addLife(r);
     for (const q of r.props) if (q.p.kind === "portal" && Math.hypot(q.p.x - sx, q.p.z - sz) - q.r < 0.6) r.latch = q; // back from a level: do not reopen the gate you are standing in
     ocean.geometry = bigOceanGeo(); ocean.position.set(0, -0.1, 0);
     r.lightDir = applyWeather(HARBOR, new THREE.Vector3(sx, 0, sz), 17);
@@ -678,6 +877,7 @@ const Render3D = (() => {
     // move, then get pushed out of things and away from the water (the pier is the one place you can drive over it)
     let nx = b.position.x + r.vel.x * dt, nz = b.position.z + r.vel.z * dt;
     for (const c of r.colliders) { const ex = nx - c.x, ez = nz - c.z, d = Math.hypot(ex, ez), min = c.r + 0.42; if (d < min && d > 1e-4) { nx = c.x + ex / d * min; nz = c.z + ez / d * min; } }
+    for (const o of r.movers) { const ex = nx - o.g.position.x, ez = nz - o.g.position.z, d = Math.hypot(ex, ez), min = o.r + 0.4; if (d < min && d > 1e-4) { nx = o.g.position.x + ex / d * min; nz = o.g.position.z + ez / d * min; } }
     const plat = (x, z) => r.platforms.find(p => x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2);
     const gy = (x, z) => { const p = plat(x, z); return p ? p.y : r.height(x, z); };
     if (gy(nx, nz) < -0.04) { if (gy(nx, b.position.z) >= -0.04) nz = b.position.z; else if (gy(b.position.x, nz) >= -0.04) nx = b.position.x; else { nx = b.position.x; nz = b.position.z; } r.vel.multiplyScalar(0.5); r.target = null; }
@@ -691,14 +891,16 @@ const Render3D = (() => {
     const e = 0.35, hx = (gy(nx + e, nz) - gy(nx - e, nz)) / (2 * e), hz = (gy(nx, nz + e) - gy(nx, nz - e)) / (2 * e);
     const cy = Math.cos(r.yaw), sy = -Math.sin(r.yaw), along = hx * cy + hz * sy, across = -hx * sy + hz * cy;
     const body = b.userData.body, kb = Math.min(1, dt * 8);
-    body.rotation.z += (Math.atan(along) * 0.9 - body.rotation.z) * kb; body.rotation.x += (-Math.atan(across) * 0.9 - r.lean - body.rotation.x) * kb;
+    const fwd = r.vel.x * cy + r.vel.z * sy, acc = (fwd - r.prevFwd) / Math.max(dt, 1e-3); r.prevFwd = fwd; r.pitch += (Math.max(-0.14, Math.min(0.14, acc * 0.012)) - r.pitch) * Math.min(1, dt * 6); // nose lifts when he pulls away, dips when he brakes
+    body.rotation.z += (Math.atan(along) * 0.9 + r.pitch - body.rotation.z) * kb; body.rotation.x += (-Math.atan(across) * 0.9 - r.lean - body.rotation.x) * kb;
     body.position.y = b.userData.bodyY + Math.sin(clock * 16) * 0.006 * (sp / MAX);
+    r.tracks.dist += sp * dt; if (r.tracks.dist > 0.2 && !plat(nx, nz)) { r.tracks.dist = 0; dropTrack(r, nx, nz, r.yaw, y < 0.35); }
     r.dustT -= dt; if (sp > 1.2 && r.dustT <= 0 && !plat(nx, nz)) { r.dustT = 0.07; burst(nx - cy * 0.45, nz - sy * 0.45, y < 0.35 ? 0xe0cfa2 : 0xb8c99a, 2, 0.45, y + 0.08); }
     // townsfolk turn to face Bolt when he drives up; portals spin; boats bob; the lighthouse sweeps; the fountain sprays
     for (const q of r.props) {
       const m = q.m; if (m.userData.spin) m.userData.spin.rotation.y += dt * 0.8;
-      if (q.p.kind === "npc") { const ex = nx - m.position.x, ez = nz - m.position.z, d = Math.hypot(ex, ez); const want = d < 5 ? Math.atan2(ex, ez) : m.userData.home; let dd = want - m.rotation.y; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI; m.rotation.y += dd * Math.min(1, dt * 3); m.position.y = m.userData.baseY + Math.sin(clock * 2 + m.position.x) * 0.02; }
     }
+    lifeFrame(r, dt, nx, nz);
     for (const f of r.floats) { f.position.y = -0.08 + Math.sin(clock * 1.1 + f.userData.phase) * 0.06; f.rotation.z = Math.sin(clock * 0.9 + f.userData.phase) * 0.03; f.rotation.x = Math.cos(clock * 0.7 + f.userData.phase) * 0.025; }
     for (const t of r.beams) t.position.set(Math.cos(clock * 0.5) * 14, 5.5, Math.sin(clock * 0.5) * 14);
     for (const h of r.hands) h.rotation.z = -clock * 0.3;
