@@ -330,7 +330,7 @@ const RPG = (() => {
     return h + "</div>";
   }
   function paint() {
-    let h = `<h3>Style: paint</h3><p class="muted">Bolt's colour, hat, eyes and trail, in 2D and 3D. Quest rewards unlock the rare ones.</p><div class="cards paints">`;
+    let h = `<h3>Style: paint</h3><p class="muted">Bolt's colour, hat, eyes and trail. Quest rewards unlock the rare ones.</p><div class="cards paints">`;
     for (const p of PAINTS) { const own = !!S.paints[p.id], on = S.paint === p.id; h += `<div class="card ${on ? "done" : ""}"><div class="swatch" style="background:${p.color}"></div><b>${p.name}</b><div class="muted">${own ? (on ? "Wearing" : "Owned") : `🪙 ${p.cost}${p.req ? " · needs " + reqText(p.req) : ""}`}</div><button class="small ${on ? "" : "primary"}" data-act="paint" data-id="${p.id}" ${on || (!own && (!meets(p.req) || S.coins < p.cost)) ? "disabled" : ""}>${own ? "Wear" : "Buy"}</button></div>`; }
     h += "</div>";
     for (const cat of ["hat", "eyes", "trail"]) {

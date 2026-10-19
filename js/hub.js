@@ -1,40 +1,25 @@
-// Harbor Town hub: the place you start every session. With the realistic renderer on it is a free-roam 3D
-// island: drive Bolt anywhere with WASD / arrows / the joystick (or click where to go), drive up to someone and
-// press E (or tap Talk) to talk, shop, read the quest board, or step through a zone portal. Townsfolk have
-// scripted conversations with clues and quests, and free chat when Ollama is running.
-// Without 3D (classic graphics, old browsers) the same town is a small grid drawn by the 2D renderer.
+// Harbor Town hub: the place you start every session. A free-roam 3D island: drive Bolt anywhere with
+// WASD / arrows / the joystick (or click where to go), drive up to someone and press E (or tap Talk) to talk,
+// shop, read the quest board, or step through a zone portal. Townsfolk have scripted conversations with clues
+// and quests, and free chat when Ollama is running. The island itself is built by render3d.js from TOWN below.
 
 const Hub = (() => {
   const $ = (id) => document.getElementById(id);
-  const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   let api; // { R, showModal, hideModal, openLevel, showScreen, openTown, zoneUnlocked, completed, save, sfx, toast, ollama }
-  const GRID = [
-    "##################",
-    "#......#......#..#",
-    "#......#......#..#",
-    "#......#......#..#",
-    "#.####.#.####.#..#",
-    "#................#",
-    "#................#",
-    "#....~~~~~~~~....#",
-    "#...~~~~~~~~~~...#",
-    "#................#",
-    "##################",
-  ];
-  // x, y: the tile in the small classic grid above. wx, wz: where it stands in the 3D town (x runs east, z runs
-  // south, the fountain is 0,0; one unit is one level tile). Move something by changing its numbers.
+  // wx, wz: where each one stands in the town (x runs east, z runs south, the fountain is 0,0; one unit is one
+  // level tile). Move something by changing its numbers.
   const PROPS = [
-    { kind: "portal", zone: 1, x: 3, y: 2, wx: 19.5, wz: -7.5 }, { kind: "portal", zone: 2, x: 10, y: 2, wx: -19, wz: -6.5 }, { kind: "portal", zone: 3, x: 16, y: 2, wx: -20.5, wz: 3 }, { kind: "portal", zone: 4, x: 16, y: 6, wx: 20, wz: 5 },
-    { kind: "portal", zone: 5, x: 16, y: 9, wx: 12, wz: -17.5 }, { kind: "portal", zone: 6, x: 9, y: 9, wx: 14.5, wz: 12.5 }, { kind: "portal", zone: 7, x: 1, y: 9, wx: -10.5, wz: -17.5 }, { kind: "portal", zone: 8, x: 1, y: 6, wx: -15, wz: 12 },
-    { kind: "npc", id: "marisol", x: 8, y: 6, wx: 3.2, wz: 13, label: "⚓ Marisol", color: "#c8553d" }, { kind: "npc", id: "pip", x: 12, y: 2, wx: -12.5, wz: -9.5, label: "🧑‍🌾 Old Pip", color: "#6a8c3a" },
-    { kind: "npc", id: "odo", x: 4, y: 7, wx: -16, wz: 7, label: "🛶 Odo", color: "#4a6b86" }, { kind: "npc", id: "wrenna", x: 13, y: 6, wx: 11, wz: 1.5, label: "🔧 Wrenna", color: "#b07a2a" },
-    { kind: "npc", id: "clock", x: 13, y: 9, wx: 12.5, wz: -10.5, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", x: 6, y: 9, wx: 6, wz: 9, label: "🧔 Dad", color: "#3f7a6a" },
-    { kind: "npc", id: "oracle", x: 3, y: 9, wx: -6.5, wz: -13.5, label: "🔮 Oracle", color: "#5fb8b0" }, { kind: "npc", id: "nyx", x: 3, y: 5, wx: 16.5, wz: 10, label: "🏴‍☠️ Nyx", color: "#2f3e5c" },
-    { kind: "stall", tab: "market", x: 6, y: 5, wx: -9.5, wz: 2.5, label: "🏪 Market" }, { kind: "stall", tab: "workshop", x: 11, y: 5, wx: 9.5, wz: 3.5, label: "🔧 Workshop" },
-    { kind: "stall", tab: "paint", x: 14, y: 7, wx: 8, wz: -6.5, label: "🎨 Style" }, { kind: "stall", tab: "pack", x: 1, y: 1, wx: -8.5, wz: -6, label: "🎒 Storehouse" },
-    { kind: "stall", tab: "board", x: 10, y: 6, wx: -4, wz: 10.5, label: "📜 Quest board" }, { kind: "stall", tab: "skills", x: 6, y: 1, wx: 5.5, wz: -11, label: "📈 Skills" },
-    { kind: "sign", x: 8, y: 1, wx: 0, wz: -9.5, label: "🗺️ World map" },
-    { kind: "stall", tab: "family", x: 15, y: 1, wx: -12.5, wz: -2, label: "👨‍👩‍👦 Family" },
+    { kind: "portal", zone: 1, wx: 19.5, wz: -7.5 }, { kind: "portal", zone: 2, wx: -19, wz: -6.5 }, { kind: "portal", zone: 3, wx: -20.5, wz: 3 }, { kind: "portal", zone: 4, wx: 20, wz: 5 },
+    { kind: "portal", zone: 5, wx: 12, wz: -17.5 }, { kind: "portal", zone: 6, wx: 14.5, wz: 12.5 }, { kind: "portal", zone: 7, wx: -10.5, wz: -17.5 }, { kind: "portal", zone: 8, wx: -15, wz: 12 },
+    { kind: "npc", id: "marisol", wx: 3.2, wz: 13, label: "⚓ Marisol", color: "#c8553d" }, { kind: "npc", id: "pip", wx: -12.5, wz: -9.5, label: "🧑‍🌾 Old Pip", color: "#6a8c3a" },
+    { kind: "npc", id: "odo", wx: -16, wz: 7, label: "🛶 Odo", color: "#4a6b86" }, { kind: "npc", id: "wrenna", wx: 11, wz: 1.5, label: "🔧 Wrenna", color: "#b07a2a" },
+    { kind: "npc", id: "clock", wx: 12.5, wz: -10.5, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", wx: 6, wz: 9, label: "🧔 Dad", color: "#3f7a6a" },
+    { kind: "npc", id: "oracle", wx: -6.5, wz: -13.5, label: "🔮 Oracle", color: "#5fb8b0" }, { kind: "npc", id: "nyx", wx: 16.5, wz: 10, label: "🏴‍☠️ Nyx", color: "#2f3e5c" },
+    { kind: "stall", tab: "market", wx: -9.5, wz: 2.5, label: "🏪 Market" }, { kind: "stall", tab: "workshop", wx: 9.5, wz: 3.5, label: "🔧 Workshop" },
+    { kind: "stall", tab: "paint", wx: 8, wz: -6.5, label: "🎨 Style" }, { kind: "stall", tab: "pack", wx: -8.5, wz: -6, label: "🎒 Storehouse" },
+    { kind: "stall", tab: "board", wx: -4, wz: 10.5, label: "📜 Quest board" }, { kind: "stall", tab: "skills", wx: 5.5, wz: -11, label: "📈 Skills" },
+    { kind: "sign", wx: 0, wz: -9.5, label: "🗺️ World map" },
+    { kind: "stall", tab: "family", wx: -12.5, wz: -2, label: "👨‍👩‍👦 Family" },
   ];
   // The rest of the 3D island: scenery you cannot talk to. render3d.js shapes the land from this (a wobbly coast of
   // radius `radius`, a bay for the harbour, `hills`, flat `plaza` cobbles and flat pads under every building).
@@ -57,30 +42,26 @@ const Hub = (() => {
     ],
     get props() { return props().map(p => ({ ...p, x: p.wx, z: p.wz })); },
   };
-  let pos = { x: 9, y: 5 }, dir = 0, busy = false, active = false;
-  let roam3d = false, nearProp = null, saveT = null; const keys = new Set(); // free-roam state
+  let active = false, nearProp = null, saveT = null; const keys = new Set();
 
   function props() { return PROPS.map(p => p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
-  function snapshot() { return { grid: GRID.map(r => r.split("")), robot: { ...pos, dir }, items: {}, switches: {}, doors: {}, gates: {}, pads: {}, crabs: [], goal: null, w: GRID[0].length, h: GRID.length, props: props(), hub: true }; }
-  const propAt = (x, y) => PROPS.find(p => p.x === x && p.y === y);
-  const walkable = (x, y) => !!GRID[y] && GRID[y][x] === "." && !propAt(x, y);
-  const nearby = () => PROPS.filter(p => Math.abs(p.x - pos.x) + Math.abs(p.y - pos.y) === 1);
 
   function init(a) { api = a; window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); }); initJoy(); }
   function open() {
-    active = true; busy = false; const s = api.save();
-    const r = api.R.pick(); roam3d = !!r.roam; nearProp = null;
-    $("screen-level").classList.toggle("roam", roam3d); $("dpad").hidden = roam3d; $("joy").hidden = !roam3d; $("talkBtn").hidden = !roam3d;
-    if (roam3d) { if (r.setLook && window.RPG) r.setLook(RPG.look()); r.roam.start(TOWN, hooks, s.hub3 || null); clearInterval(saveT); saveT = setInterval(() => { if (active && roam3d) remember(); }, 4000); }
-    else { if (s.hub) { pos = { x: s.hub.x, y: s.hub.y }; dir = s.hub.dir || 0; } api.R.load(snapshot(), "sand"); }
+    active = true; nearProp = null; const s = api.save();
+    $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false;
+    const r = api.R.pick();
+    if (!r) { renderPanel(); return; } // 3D still loading: render3d-ready calls open() again
+    r.setLook(RPG.look()); r.roam.start(TOWN, hooks, s.hub3 || null);
+    clearInterval(saveT); saveT = setInterval(() => { if (active) remember(); }, 4000);
     renderPanel();
   }
   function close() {
-    if (!active) return; active = false; clearInterval(saveT);
-    if (roam3d) { remember(); Render3D.roam.stop(); keys.clear(); }
+    if (!active) return; active = false; clearInterval(saveT); keys.clear();
+    if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true;
   }
-  function remember() { const s = api.save(); if (roam3d) { const p = Render3D.roam.pose(); if (p) s.hub3 = p; } else s.hub = { x: pos.x, y: pos.y, dir }; api.persistSave(); }
+  function remember() { if (!window.Render3D) return; const p = Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.persistSave(); } }
 
   // ---------- free roam (3D) ----------
   const hooks = {
@@ -91,61 +72,27 @@ const Hub = (() => {
   function sendInput() {
     const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
     const y = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
-    if (roam3d && window.Render3D) Render3D.roam.input(x, y);
+    if (window.Render3D) Render3D.roam.input(x, y);
   }
-  function interactNear() { if (!roam3d) return pressE(); const p = Render3D.roam.near(); if (p && $("modal").hidden) interact(p); }
+  function interactNear() { const p = window.Render3D && Render3D.roam.near(); if (p && $("modal").hidden) interact(p); }
   function onKeyUp(e) { keys.delete(e.key.toLowerCase()); sendInput(); }
   // phone: a thumb joystick over the bottom-left of the picture, a Talk button bottom-right
   function initJoy() {
     const j = $("joy"), k = $("joyKnob"); if (!j) return; let id = null, cx = 0, cy = 0;
-    const set = e => { const dx = e.clientX - cx, dy = e.clientY - cy, d = Math.hypot(dx, dy), m = Math.min(d, 44), ux = d ? dx / d : 0, uy = d ? dy / d : 0; k.style.transform = `translate(${ux * m}px, ${uy * m}px)`; if (roam3d) Render3D.roam.input(ux * m / 44, -uy * m / 44); };
+    const set = e => { const dx = e.clientX - cx, dy = e.clientY - cy, d = Math.hypot(dx, dy), m = Math.min(d, 44), ux = d ? dx / d : 0, uy = d ? dy / d : 0; k.style.transform = `translate(${ux * m}px, ${uy * m}px)`; if (window.Render3D) Render3D.roam.input(ux * m / 44, -uy * m / 44); };
     j.addEventListener("pointerdown", e => { id = e.pointerId; j.setPointerCapture(id); const r = j.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; set(e); e.preventDefault(); });
     j.addEventListener("pointermove", e => { if (e.pointerId === id) set(e); });
-    const end = e => { if (e.pointerId !== id) return; id = null; k.style.transform = ""; if (roam3d) Render3D.roam.input(0, 0); };
+    const end = e => { if (e.pointerId !== id) return; id = null; k.style.transform = ""; if (window.Render3D) Render3D.roam.input(0, 0); };
     j.addEventListener("pointerup", end); j.addEventListener("pointercancel", end);
     $("talkBtn").onclick = () => interactNear();
   }
 
-  async function step(dx, dy) {
-    if (busy || roam3d) return;
-    const nd = DIRS.findIndex(d => d[0] === dx && d[1] === dy), to = { x: pos.x + dx, y: pos.y + dy }, ev = [];
-    if (nd !== dir) { dir = nd; ev.push({ type: "turn", dir }); }
-    const p = propAt(to.x, to.y);
-    busy = true;
-    if (p) { await api.R.play(ev, "fast"); busy = false; interact(p); return; }
-    if (!walkable(to.x, to.y)) { await api.R.play(ev.concat([{ type: "bump", x: pos.x, y: pos.y, dir, what: GRID[to.y] && GRID[to.y][to.x] === "~" ? "water" : "wall" }]), "fast"); busy = false; return; }
-    ev.push({ type: "move", from: { ...pos }, to }); pos = to;
-    await api.R.play(ev, "fast"); busy = false; remember(); renderPanel();
-  }
-  async function walkTo(tx, ty) {
-    if (busy || !active || roam3d) return;
-    const target = propAt(tx, ty);
-    if (!target && !walkable(tx, ty)) return;
-    const key = (x, y) => x + "," + y, goal = (x, y) => target ? Math.abs(x - tx) + Math.abs(y - ty) === 1 : (x === tx && y === ty);
-    const prev = { [key(pos.x, pos.y)]: null }, q = [[pos.x, pos.y]]; let found = null;
-    while (q.length) { const [x, y] = q.shift(); if (goal(x, y)) { found = [x, y]; break; } for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy; if (walkable(nx, ny) && !(key(nx, ny) in prev)) { prev[key(nx, ny)] = [x, y]; q.push([nx, ny]); } } }
-    if (!found) return;
-    const path = []; let c = found; while (c && key(c[0], c[1]) !== key(pos.x, pos.y)) { path.unshift(c); c = prev[key(c[0], c[1])]; }
-    busy = true;
-    for (const [x, y] of path) {
-      if (!active) break;
-      const nd = DIRS.findIndex(d => d[0] === x - pos.x && d[1] === y - pos.y), ev = [];
-      if (nd !== dir) { dir = nd; ev.push({ type: "turn", dir }); }
-      ev.push({ type: "move", from: { ...pos }, to: { x, y } }); pos = { x, y };
-      await api.R.play(ev, "fast");
-    }
-    if (target) { const nd = DIRS.findIndex(d => d[0] === tx - pos.x && d[1] === ty - pos.y); if (nd >= 0 && nd !== dir) { dir = nd; await api.R.play([{ type: "turn", dir }], "fast"); } }
-    busy = false; remember(); renderPanel();
-    if (target) interact(target);
-  }
   function onKey(e) {
     if (!active || !$("modal").hidden) return;
     const t = e.target.tagName; if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
     const k = e.key.toLowerCase();
-    const m = { arrowright: [1, 0], d: [1, 0], arrowdown: [0, 1], s: [0, 1], arrowleft: [-1, 0], a: [-1, 0], arrowup: [0, -1], w: [0, -1] }[k];
-    if (roam3d) { if (m) { e.preventDefault(); keys.add(k); sendInput(); } else if (k === "e" || k === "enter" || k === " ") { e.preventDefault(); interactNear(); } return; }
-    if (m) { e.preventDefault(); step(m[0], m[1]); return; }
-    if (k === "e" || k === "enter" || k === " ") { const f = propAt(pos.x + DIRS[dir][0], pos.y + DIRS[dir][1]) || nearby()[0]; if (f) { e.preventDefault(); interact(f); } }
+    const m = ["arrowright", "d", "arrowdown", "s", "arrowleft", "a", "arrowup", "w"].includes(k);
+    if (m) { e.preventDefault(); keys.add(k); sendInput(); } else if (k === "e" || k === "enter" || k === " ") { e.preventDefault(); interactNear(); }
   }
   function interact(p) {
     api.sfx("click");
@@ -171,7 +118,7 @@ const Hub = (() => {
   function renderPanel() {
     const el = $("mission"); if (!el || !active) return;
     const s = api.save();
-    if (roam3d) {
+    {
       const p = nearProp, phone = document.documentElement.dataset.device === "phone";
       el.innerHTML = `<div class="zonechip">⚓ Harbor Town</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. Dark gates are sealed until you finish the zone before them."}</p>
@@ -180,12 +127,6 @@ const Hub = (() => {
       const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
       return;
     }
-    const near = nearby();
-    el.innerHTML = `<div class="zonechip">⚓ Harbor Town</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
-      <p>Walk Bolt with the <b>arrow keys</b> or <b>WASD</b>, or <b>click a tile</b>. Walk up to someone and press <b>E</b> (or click them) to talk, shop, or step through a portal. Dark portals are sealed until you finish the zone before them.</p>
-      <div id="nearby">${near.length ? near.map(p => `<button class="primary" data-near="${p.x},${p.y}">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + " Enter " + ZONES[p.zone - 1].name : (p.kind === "npc" ? "🗣️ Talk to " : "Open ") + p.label}</button>`).join(" ") : `<span class="muted">Nobody within reach. The quest board and Marisol are by the harbor.</span>`}</div>
-      <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()} · ${LEVELS.filter(l => api.completed()[l.id]).length}/${LEVELS.length} missions</p>`;
-    el.querySelectorAll("button[data-near]").forEach(b => b.onclick = () => { const [x, y] = b.dataset.near.split(",").map(Number); const p = propAt(x, y); const nd = DIRS.findIndex(d => d[0] === x - pos.x && d[1] === y - pos.y); if (nd >= 0) dir = nd; api.R.play([{ type: "turn", dir }], "fast").then(() => interact(p)); });
   }
 
   // ---------- conversations ----------
@@ -295,7 +236,6 @@ const Hub = (() => {
     catch (e) { return "(The free-talk line is down: " + (e.message || e) + ". Is Ollama running with OLLAMA_ORIGINS set?)"; }
   }
 
-  function pressE() { if (roam3d) return interactNear(); const f = propAt(pos.x + DIRS[dir][0], pos.y + DIRS[dir][1]) || nearby()[0]; if (f) interact(f); }
-  return { init, open, close, walkTo, step, pressE, get active() { return active; }, GRID, PROPS, TOWN };
+  return { init, open, close, pressE: interactNear, get active() { return active; }, PROPS, TOWN };
 })();
 window.Hub = Hub;

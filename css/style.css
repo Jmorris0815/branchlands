@@ -85,7 +85,8 @@ main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.
 #fx { position: absolute; inset: 0; pointer-events: none; }
 #world3d { display: block; width: 800px; max-width: 100%; height: auto; border-radius: 10px; cursor: grab; touch-action: none; }
 #world3d:active { cursor: grabbing; }
-#world3d[hidden], #world[hidden] { display: none; }
+#world3d[hidden], #world { display: none; }
+.nogl { position: absolute; inset: 20% 10% auto; text-align: center; }
 .camhint { font-size: 12px; text-align: center; margin-top: 6px; }
 /* free-roam Harbor Town: the picture takes the whole width, the panel sits under it */
 #screen-level.roam main { grid-template-columns: 1fr; }
@@ -242,11 +243,7 @@ footer { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: cen
 .symbar button { font: 500 14px var(--mono); min-height: 36px; padding: 4px 9px; }
 .symbar button.kw { font: 600 13px var(--body); }
 :root[data-device="phone"] .symbar { display: flex; }
-#dpad { display: none; }
-:root[data-device="phone"] #dpad:not([hidden]) { display: grid; grid-template-columns: 56px 56px 56px; grid-template-rows: 56px 56px 56px; gap: 6px; justify-content: center; margin: 10px auto 0; }
-#dpad button { font-size: 20px; min-height: 0; padding: 0; }
-#dpad [data-d="0,-1"] { grid-column: 2; grid-row: 1; } #dpad [data-d="-1,0"] { grid-column: 1; grid-row: 2; } #dpad [data-d="e"] { grid-column: 2; grid-row: 2; } #dpad [data-d="1,0"] { grid-column: 3; grid-row: 2; } #dpad [data-d="0,1"] { grid-column: 2; grid-row: 3; }
-
+:root[data-device="phone"] 
 /* ---- family world ---- */
 .famcode { font: 700 36px/1.2 var(--mono); letter-spacing: 8px; color: var(--amber); margin: 4px 0 8px; user-select: all; }
 .famform { gap: 8px; } .famform input, .famform select { width: 100%; }

@@ -77,27 +77,36 @@ const Game = (() => {
   function starsText(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
   function resolveGrid(l) { return l.generate ? l.generate() : l.grid; }
   function themeOf(l) { return (ZONES[(l.zone || 1) - 1] || ZONES[0]).theme; }
-  // Renderer switch: the realistic 3D renderer (js/render3d.js, Three.js) when it has loaded and the
-  // Graphics setting allows it, otherwise the 2D canvas renderer (js/render.js). Same interface either way.
+  // The world is drawn by the 3D renderer (js/render3d.js, Three.js), loaded as a module. Until it is ready
+  // (a second or two on first load) nothing is drawn and runs still score; when it arrives the scene is rebuilt.
+  // If the browser has no WebGL at all, a notice says so: the game is 3D only.
   let r3dInited = false;
   const R = {
-    init() { Render.init($("world"), $("fx")); R.init3d(); },
-    init3d() { if (!r3dInited && window.Render3D) { r3dInited = true; Render3D.init($("world"), $("fx")); } },
+    init() { R.init3d(); },
+    init3d() { if (!r3dInited && window.Render3D) { r3dInited = true; Render3D.init($("world"), $("fx")); if (!Render3D.ok) noWebGL(); } },
+    get ready() { return r3dInited && Render3D.ok; },
     pick() {
+      if (!R.ready) return null;
       const isPhone = document.documentElement.dataset.device === "phone";
-      const g = !save.settings.gfx || save.settings.gfx === "auto" ? (isPhone ? "fast" : "realistic") : save.settings.gfx;
-      const has = r3dInited && Render3D.ok, want = has && g !== "classic";
-      if (has) { Render3D.setQuality(g === "fast" ? "fast" : "realistic"); Render3D.setActive(want); }
-      return want ? Render3D : Render;
+      const g = save.settings.gfx === "fast" || ((!save.settings.gfx || save.settings.gfx === "auto") && isPhone) ? "fast" : "realistic";
+      Render3D.setQuality(g); Render3D.setActive(true); return Render3D;
     },
-    load(s, t) { const r = R.pick(); if (r.setLook) r.setLook(RPG.look()); r.load(s, t); },
-    play(e, sp, cb) { return R.pick().play(e, sp, cb); },
-    cancel() { Render.cancel(); if (r3dInited) Render3D.cancel(); },
-    confetti() { Render.confetti(); R.celebrate(); },
-    celebrate() { if (r3dInited && Render3D.ok && save.settings.gfx !== "classic") Render3D.celebrate(); },
+    load(s, t) { const r = R.pick(); if (!r) return; r.setLook(RPG.look()); r.load(s, t); },
+    async play(e, sp, cb) { const r = R.pick(); if (r) return r.play(e, sp, cb); if (cb) for (const ev of e) cb(ev); },
+    cancel() { if (r3dInited) Render3D.cancel(); },
+    confetti() { confetti(); R.celebrate(); },
+    celebrate() { if (R.ready) Render3D.celebrate(); },
     reload() { if (current && current.mode === "hub" && !$("screen-level").hidden) { Hub.open(); return; } if (current && current.mode === "robot" && !$("screen-level").hidden && !$("runBtn").disabled && grid) { R.cancel(); sim = new Sim(current, grid, RPG.gear()); R.load(sim.snapshot(), themeOf(current)); } },
   };
   window.addEventListener("render3d-ready", () => { if (save) { R.init3d(); R.reload(); } });
+  function noWebGL() { const w = document.querySelector(".worldwrap"); if (w && !w.querySelector(".nogl")) w.insertAdjacentHTML("beforeend", `<div class="nogl panel"><b>This browser can't draw 3D.</b> Branchlands needs WebGL. Try Chrome, Edge, Safari or Firefox, and check that hardware acceleration is on.</div>`); }
+  function confetti() {
+    const c = document.createElement("canvas"); c.className = "confetti"; c.width = innerWidth; c.height = innerHeight; document.body.appendChild(c);
+    const g = c.getContext("2d"); const ps = Array.from({ length: 140 }, () => ({ x: Math.random() * c.width, y: -20 - Math.random() * 200, vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 3, r: 4 + Math.random() * 5, a: Math.random() * 6, color: ["#5fcf8f", "#f0b24a", "#7fb3ff", "#ff7b72", "#c9a7ff"][Math.floor(Math.random() * 5)] }));
+    let frames = 0; const t0 = performance.now();
+    (function f() { if (!c.isConnected) return; g.clearRect(0, 0, c.width, c.height); for (const p of ps) { p.x += p.vx; p.y += p.vy; p.a += 0.1; g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.fillStyle = p.color; g.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6); g.restore(); } if (++frames < 150 && performance.now() - t0 < 3500) requestAnimationFrame(f); else c.remove(); })();
+    setTimeout(() => c.remove(), 4000);
+  }
 
   // ---------- save slots, home screen, Harbor Town hub ----------
   function slotInfo(i) { try { const s = JSON.parse(localStorage.getItem(slotKey(i))); if (!s) return null; return { name: (s.settings && s.settings.name) || "Castaway", done: Object.keys(s.completed || {}).length, coins: s.rpg ? s.rpg.coins : 0, last: s.meta && s.meta.last, xp: s.xp || 0 }; } catch (e) { return null; } }
@@ -135,7 +144,7 @@ const Game = (() => {
     document.querySelectorAll(".mode").forEach(e => e.hidden = true); $("mode-robot").hidden = false;
     $("levels").innerHTML = `<button id="hubTown">📜 Quest board</button><button id="hubMap">🗺️ World map</button><button id="hubSaves">💾 Saves</button>`;
     $("hubTown").onclick = () => hubApi.openTown("board"); $("hubMap").onclick = () => showScreen("map"); $("hubSaves").onclick = () => showScreen("home");
-    $("dpad").hidden = false; Hub.open(); window.scrollTo({ top: 0 }); if (Family.connected()) Family.sync();
+    Hub.open(); window.scrollTo({ top: 0 }); if (Family.connected()) Family.sync();
   }
   function applySettings() {
     const t = save.settings.theme; if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
@@ -243,7 +252,7 @@ const Game = (() => {
     document.querySelectorAll(".mode").forEach(e => e.hidden = true);
     $("console").textContent = ""; $("langSel").hidden = !l.sandbox; $("code").disabled = false;
     ({ robot: setupRobot, git: setupGit, review: setupReview, author: setupAuthor, oracle: setupOracle, ollama: setupOllama })[l.mode]();
-    buildSymbar(l.lang); $("dpad").hidden = true;
+    buildSymbar(l.lang);
     window.scrollTo({ top: 0 });
   }
 
@@ -503,7 +512,7 @@ const Game = (() => {
       <div class="row2"><label>Player name<input id="sName" type="text" value="${s.name.replace(/"/g, "&quot;")}" placeholder="Sonny"></label>
       <label>Theme<select id="sTheme"><option value="system" ${s.theme === "system" ? "selected" : ""}>system</option><option value="light" ${s.theme === "light" ? "selected" : ""}>light</option><option value="dark" ${s.theme === "dark" ? "selected" : ""}>dark</option></select></label></div>
       <div class="row2"><label>Sound<select id="sSound"><option value="1" ${s.sound ? "selected" : ""}>on</option><option value="0" ${!s.sound ? "selected" : ""}>off</option></select></label>
-      <label>Graphics<select id="sGfx"><option value="auto" ${!s.gfx || s.gfx === "auto" ? "selected" : ""}>auto (3D on PC, fast 3D on phone)</option><option value="realistic" ${s.gfx === "realistic" ? "selected" : ""}>realistic 3D (shadows, bloom)</option><option value="fast" ${s.gfx === "fast" ? "selected" : ""}>fast 3D</option><option value="classic" ${s.gfx === "classic" ? "selected" : ""}>classic 2D</option></select></label></div>
+      <label>Graphics<select id="sGfx"><option value="auto" ${!s.gfx || s.gfx === "auto" || s.gfx === "classic" ? "selected" : ""}>auto (full on PC, fast on phone)</option><option value="realistic" ${s.gfx === "realistic" ? "selected" : ""}>full (shadows, bloom, everything)</option><option value="fast" ${s.gfx === "fast" ? "selected" : ""}>fast (smoother on older devices)</option></select></label></div>
       <div class="row2"><label>Screen<select id="sDev"><option value="auto">auto-detect</option><option value="phone" ${localStorage.getItem("bh-device") === "phone" ? "selected" : ""}>phone</option><option value="desktop" ${localStorage.getItem("bh-device") === "desktop" ? "selected" : ""}>desktop</option></select></label>
       <label>Default speed<select id="sSpeed"><option value="slow" ${s.speed === "slow" ? "selected" : ""}>slow</option><option value="normal" ${s.speed === "normal" ? "selected" : ""}>normal</option><option value="fast" ${s.speed === "fast" ? "selected" : ""}>fast</option></select></label></div>
       <h3 style="margin:6px 0 0;font:500 13px var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Real-world quests</h3>
@@ -577,9 +586,6 @@ const Game = (() => {
     loadSave(); applySettings(); RPG.init(save, rpgApi); RPG.bind(); Hub.init(hubApi); Family.init(save, famApi); if (Family.connected()) Family.sync();
     $("famBadge").onclick = () => hubApi.openTown("family");
     R.init($("world"), $("fx")); editorTabs($("code"));
-    $("world").addEventListener("click", e => { if (Hub.active) { const t = Render.pickTile(e); if (t) Hub.walkTo(t.x, t.y); } });
-    document.addEventListener("tileclick", e => { if (Hub.active && e.detail) Hub.walkTo(e.detail.x, e.detail.y); });
-    $("dpad").querySelectorAll("button").forEach(b => b.onclick = () => { const d = b.dataset.d; if (d === "e") Hub.pressE(); else { const [dx, dy] = d.split(",").map(Number); Hub.step(dx, dy); } });
     WorldMap.init($("map"), zoneStatus, (z) => { const st = zoneStatus(z.n); if (st.unlocked) { sfx("click"); openLevel(zoneLevels(z.n).find(l => !save.completed[l.id]) || zoneLevels(z.n)[0]); } else renderMapInfo(z); }, (z) => renderMapInfo(z));
     $("homeBtn").onclick = () => showScreen("home"); $("mapBtn").onclick = () => showScreen("map"); $("hubBtn").onclick = openHub; $("townBack").onclick = openHub;
     $("backBtn").onclick = openHub; $("edBack").onclick = () => showScreen("map");

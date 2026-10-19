@@ -1,5 +1,5 @@
-// Realistic 3D renderer (Three.js). Same interface as render.js: init, load, play, cancel, draw.
-// Loaded as an ES module. If it cannot load (offline, old browser) the game keeps using the 2D renderer.
+// The game's renderer (Three.js): init, load, play, cancel, draw for the coding levels, and roam for Harbor Town.
+// Loaded as an ES module from a CDN, so the first visit needs a network connection.
 //
 // Picture: every level is a small island in an ocean, under a physically-based sky. The sun casts real
 // shadows, the water is a wave shader, each zone has its own weather (fog, sun height, colour), the
@@ -180,7 +180,7 @@ const Render3D = (() => {
     let drag = null;
     canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, az: cam.az, el: cam.el }; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener("pointermove", e => { if (drag) { cam.az = drag.az + (e.clientX - drag.x) * 0.008; cam.el = Math.min(roam ? 1.1 : 1.3, Math.max(roam ? 0.12 : 0.4, drag.el + (e.clientY - drag.y) * 0.006)); cam.azV = 0; if (roam) roam.lastDrag = clock; } });
-    canvas.addEventListener("pointerup", e => { if (drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) { if (roam) roamClick(e); else canvas.dispatchEvent(new CustomEvent("tileclick", { bubbles: true, detail: pickTile(e) })); } drag = null; }); canvas.addEventListener("pointercancel", () => drag = null);
+    canvas.addEventListener("pointerup", e => { if (drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) { if (roam) roamClick(e);  } drag = null; }); canvas.addEventListener("pointercancel", () => drag = null);
     canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.max(roam ? 2.5 : 4, Math.min(roam ? 11 : 40, cam.dist * (e.deltaY > 0 ? 1.08 : 0.93))); }, { passive: false });
     ok = true; preloadAssets();
     if (!loopStarted) { loopStarted = true; requestAnimationFrame(frame); }

@@ -56,7 +56,7 @@ Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by cha
   `robot`: **Long Arm** picks from the tile ahead, **Spring Treads** jump two tiles, **Wide Scanner** makes
   `robot.scan()` return three tiles, **Crab Shell** survives a pinch, **Gem Magnet** doubles gem loot.
   Upgrades have skill requirements, like any RPG.
-- **Style (🎨).** Paints, hats, eye colours and movement trails, all visible on Bolt in 2D and 3D. The rare ones are quest rewards.
+- **Style (🎨).** Paints, hats, eye colours and movement trails, all visible on Bolt. The rare ones are quest rewards.
 - **Quest board (📜).** Forty multi-step missions from the townsfolk (three-star hunts, whole-zone clears, crafting runs, commit counts, trading targets, total-level milestones), plus three daily contracts that change
   every day. Rewards: coins, skill XP, paints, titles.
 
@@ -96,9 +96,9 @@ the Workshop, twilight at the Oracle, pale winter light on Mirror Sea). Drag to 
 
 Apart from the generated models there are no art files: every texture is a few lines of canvas code and the
 lamps, pier, boats, lighthouse, tower and fountain are built from primitives, so a kid can read how they are made. The engine loads from a CDN; if it
-can't (offline, old browser), the game falls back to the original 2D renderer automatically.
-⚙️ Settings → Graphics switches between **realistic 3D** (shadows, bloom), **fast 3D** (laptops, Chromebooks)
-and **classic 2D**. Where the realism goes next (AI-generated skies, a rigged robot, cinematic zone intros)
+can't (offline), the world waits for it; a browser without WebGL gets a notice. There is no 2D mode.
+⚙️ Settings → Graphics switches between **full** (shadows, bloom, everything) and **fast** (older laptops,
+Chromebooks, phones). Where the realism goes next (AI-generated skies, a rigged robot, cinematic zone intros)
 is in [docs/PROGRAM.md](docs/PROGRAM.md#36-visual-direction).
 
 ## Run it locally
@@ -130,7 +130,6 @@ js/sim.js         world model: robot API, tiles, crabs, goals, event log (runs i
 js/python.js      Skulpt bridge: `import robot`, friendly errors
 js/worker.js      runs student JavaScript off the main thread
 js/jsrunner.js    worker wrapper with a 3-second kill switch
-js/render.js      canvas renderer, tile art, playback, particles, confetti
 js/gitsim.js      the in-game Git: commit DAG, branches, merges, conflicts, a simulated origin
 js/map.js         the world map
 js/editor.js      level editor, export, share links
@@ -138,7 +137,7 @@ js/quests.js      GitHub quest verification, Ollama client
 js/audio.js       synthesized sound effects
 js/game.js        save slots, screens, progression, stars, achievements, settings, and the play modes
 js/rpg.js         Harbor Town economy: skills, loot, market, crafting, upgrades, paint, quests, daily contracts
-js/hub.js         Harbor Town: the TOWN layout (3D) and classic grid, driving keys / joystick, NPC conversations (scripted + Ollama)
+js/hub.js         Harbor Town: the TOWN layout, driving keys / joystick, NPC conversations (scripted + Ollama)
 js/family.js      shared family world: family code, shared market, board, trading, real PR reviews (Supabase edge function)
 js/device.js      phone/desktop detection (sets data-device for the phone layout)
 docs/             company program, competitor teardown (with REA), research report
@@ -160,7 +159,7 @@ item, goal, switch, door, gate, teleporter, crab, floor.
 
 ## Status
 
-Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer with a 2D fallback, Harbor Town hub with economy, skills, quests and NPCs, three save slots, phone play, a shared family world with real two-person PR reviews. Not built yet: accounts, Git against your real local folder, an LLM NPC inside the robot world, a rigged robot model, music.
+Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer (3D only), Harbor Town hub with economy, skills, quests and NPCs, three save slots, phone play, a shared family world with real two-person PR reviews. Not built yet: accounts, Git against your real local folder, an LLM NPC inside the robot world, a rigged robot model, music.
 The plan is in [docs/PROGRAM.md](docs/PROGRAM.md).
 
 ## License
