@@ -630,15 +630,15 @@ const Render3D = (() => {
   }
   // soft clouds drifting on a high sky plane
   function cloudLayer() {
-    const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false, uniforms: { uTime: { value: 0 } },
+    const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, fog: false, uniforms: { uTime: { value: 0 }, uNight: { value: 0 } },
       vertexShader: "varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",
-      fragmentShader: `uniform float uTime; varying vec2 vUv; varying vec3 vW;
+      fragmentShader: `uniform float uTime, uNight; varying vec2 vUv; varying vec3 vW;
         float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
         float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ v += n(p) * a; p *= 2.03; a *= 0.5; } return v; }
         void main(){ vec2 p = vW.xz * 0.012 + vec2(uTime * 0.004, uTime * 0.0015); float c = smoothstep(0.52, 0.78, fbm(p));
           float edge = 1.0 - smoothstep(0.25, 0.5, length(vUv - 0.5)); vec3 col = mix(vec3(0.82, 0.85, 0.9), vec3(1.0, 0.98, 0.94), fbm(p * 2.0 + 3.0));
-          gl_FragColor = vec4(col, c * edge * 0.85); }` });
+          col = mix(col, vec3(0.12, 0.15, 0.24), uNight * 0.85); gl_FragColor = vec4(col, c * edge * 0.85); }` });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), mat); m.rotation.x = Math.PI / 2; m.position.y = 70; m.renderOrder = -1; return m;
   }
   // final look: a touch of contrast and warmth, and a soft vignette
@@ -760,13 +760,62 @@ const Render3D = (() => {
   // follow camera during a run
   const ride = { on: true, k: 0, playing: false, az: 0, el: 0.5, dist: 5 };
   function setFollow(on) { ride.on = !!on; }
+  // ---------- day and night in Harbor Town ----------
+  // A town day lasts DAY_SECONDS. The sun rises in the east, sets in gold, the lamps and windows come on, the moon
+  // takes over with cool blue light, stars come out, and the morning comes round again. Levels keep their own
+  // fixed weather so puzzles always read clearly. ⚙️ Settings → Time of day can pin the clock.
+  const DAY_SECONDS = 600;
+  let townTime = 0.36; // 0 midnight, 0.25 sunrise, 0.5 noon, 0.75 sunset; carries over between visits
+  let timeMode = "cycle"; // "cycle" | "day" | "sunset" | "night"
+  function setTimeMode(m) { timeMode = m || "cycle"; if (timeMode === "day") townTime = 0.42; if (timeMode === "sunset") townTime = 0.73; if (timeMode === "night") townTime = 0.02; if (roam) roam.todT = 99; }
+  function makeStars() {
+    const N = 1800, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) { const u = Math.random(), th = Math.random() * Math.PI * 2, y = 0.08 + u * 0.92, s = Math.sqrt(1 - y * y); pos.set([Math.cos(th) * s * 300, y * 300, Math.sin(th) * s * 300], i * 3); const b = 0.5 + Math.random() * 0.5, t = Math.random(); col.set([b * (0.85 + t * 0.15), b * 0.9, b], i * 3); }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const m = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    m.frustumCulled = false; m.renderOrder = -2; return m;
+  }
+  function moonMesh() { const m = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), new THREE.MeshBasicMaterial({ color: 0xf2f0e6, fog: false, transparent: true })); m.renderOrder = -1; return m; }
+  const C = (h) => new THREE.Color(h), mixC = (a, b, k) => a.clone().lerp(b, Math.min(1, Math.max(0, k)));
+  const TOD = { noonSun: C(0xfff2dc), lowSun: C(0xffa860), moon: C(0x9db4ff), dayFog: C(0xe8dcc6), duskFog: C(0xeab28a), nightFog: C(0x0f1828), daySky: C(0xcfe3ff), nightSky: C(0x2a3a66), dayGround: C(0xb59a6a), nightGround: C(0x15141c) };
+  function applyTimeOfDay(r, full) {
+    const t = townTime, el = 68 * Math.sin((t - 0.25) * Math.PI * 2), az = 90 + t * 360; // east at sunrise, west at sunset
+    const day = smoothstep(-6, 10, el), low = 1 - smoothstep(4, 28, el), night = 1 - smoothstep(-10, -1, el);
+    // the sky shader follows the real sun; under the horizon it darkens to night by itself
+    const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - el), THREE.MathUtils.degToRad(az));
+    const u = sky.material.uniforms; u.sunPosition.value.copy(sunDir); u.turbidity.value = 3 + low * 5; u.rayleigh.value = 2.2 + low * 1.2;
+    // the light that casts shadows: the sun by day, the moon (opposite side, never too low) by night
+    const moonEl = THREE.MathUtils.clamp(-el, 25, 60);
+    const lightDir = day > 0.02 ? new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - Math.max(el, 8)), THREE.MathUtils.degToRad(az)) : new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - moonEl), THREE.MathUtils.degToRad(az + 180));
+    r.lightDir = lightDir;
+    sun.color.copy(day > 0.02 ? mixC(TOD.noonSun, TOD.lowSun, low) : TOD.moon); sun.intensity = day > 0.02 ? 2.5 * day : 0.8 * night;
+    hemi.color.copy(mixC(TOD.daySky, TOD.nightSky, 1 - day)); hemi.groundColor.copy(mixC(TOD.dayGround, TOD.nightGround, 1 - day)); hemi.intensity = 0.38 + 0.17 * day;
+    const fog = mixC(mixC(TOD.dayFog, TOD.duskFog, low * day), TOD.nightFog, 1 - day); scene.fog.color.copy(fog);
+    renderer.toneMappingExposure = 0.66 + 0.3 * (1 - day);
+    const wu = ocean.material.uniforms; wu.uSky.value.copy(fog); wu.uFogColor.value.copy(fog); wu.uSunDir.value.copy(day > 0.02 ? sunDir : lightDir);
+    wu.uDeep.value.copy(mixC(C(0x17567f), C(0x061a2c), 1 - day)); wu.uShallow.value.copy(mixC(C(0x5fc0dc), C(0x1a4a5c), 1 - day));
+    r.stars.material.opacity = night; r.moon.material.opacity = night; r.moonDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - moonEl), THREE.MathUtils.degToRad(az + 180));
+    r.clouds.material.uniforms.uNight.value = 1 - day;
+    // lamps and cottage windows: on from dusk to dawn
+    const lit = 1 - smoothstep(-2, 8, el);
+    for (const l of r.lamps) { l.light.intensity = 0.2 + lit * 3.2; l.bulb.emissiveIntensity = 0.6 + lit * 2.6; }
+    for (const h of r.houseLights) h.intensity = 0.4 + lit * 3;
+    for (const w of r.windows) w.material.emissiveIntensity = lit * 2.2;
+    if (full) { const envScene = new THREE.Scene(); envScene.add(sky); const rt = pmrem.fromScene(envScene); if (scene.environment) scene.environment.dispose(); scene.environment = rt.texture; scene.add(sky); }
+  }
+  function tickTime(r, dt) {
+    if (timeMode === "cycle") townTime = (townTime + dt / DAY_SECONDS) % 1;
+    r.todT = (r.todT || 0) + dt; r.envT = (r.envT || 0) + dt;
+    if (r.todT > 0.25) { const full = r.envT > 4; r.todT = 0; if (full) r.envT = 0; applyTimeOfDay(r, full); }
+    r.stars.position.copy(camera.position); r.moon.position.copy(camera.position).addScaledVector(r.moonDir, 250);
+  }
   // town furniture that is not a level piece
   function lampMesh(withLight) {
     const g = new THREE.Group(), iron = std({ color: 0x2b2f36, metalness: 0.6, roughness: 0.5 });
     g.add(mesh(new THREE.CylinderGeometry(0.05, 0.08, 2.4, 8), iron, 0, 1.2, 0)); g.add(mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.08, 8), iron, 0, 0.04, 0));
-    g.add(mesh(new THREE.BoxGeometry(0.26, 0.3, 0.26), std({ color: 0xffe2a8, emissive: 0xffb347, emissiveIntensity: 2.4 }), 0, 2.55, 0));
+    const bulb = std({ color: 0xffe2a8, emissive: 0xffb347, emissiveIntensity: 2.4 }); g.add(mesh(new THREE.BoxGeometry(0.26, 0.3, 0.26), bulb, 0, 2.55, 0)); g.userData.bulb = bulb;
     g.add(mesh(new THREE.ConeGeometry(0.24, 0.16, 4), iron, 0, 2.78, 0));
-    if (withLight) { const l = new THREE.PointLight(0xffb86b, 1.8, 7, 2); l.position.set(0, 2.5, 0); g.add(l); }
+    if (withLight) { const l = new THREE.PointLight(0xffb86b, 1.8, 7, 2); l.position.set(0, 2.5, 0); g.add(l); g.userData.light = l; }
     return g;
   }
   function dockMesh(len) {
@@ -1062,7 +1111,7 @@ const Render3D = (() => {
     const flats = town.flats.concat(town.decor.filter(d => PAD[d.kind]).map(d => ({ x: d.x, z: d.z, r: PAD[d.kind] * (d.s ? d.s / 2.4 : 1) })), town.props.map(p => ({ x: p.x, z: p.z, r: PAD[p.kind] || 1 })));
     const pl = town.flats[0]; for (const f of flats) if (f !== pl && Math.hypot(f.x - town.plaza.x, f.z - town.plaza.z) < town.plaza.r + 1) f.y = pl.y; // anything standing on the plaza stands at plaza height
     const height = makeHeight(town, flats);
-    const r = roam = { town, hooks, height, colliders: [], platforms: [], trees: [], props: [], floats: [], beams: [], hands: [], fountains: [], input: { x: 0, y: 0 }, vel: new THREE.Vector3(), yaw: pose ? pose.yaw : Math.PI / 2, lean: 0, near: null, latch: null, target: null, lastDrag: -9, lights: 0, dustT: 0, sprayT: 0 };
+    const r = roam = { town, hooks, height, colliders: [], platforms: [], trees: [], lamps: [], houseLights: [], windows: [], props: [], floats: [], beams: [], hands: [], fountains: [], input: { x: 0, y: 0 }, vel: new THREE.Vector3(), yaw: pose ? pose.yaw : Math.PI / 2, lean: 0, near: null, latch: null, target: null, lastDrag: -9, lights: 0, dustT: 0, sprayT: 0 };
     r.terrain = terrainMesh(town, height); world.add(r.terrain);
     const cobbles = paving().clone(); cobbles.repeat.set(town.plaza.r * 0.9, town.plaza.r * 0.9); cobbles.needsUpdate = true;
     const disc = mesh(new THREE.CircleGeometry(town.plaza.r, 48), std({ color: 0xffffff, roughness: 0.95, map: cobbles }), town.plaza.x, height(town.plaza.x, town.plaza.z) + 0.015, town.plaza.z); disc.rotation.x = -Math.PI / 2; disc.castShadow = false; world.add(disc);
@@ -1071,13 +1120,13 @@ const Render3D = (() => {
     for (const d of town.decor) {
       const s = d.s || 1, ry = d.ry !== undefined ? d.ry : faceCentre(d.x, d.z);
       switch (d.kind) {
-        case "house": put(house(), d.x, d.z, ry, s); r.colliders.push({ x: d.x, z: d.z, r: 0.55 * s }); break;
+        case "house": { const hm = put(house(), d.x, d.z, ry, s); hm.traverse(o => { if (o.isPointLight) r.houseLights.push(o); }); r.colliders.push({ x: d.x, z: d.z, r: 0.55 * s }); break; }
         case "tree": { const t = put(leafyTree(s * 1.25, d.x < -12 && d.z < -9 || Math.random() < 0.25), d.x, d.z, ry, 1, -0.04); r.trees.push(t); r.colliders.push({ x: d.x, z: d.z, r: 0.22 * s }); break; }
         case "rock": put(wall("rock", 0x8f7a5e), d.x, d.z, ry, s, -0.1); r.colliders.push({ x: d.x, z: d.z, r: 0.42 * s }); break;
         case "crate": put(wall("crate", 0xa8784f), d.x, d.z, ry, s); r.colliders.push({ x: d.x, z: d.z, r: 0.5 * s }); break;
         case "crystal": put(wall("crystal", 0x8ff0f4), d.x, d.z, ry, s); r.colliders.push({ x: d.x, z: d.z, r: 0.4 * s }); break;
         case "pillar": put(wall("pillar", 0x5f6d7c), d.x, d.z, ry, s); r.colliders.push({ x: d.x, z: d.z, r: 0.45 * s }); break;
-        case "lamp": put(lampMesh(r.lights++ < 6), d.x, d.z, 0, s); r.colliders.push({ x: d.x, z: d.z, r: 0.2 }); break;
+        case "lamp": { const lm = put(lampMesh(r.lights++ < 8), d.x, d.z, 0, s); r.lamps.push({ light: lm.userData.light || { intensity: 0 }, bulb: lm.userData.bulb }); r.colliders.push({ x: d.x, z: d.z, r: 0.2 }); break; }
         case "fountain": put(fountainMesh(), d.x, d.z, 0, s); r.colliders.push({ x: d.x, z: d.z, r: 2.3 * s }); r.fountains.push({ x: d.x, z: d.z, y: height(d.x, d.z) + 1.7 * s }); break;
         case "tower": { const m = put(towerMesh(), d.x, d.z, ry, s); r.colliders.push({ x: d.x, z: d.z, r: 1.3 * s }); r.hands.push(m.userData.hand); break; }
         case "lighthouse": { const m = put(lighthouseMesh(), d.x, d.z, 0, s); r.colliders.push({ x: d.x, z: d.z, r: 1.4 * s }); r.beams.push(m.userData.beam); break; }
@@ -1106,6 +1155,7 @@ const Render3D = (() => {
     for (const q of r.props) if (q.p.kind === "portal" && Math.hypot(q.p.x - sx, q.p.z - sz) - q.r < 0.6) r.latch = q; // back from a level: do not reopen the gate you are standing in
     ocean.geometry = bigOceanGeo(); ocean.position.set(0, -0.1, 0);
     r.lightDir = applyWeather(HARBOR, new THREE.Vector3(sx, 0, sz), 17);
+    r.stars = makeStars(); world.add(r.stars); r.moon = moonMesh(); world.add(r.moon); applyTimeOfDay(r, true);
     cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); cam.el = 0.3; cam.dist = phone ? 6.2 : 5.4; cam.introK = 0; cam.look.set(sx, height(sx, sz) + 0.9, sz);
   }
   function stopRoam() { if (!roam) return; if (window.Audio_) Audio_.engine(null); if (roam.ht) roam.ht.tex.dispose(); ocean.material.uniforms.uHas.value = 0; roam = null; canvas.classList.remove("roam"); ocean.geometry = OCEAN_LEVEL; }
@@ -1163,6 +1213,7 @@ const Render3D = (() => {
     for (const h of r.hands) h.rotation.z = -clock * 0.3;
     r.sprayT -= dt; if (r.sprayT <= 0) { r.sprayT = 0.05; for (const f of r.fountains) burst(f.x, f.z, 0xbfe9ff, 2, 1.6, f.y); }
     // the sun (and its shadow box) travels with Bolt so shadows stay sharp wherever he is
+    tickTime(r, dt);
     sun.position.copy(b.position).addScaledVector(r.lightDir, 30); sun.target.position.copy(b.position);
     // who is close enough to talk to? driving into a portal ring opens it
     let best = null, bd = 1e9;
@@ -1264,7 +1315,7 @@ const Render3D = (() => {
   function cancel() { cancelFlag = true; }
   function celebrate() { if (!ok || !state || !state.goal) return; for (let i = 0; i < 4; i++) setTimeout(() => burst(state.goal.x, state.goal.y, [0x5fcf8f, 0xf0b24a, 0x7fb3ff, 0xff7b72][i], 30, 3), i * 180); }
 
-  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, setPaint, setLook, pickTile, setFollow, get scene() { return scene; }, get ride() { return ride; }, tick: (ms) => { lastNow = performance.now() - ms; tick(performance.now()); }, roam: roamApi, get ok() { return ok; } };
+  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, setPaint, setLook, pickTile, setFollow, setTimeMode, get townTime() { return townTime; }, set townTime(v) { townTime = v; if (roam) roam.todT = 99; }, get scene() { return scene; }, get ride() { return ride; }, tick: (ms) => { lastNow = performance.now() - ms; tick(performance.now()); }, roam: roamApi, get ok() { return ok; } };
 })();
 window.Render3D = Render3D;
 window.dispatchEvent(new Event("render3d-ready"));

@@ -30,7 +30,11 @@ ASSETS = {
  "key":      "an ornate antique golden key with a round bow and simple teeth",
  "lens":     "one golden magnifying glass with a round glass lens and one short handle, a single object alone",
  "villager": "3D game character model of one bearded fisherman in a knit sweater, flat cap and rubber boots, standing upright in a relaxed pose, full body head to toe, front view, one person only, isolated figure, no props, no boat, no other people",
- "villager2":"one single friendly shopkeeper woman standing alone holding a small basket, apron over a striped shirt, headscarf, full body, stylized realistic character, only one person, no background objects",
+ "villager2":"full body 3D game character of one friendly shopkeeper woman, apron over a striped shirt, headscarf, long skirt and boots",
+ "villager3":"full body 3D game character of one young sailor, navy pea coat, striped shirt, dark trousers, knit beanie, boots",
+ "villager4":"full body 3D game character of one kind old woman, knitted shawl, long brown dress, grey hair in a bun, walking shoes",
+ "villager5":"full body 3D game character of one burly blacksmith, leather apron over a rolled-sleeve shirt, work trousers, heavy boots, short beard",
+ "villager6":"full body 3D game character of one cheerful girl about ten years old, straw hat, yellow sundress over leggings, sneakers",
  "stall":    "a small wooden market stall with a red and white striped canvas awning and a counter with wooden crates of fruit",
  "rock":     "one cluster of three large rounded sandy beige boulders stacked together, a single isolated rock formation with lichen patches, no ground",
  "crate":    "a sturdy weathered wooden shipping crate with iron corner brackets",
@@ -39,7 +43,12 @@ ASSETS = {
  "ice":      "a pale light blue frosted ice cube, opaque matte surface with white frost and snow on top, bright and glowing light blue, one cube alone",
 }
 # small things and repeated walls get fewer faces so phones stay smooth
-FACES = {"bolt": 20000, "house": 20000, "villager": 15000, "villager2": 15000, "stall": 15000, "tree": 8000, "crab": 8000}
+FACES = {"bolt": 20000, "house": 20000, "villager": 15000, "stall": 15000, "tree": 8000, "crab": 8000}
+# people: standing in an A-pose (arms a little away from the body, legs apart) so the game can animate the limbs
+PEOPLE = {"villager2", "villager3", "villager4", "villager5", "villager6"}
+POSE = (", standing straight in an A-pose, arms held down and slightly away from the body, empty hands, legs slightly apart,"
+        " facing the camera, head to toe fully visible, one person only, nobody else, no props, plain white background, realistic proportions")
+for n in PEOPLE: FACES[n] = 15000
 
 flags = [a for a in sys.argv[1:] if a.startswith("--")]
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -52,6 +61,32 @@ images_only = "--images-only" in flags
 P = lambda n, ext: os.path.join(OUT, n + ext)
 
 import torch
+import numpy as np
+def figure_mask(img):
+    """non-white pixels, as a rough foreground mask (the backgrounds are plain white)"""
+    a = np.asarray(img.convert("RGB")).astype(np.int16); return (np.abs(a - 255).sum(-1) > 60)
+def figure_score(img):
+    """1 for one tall, centred figure that is fully in frame; low for groups, cropped heads/feet or props"""
+    from scipy import ndimage
+    m = figure_mask(img); lab, n = ndimage.label(m)
+    if n == 0: return 0
+    sizes = ndimage.sum(m, lab, range(1, n + 1)); big = sizes.argmax() + 1; share = sizes.max() / sizes.sum()
+    ys, xs = np.where(lab == big); h, w = ys.ptp() + 1, xs.ptp() + 1; H, Wd = m.shape
+    tall = min(1.0, (h / w) / 2.2); inframe = 1.0 if ys.min() > 4 and ys.max() < H - 5 else 0.5
+    centred = 1 - abs(xs.mean() / Wd - 0.5)
+    return share * tall * inframe * centred
+def crop_figure(rgba):
+    """keep only the largest cut-out shape (drops stray extra figures) and pad it square"""
+    from scipy import ndimage
+    from PIL import Image as _I
+    if rgba.mode != "RGBA": return rgba
+    a = np.asarray(rgba); m = a[..., 3] > 20; lab, n = ndimage.label(m)
+    if n > 1:
+        sizes = ndimage.sum(m, lab, range(1, n + 1)); keep = lab == (sizes.argmax() + 1); a = a.copy(); a[~keep] = 0
+    ys, xs = np.where(a[..., 3] > 20)
+    if not len(ys): return rgba
+    a = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]; s = int(max(a.shape[:2]) * 1.12)
+    out = _I.new("RGBA", (s, s), (0, 0, 0, 0)); out.paste(_I.fromarray(a), ((s - a.shape[1]) // 2, (s - a.shape[0]) // 2)); return out
 def free():
     gc.collect(); torch.cuda.empty_cache()
 
@@ -62,7 +97,13 @@ if todo:
     pipe = AutoPipelineForText2Image.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16", local_files_only=True).to("cuda")
     for n in todo:
         t0 = time.time()
-        img = pipe(ASSETS[n] + STYLE, num_inference_steps=4, guidance_scale=0.0, width=768, height=768, generator=torch.Generator("cuda").manual_seed(7)).images[0]
+        if n in PEOPLE:
+            # SDXL-Turbo likes to add extra people; make a few and keep the one that is most clearly a single tall figure
+            cands = [pipe(ASSETS[n] + POSE, num_inference_steps=4, guidance_scale=0.0, width=768, height=768, generator=torch.Generator("cuda").manual_seed(sd)).images[0] for sd in (7, 11, 23, 31, 42)]
+            scored = sorted(((figure_score(c), i, c) for i, c in enumerate(cands)), key=lambda t: -t[0])
+            img = scored[0][2]; print(n, "picked seed", (7, 11, 23, 31, 42)[scored[0][1]], "score", round(scored[0][0], 2), flush=True)
+        else:
+            img = pipe(ASSETS[n] + STYLE, num_inference_steps=4, guidance_scale=0.0, width=768, height=768, generator=torch.Generator("cuda").manual_seed(7)).images[0]
         img.save(P(n, ".png")); print(n, "image", round(time.time() - t0, 1), "s", flush=True)
     del pipe; free()
 if images_only: sys.exit(0)
@@ -80,6 +121,7 @@ if todo:
     for n in todo:
         t0 = time.time()
         img = Image.open(P(n, ".png")).convert("RGB"); img = rembg(img)
+        if n in PEOPLE: img = crop_figure(img)
         mesh = shape(image=img, num_inference_steps=30, octree_resolution=320, num_chunks=20000, generator=torch.manual_seed(1234))[0]
         mesh.export(P(n, "_shape.glb")); print(n, "shape", round(time.time() - t0, 1), "s", len(mesh.faces), "faces", flush=True)
     del shape; free()
