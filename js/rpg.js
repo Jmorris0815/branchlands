@@ -95,6 +95,7 @@ const RPG = (() => {
   const NPC = {
     marisol: { name: "Marisol, Harbor Master", icon: "⚓" }, pip: { name: "Old Pip, Orchard Keeper", icon: "🧑‍🌾" }, odo: { name: "Odo the Ferryman", icon: "🛶" },
     wrenna: { name: "Wrenna the Tinker", icon: "🔧" }, clock: { name: "The Clockwright", icon: "🕰️" }, dad: { name: "Dad", icon: "🧔" }, oracle: { name: "The Oracle", icon: "🔮" }, nyx: { name: "Captain Nyx", icon: "🏴‍☠️" },
+    juno: { name: "Juno, Trader", icon: "🧺" }, gully: { name: "Old Gully, Castaway", icon: "🦜" },
   };
   const QUESTS = [
     { id: "papers", npc: "marisol", title: "Harbor Papers", story: "Nobody trades in my harbor until I've seen them drive. Walk Bolt round the corner and bring me a lens from the rocks.", steps: [{ type: "complete", level: "1-2" }, { type: "gather", good: "lens", n: 1 }], reward: { coins: 40, xp: { commands: 60 } } },

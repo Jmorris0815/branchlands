@@ -142,6 +142,17 @@ const Render3D = (() => {
       g.add(mesh(new THREE.PlaneGeometry(1.08, 2.0), std({ color: 0x8a6a48, emissive: 0xffa050, emissiveIntensity: p.kind === "door" ? 0.55 : 0.25, side: THREE.DoubleSide }), 0, 1.0, -0.02));
       const bulb = std({ color: 0xffe2a8, emissive: 0xffb347, emissiveIntensity: 2.4 }); g.add(mesh(new THREE.BoxGeometry(0.16, 0.22, 0.16), bulb, 0.82, 1.9, 0.12));
       g.add(label(name, 0, 0, 0.5, 2.6));
+    } else if (p.kind === "moor") {
+      const wood = std({ color: 0x5a4330, roughness: 0.9 }); g.add(mesh(new THREE.CylinderGeometry(0.09, 0.11, 1.0, 10), wood, 0, 0.5, 0));
+      const rope = mesh(new THREE.TorusGeometry(0.13, 0.035, 6, 16), std({ color: 0xc9b48a, roughness: 1 }), 0, 0.72, 0); rope.rotation.x = Math.PI / 2; g.add(rope);
+      g.add(label(name, 0, 0, 0.5, 1.45));
+    } else if (p.kind === "chest") {
+      const wood = std({ color: 0xffffff, map: texture("planks", 0x7a4a2a), roughness: 0.8 }), gold = std({ color: 0xe6b422, metalness: 0.9, roughness: 0.3 });
+      g.add(mesh(new THREE.BoxGeometry(0.7, 0.4, 0.46), wood, 0, 0.2, 0)); for (const x of [-0.28, 0.28]) g.add(mesh(new THREE.BoxGeometry(0.05, 0.42, 0.48), gold, x, 0.2, 0));
+      const lid = new THREE.Group(); lid.position.set(0, 0.4, -0.23); const top = mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.7, 14, 1, false, 0, Math.PI), wood, 0, 0, 0.23); top.rotation.z = Math.PI / 2; lid.add(top);
+      for (const x of [-0.28, 0.28]) { const band = mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.05, 14, 1, false, 0, Math.PI), gold, x, 0, 0.23); band.rotation.z = Math.PI / 2; lid.add(band); }
+      lid.add(mesh(new THREE.BoxGeometry(0.1, 0.12, 0.04), gold, 0, -0.02, 0.47)); g.add(lid); g.userData.lid = lid; lid.rotation.x = p.open ? -1.9 : 0; g.userData.lidTo = lid.rotation.x;
+      g.add(label(name, 0, 0, 0.5, 1.05));
     } else if (p.kind === "race") {
       const pole = std({ color: 0xd8dde4, metalness: 0.8, roughness: 0.3 }); g.add(mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.9, 10), pole, 0, 0.95, 0));
       const ck = document.createElement("canvas"); ck.width = 64; ck.height = 40; const cg = ck.getContext("2d"); for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { cg.fillStyle = (x + y) % 2 ? "#151515" : "#fafafa"; cg.fillRect(x * 8, y * 8, 8, 8); }
@@ -518,9 +529,9 @@ const Render3D = (() => {
   // the island's shape: a wobbly coast, rolling ground, a few hills, a bay for the harbour, flat pads under buildings
   function makeHeight(town, flats) {
     const base = (x, z) => {
-      const r = Math.hypot(x, z), a = Math.atan2(z, x);
-      const edge = town.radius + Math.sin(a * 3 + 1) * 1.6 + Math.sin(a * 5 + 2.2) * 0.9;
-      let y = 1 + 0.45 * Math.sin(x * 0.23 + 1.3) * Math.sin(z * 0.19 - 0.4) + 0.2 * Math.sin(x * 0.61 - z * 0.37 + 0.5);
+      const r = Math.hypot(x, z), a = Math.atan2(z, x), ph = town.seed || 0; // seed: a different coast and roll for each island
+      const edge = town.radius + Math.sin(a * 3 + 1 + ph) * 1.6 + Math.sin(a * 5 + 2.2 + ph * 1.7) * 0.9;
+      let y = 1 + 0.45 * Math.sin(x * 0.23 + 1.3 + ph) * Math.sin(z * 0.19 - 0.4 + ph * 0.6) + 0.2 * Math.sin(x * 0.61 - z * 0.37 + 0.5 + ph * 2.1);
       for (const h of town.hills) { const d = Math.hypot(x - h.x, z - h.z) / h.r; y += h.h * Math.exp(-d * d * 2); }
       const shore = smoothstep(edge - 6, edge + 3, r); y = y * (1 - shore) - 1.8 * shore;
       const b = Math.hypot(x - town.bay.x, z - town.bay.z) / town.bay.r; y -= 3.2 * Math.exp(-b * b * 1.2);
@@ -824,7 +835,7 @@ const Render3D = (() => {
     if (full) { const envScene = new THREE.Scene(); envScene.add(sky); const rt = pmrem.fromScene(envScene); if (scene.environment) scene.environment.dispose(); scene.environment = rt.texture; scene.add(sky); }
   }
   function tickTime(r, dt) {
-    if (timeMode === "cycle") townTime = (townTime + dt / DAY_SECONDS) % 1;
+    if (timeMode === "cycle" && !r.photo) townTime = (townTime + dt / DAY_SECONDS) % 1; // the clock stops while you take a photo
     r.todT = (r.todT || 0) + dt; r.envT = (r.envT || 0) + dt;
     if (r.todT > 0.25) { const full = r.envT > 4; r.todT = 0; if (full) r.envT = 0; applyTimeOfDay(r, full); }
     r.stars.position.copy(camera.position); r.moon.position.copy(camera.position).addScaledVector(r.moonDir, 250);
@@ -880,6 +891,22 @@ const Render3D = (() => {
     } else if (kind === "rug") {
       const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d"); x.fillStyle = "#7a2e2a"; x.fillRect(0, 0, 128, 128); x.strokeStyle = "#e6c36a"; x.lineWidth = 6; x.strokeRect(10, 10, 108, 108); x.strokeStyle = "#2e4a6a"; x.lineWidth = 4; x.strokeRect(24, 24, 80, 80);
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const r = mesh(new THREE.PlaneGeometry(3, 2), std({ map: t, roughness: 1 }), 0, 0.012, 0); r.rotation.x = -Math.PI / 2; r.castShadow = false; g.add(r);
+    } else if (kind === "counter") { // shop counter with brass scales and a jar of coins
+      g.add(mesh(new THREE.BoxGeometry(3.2, 0.95, 0.7), wood, 0, 0.475, 0)); g.add(mesh(new THREE.BoxGeometry(3.4, 0.08, 0.85), dark, 0, 0.99, 0));
+      const brass = std({ color: 0xc9a227, metalness: 0.9, roughness: 0.3 }); g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 8), brass, -0.9, 1.28, 0)); g.add(mesh(new THREE.BoxGeometry(0.62, 0.03, 0.03), brass, -0.9, 1.52, 0));
+      for (const x of [-1.18, -0.62]) g.add(mesh(new THREE.CylinderGeometry(0.13, 0.08, 0.04, 14), brass, x, 1.34, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.3, 14), std({ color: 0xbfe6ff, transparent: true, opacity: 0.4, roughness: 0.05 }), 0.9, 1.18, 0));
+      for (let i = 0; i < 9; i++) g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.015, 10), brass, 0.9 + rnd(-0.05, 0.05), 1.05 + i * 0.02, rnd(-0.05, 0.05)));
+      g.add(mesh(new THREE.BoxGeometry(0.42, 0.03, 0.3), std({ color: 0xf2e8d0 }), 0.15, 1.04, 0.05));
+    } else if (kind === "sacks") {
+      const burlap = std({ color: 0xb89a6a, roughness: 1 }); for (const [x, z, k] of [[0, 0, 1], [0.52, 0.15, 0.9], [0.22, -0.45, 0.85]]) { const m = mesh(new THREE.SphereGeometry(0.32 * k, 12, 10), burlap, x, 0.3 * k, z); m.scale.set(1, 1.25, 1); g.add(m); g.add(mesh(new THREE.CylinderGeometry(0.07 * k, 0.11 * k, 0.12 * k, 8), burlap, x, 0.68 * k, z)); }
+    } else if (kind === "crates") {
+      const cm = std({ color: 0xffffff, map: texture("planks", 0xa8784f), roughness: 0.85 }); g.add(mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), cm, 0, 0.35, 0)); g.add(mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), cm, 0.75, 0.35, 0.05)); { const o = mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), cm, 0.35, 1.0, 0); o.rotation.y = 0.4; g.add(o); }
+    } else if (kind === "fruit") { // a table heaped with apples and gems
+      g.add(mesh(new THREE.BoxGeometry(1.6, 0.08, 0.8), wood, 0, 0.8, 0)); for (const x of [-0.7, 0.7]) for (const z of [-0.32, 0.32]) g.add(mesh(new THREE.BoxGeometry(0.08, 0.8, 0.08), dark, x, 0.4, z));
+      const red = std({ color: 0xc8302a, roughness: 0.5 }), gem = std({ color: 0x8ff0f4, emissive: 0x2aa0b0, emissiveIntensity: 0.6, roughness: 0.15 });
+      for (let i = 0; i < 18; i++) g.add(mesh(new THREE.SphereGeometry(0.07, 10, 8), red, -0.65 + (i % 6) * 0.1, 0.9 + Math.floor(i / 6) * 0.05, -0.2 + Math.floor(i / 6) * 0.12));
+      for (let i = 0; i < 6; i++) g.add(mesh(new THREE.OctahedronGeometry(0.07), gem, 0.3 + (i % 3) * 0.14, 0.92, -0.1 + Math.floor(i / 3) * 0.16));
     } else if (kind === "lantern") {
       g.add(mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.8, 4), iron, 0, 3.0, 0)); const bulb = std({ color: 0xffe2a8, emissive: 0xffb347, emissiveIntensity: 2.6 });
       g.add(mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), bulb, 0, 2.5, 0)); const l = new THREE.PointLight(0xffc27a, 4, 9, 2); l.position.set(0, 2.4, 0); g.add(l);
@@ -967,6 +994,26 @@ const Render3D = (() => {
     const sail = mesh(new THREE.PlaneGeometry(1.1, 1.6), std({ color: big ? 0x22232b : 0xf4ecd8, side: THREE.DoubleSide, roughness: 0.9 }), 0.78, 1.8, 0); sail.rotation.y = 0.25; g.add(sail);
     if (big) { g.add(mesh(new THREE.PlaneGeometry(0.55, 0.32), std({ color: 0x111111, side: THREE.DoubleSide }), 0.45, 2.95, 0)); g.add(mesh(new THREE.PlaneGeometry(0.2, 0.2), std({ color: 0xffffff, side: THREE.DoubleSide }), 0.45, 2.95, 0.005)); g.add(mesh(new THREE.SphereGeometry(0.12, 8, 6), std({ color: 0xffd866, emissive: 0xffb347, emissiveIntensity: 2 }), -0.9, 0.7, 0)); }
     g.scale.setScalar(big ? 2.2 : 1.1); return g;
+  }
+  // Bolt's own sailboat: a pointed V hull, a planked deck, a mainsail and jib angled so you see them from behind
+  function sailboatMesh() {
+    const g = new THREE.Group(), out = [[-1.5, -0.55], [0.5, -0.64], [1.25, -0.38], [1.7, 0], [1.25, 0.38], [0.5, 0.64], [-1.5, 0.55]];
+    const shape = new THREE.Shape(out.map(([x, z]) => new THREE.Vector2(x, z)));
+    const hg = new THREE.ExtrudeGeometry(shape, { depth: 0.56, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2, steps: 3 }); hg.rotateX(-Math.PI / 2);
+    const hp = hg.attributes.position; for (let i = 0; i < hp.count; i++) { const y = hp.getY(i), k = 0.45 + 0.55 * smoothstep(-0.05, 0.5, y); hp.setZ(i, hp.getZ(i) * k); if (hp.getX(i) > 1.2 && y < 0.3) hp.setX(i, hp.getX(i) - (0.3 - y) * 0.6); } hg.computeVertexNormals();
+    const hull = mesh(hg, std({ color: 0xffffff, map: texture("planks", 0x2f5a7a), roughness: 0.7 }), 0, -0.1, 0); g.add(hull);
+    const stripe = mesh(hg, std({ color: 0xf4ecd8, roughness: 0.6 })); stripe.scale.set(1.004, 0.12, 1.012); stripe.position.y = 0.36; g.add(stripe);
+    const dg = new THREE.ShapeGeometry(shape); dg.rotateX(-Math.PI / 2); const deck = mesh(dg, std({ color: 0xffffff, map: texture("planks", 0xc9a46e), roughness: 0.85 }), 0, 0.5, 0); deck.scale.set(0.95, 1, 0.9); deck.castShadow = false; g.add(deck);
+    const wood = std({ color: 0x5a4330, roughness: 0.8 }), cloth = std({ color: 0xf6efe0, side: THREE.DoubleSide, roughness: 0.9 });
+    g.add(mesh(new THREE.CylinderGeometry(0.045, 0.06, 3.3, 10), wood, 0.55, 2.1, 0));
+    const rig = new THREE.Group(); rig.position.set(0.55, 0, 0); rig.rotation.y = 0.5; g.add(rig);
+    const boom = mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.9, 8), wood, -0.95, 1.0, 0); boom.rotation.z = Math.PI / 2; rig.add(boom);
+    const sailGeo = (pts) => { const sg = new THREE.BufferGeometry(), v = [], n = 6; for (let i = 0; i <= n; i++) for (let j = 0; j <= n - i; j++) { const a = i / n, b = j / n, c = 1 - a - b; const x = pts[0][0] * c + pts[1][0] * a + pts[2][0] * b, y = pts[0][1] * c + pts[1][1] * a + pts[2][1] * b; v.push(x, y, Math.sin(Math.PI * (1 - c)) * Math.sin(Math.PI * Math.min(1, a + b)) * 0.12 * c * 4); } const idx = [], row = (i) => i * (n + 1) - (i * (i - 1)) / 2; for (let i = 0; i < n; i++) for (let j = 0; j < n - i; j++) { const p0 = row(i) + j, p1 = row(i + 1) + j, p2 = p0 + 1; idx.push(p0, p1, p2); if (j < n - i - 1) idx.push(p2, p1, p1 + 1); } sg.setAttribute("position", new THREE.Float32BufferAttribute(v, 3)); sg.setIndex(idx); sg.computeVertexNormals(); return sg; };
+    const main = mesh(sailGeo([[0, 1.05], [0, 3.6], [-1.85, 1.05]]), cloth); rig.add(main);
+    const jib = mesh(sailGeo([[0.08, 0.75], [0.08, 3.2], [1.05, 0.75]]), cloth); jib.rotation.y = -0.35; g.add(jib); jib.position.x = 0.55;
+    const flag = mesh(new THREE.PlaneGeometry(0.42, 0.2), std({ color: 0xc8553d, side: THREE.DoubleSide }), 0.76, 3.6, 0); g.add(flag); g.userData.flag2 = flag;
+    g.add(mesh(new THREE.BoxGeometry(0.06, 0.5, 0.28), wood, -1.55, 0.05, 0));
+    return g;
   }
   function lighthouseMesh() {
     const g = new THREE.Group(), white = std({ color: 0xf3efe6, roughness: 0.8 }), red = std({ color: 0xc8402f, roughness: 0.8 });
@@ -1371,7 +1418,7 @@ const Render3D = (() => {
     r.mini = { c, N, S };
   }
   function drawHud() {
-    const r = roam; if (!r || !modalHidden()) return;
+    const r = roam; if (!r || r.photo || !modalHidden()) return;
     const ph = phone, b = r.bolt.position;
     if (!r.indoor && r.mini) {
       const Rm = ph ? 58 : 66, cx = fx.width - Rm - 12, cy = Rm + 12, view = 21, k = Rm / view, px = r.mini.N / r.mini.S;
@@ -1437,16 +1484,21 @@ const Render3D = (() => {
         case "tower": { const m = put(towerMesh(), d.x, d.z, ry, s); r.colliders.push({ x: d.x, z: d.z, r: 1.3 * s }); r.hands.push(m.userData.hand); break; }
         case "lighthouse": { const m = put(lighthouseMesh(), d.x, d.z, 0, s); r.colliders.push({ x: d.x, z: d.z, r: 1.4 * s }); r.beams.push(m.userData.beam); break; }
         case "dock": { const y = height(d.x, d.z); const m = dockMesh(d.len); m.position.set(d.x, y, d.z); world.add(m); r.platforms.push({ x1: d.x - 1.3, x2: d.x + 1.3, z1: d.z - 0.2, z2: d.z + d.len, y: y + 0.39 }); break; }
+        case "stone": { const g = new THREE.Group(), geo = new THREE.CylinderGeometry(0.34, 0.52, 2.5, 7, 3); const pa = geo.attributes.position; for (let i = 0; i < pa.count; i++) { const k = 1 + Math.sin(i * 12.9898 + d.x) * 0.09; pa.setX(i, pa.getX(i) * k); pa.setZ(i, pa.getZ(i) * (2 - k)); } geo.computeVertexNormals();
+          g.add(mesh(geo, std({ color: 0xffffff, map: texture("cobble", 0x9a9184), roughness: 0.95 }), 0, 1.15, 0)); g.rotation.z = Math.sin(d.x * 3.1) * 0.06; put(g, d.x, d.z, ry, s, -0.05); r.colliders.push({ x: d.x, z: d.z, r: 0.5 * s }); break; } // a standing stone
+        case "wreck": { const m = boatMesh(true); m.position.set(d.x, height(d.x, d.z) - 0.45, d.z); m.rotation.set(0.1, ry, 0.34); world.add(m); r.colliders.push({ x: d.x, z: d.z, r: 2.3 }); break; }
         case "boat": case "ship": { const m = boatMesh(d.kind === "ship"); m.position.set(d.x, -0.1, d.z); m.rotation.y = ry; world.add(m); m.userData.phase = Math.random() * 6; r.floats.push(m); r.colliders.push({ x: d.x, z: d.z, r: d.kind === "ship" ? 2.6 : 1.3 }); break; }
       }
     }
-    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45 };
+    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5 };
     for (const p of town.props) {
       const m = propMesh(p), s = SCALE[p.kind] || 1;
       if (p.kind === "portal") m.add(archMesh(p.locked ? 0x555a66 : p.color));
       put(m, p.x, p.z, p.ry !== undefined ? p.ry : faceCentre(p.x, p.z), s);
       m.userData.baseY = m.position.y; m.userData.home = m.rotation.y;
       r.props.push({ p, m, r: REACH[p.kind] || 0.5, s });
+      if (p.kind === "moor") { const pl = r.platforms.find(f => p.x > f.x1 && p.x < f.x2 && p.z > f.z1 && p.z < f.z2); if (pl) m.position.y = pl.y; m.userData.baseY = m.position.y; // the post stands on the pier
+        const bm = sailboatMesh(); bm.position.set(p.boat.x, -0.1, p.boat.z); bm.rotation.y = p.boat.ry || 0; bm.userData.phase = 1.3; world.add(bm); r.floats.push(bm); r.moor = { p, boat: bm }; continue; }
       if (p.kind !== "portal" && p.kind !== "door") r.colliders.push({ x: p.x, z: p.z, r: REACH[p.kind] || 0.5 });
       else if (p.kind === "portal") for (const side of [-1, 1]) r.colliders.push({ x: p.x + side * 1.36 * Math.cos(m.rotation.y), z: p.z - side * 1.36 * Math.sin(m.rotation.y), r: 0.22 }); // the gate's two pillars
     }
@@ -1462,13 +1514,14 @@ const Render3D = (() => {
     ocean.geometry = bigOceanGeo(); ocean.position.set(0, -0.1, 0);
     r.lightDir = applyWeather(HARBOR, new THREE.Vector3(sx, 0, sz), 17);
     r.stars = makeStars(); world.add(r.stars); r.moon = moonMesh(); world.add(r.moon); applyTimeOfDay(r, true);
+    if (pose && pose.sail && r.moor) roamApi.sail(true, pose);
     cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); cam.el = 0.3; cam.dist = phone ? 6.2 : 5.4; cam.introK = 0; cam.look.set(sx, height(sx, sz) + 0.9, sz);
   }
   function stopRoam() { restoreOutdoor(); if (camera && camera.fov !== 38) { camera.fov = 38; camera.updateProjectionMatrix(); } if (!roam) return; stopRace(); if (window.Audio_) { Audio_.engine(null); if (Audio_.rain) Audio_.rain(0); } if (roam.ht) roam.ht.tex.dispose(); ocean.material.uniforms.uHas.value = 0; roam = null; canvas.classList.remove("roam"); ocean.geometry = OCEAN_LEVEL; }
 
   function roamFrame(dt) {
     const r = roam, b = r.bolt, BASE = 4.4;
-    r.boosting = r.boostOn && r.energy > (r.boosting ? 0.01 : 0.2) && !r.indoor; const MAX = r.boosting ? 7.6 : BASE; // Shift: faster while the blue bar lasts
+    r.boosting = r.boostOn && r.energy > (r.boosting ? 0.01 : 0.2) && !r.indoor; const MAX = (r.boosting ? 7.6 : BASE) * (r.sail ? 1.35 : 1); // Shift: faster while the blue bar lasts; the boat is quicker still
     // where does the player want to go? keys and the joystick are relative to the camera; a click or tap sets a target
     let dx = 0, dz = 0;
     if (r.target) {
@@ -1482,7 +1535,7 @@ const Render3D = (() => {
       const a = cam.az, fwx = -Math.sin(a), fwz = -Math.cos(a), rx = Math.cos(a), rz = -Math.sin(a);
       dx = fwx * r.input.y + rx * r.input.x; dz = fwz * r.input.y + rz * r.input.x; const l = Math.hypot(dx, dz); if (l > 1) { dx /= l; dz /= l; }
     }
-    if (r.frozen) { dx = dz = 0; } // the rally countdown
+    if (r.frozen || r.photo) { dx = dz = 0; } // the rally countdown, or posing for a photo
     const want = r.target || r.input.x || r.input.y, k = Math.min(1, dt * (want ? 6 : 9)) * (r.air > 0 ? 0.35 : 1); // less grip in the air
     r.vel.x += (dx * MAX - r.vel.x) * k; r.vel.z += (dz * MAX - r.vel.z) * k;
     const sp = Math.hypot(r.vel.x, r.vel.z);
@@ -1493,8 +1546,13 @@ const Render3D = (() => {
     for (const o of r.movers) { const ex = nx - o.g.position.x, ez = nz - o.g.position.z, d = Math.hypot(ex, ez), min = o.r + 0.4; if (d < min && d > 1e-4) { nx = o.g.position.x + ex / d * min; nz = o.g.position.z + ez / d * min; } }
     const plat = (x, z) => r.platforms.find(p => x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2);
     const gy = (x, z) => { const p = plat(x, z); return p ? p.y : r.height(x, z); };
-    if (gy(nx, nz) < -0.04) { if (gy(nx, b.position.z) >= -0.04) nz = b.position.z; else if (gy(b.position.x, nz) >= -0.04) nx = b.position.x; else { nx = b.position.x; nz = b.position.z; } r.vel.multiplyScalar(0.5); r.target = null; }
-    b.position.x = nx; b.position.z = nz; const y = gy(nx, nz);
+    const bad = (x, z) => r.sail ? gy(x, z) > -0.5 : gy(x, z) < -0.04; // on foot the sea stops you; in the boat the shore does
+    if (bad(nx, nz)) { if (!bad(nx, b.position.z)) nz = b.position.z; else if (!bad(b.position.x, nz)) nx = b.position.x; else { nx = b.position.x; nz = b.position.z; } r.vel.multiplyScalar(0.5); r.target = null; }
+    b.position.x = nx; b.position.z = nz; const bob = Math.sin(clock * 1.3) * 0.06, y = r.sail ? -0.12 + bob + 0.5 : gy(nx, nz);
+    if (r.sail) { const bt = r.moor.boat; bt.position.set(nx + Math.cos(r.yaw) * 0.45, -0.12 + bob, nz - Math.sin(r.yaw) * 0.45); // Bolt rides behind the mast bt.rotation.set(Math.sin(clock * 1.1) * 0.04 - r.lean * 1.5, r.yaw, Math.cos(clock * 0.9) * 0.03); r.jumpReq = false;
+      r.wakeT = (r.wakeT || 0) - dt; if (sp > 1 && r.wakeT <= 0) { r.wakeT = 0.04; const c0 = Math.cos(r.yaw), s0 = -Math.sin(r.yaw); burst(nx - c0 * 1.7, nz - s0 * 1.7, 0xf4fbff, 3, 0.7, -0.05); burst(nx + c0 * 1.75, nz + s0 * 1.75, 0xe6f4ff, 1, 0.6, -0.02);
+      if (bt.userData.flag2) bt.userData.flag2.rotation.y = Math.sin(clock * 7) * 0.3; }
+      if (!r.sailOut && Math.hypot(nx, nz) > r.town.radius + 15 && r.hooks.onSail) { r.sailOut = true; r.vel.set(0, 0, 0); r.hooks.onSail(); } }
     // Space: jump. Up with a puff of dust, down with a thump and a little squash
     if (r.jumpReq && r.air <= 0 && !r.frozen) { r.vy = 5.2; r.air = 0.001; if (window.Audio_) Audio_.play("jump"); burst(nx, nz, y < 0.35 ? 0xe0cfa2 : 0xb8c99a, 6, 0.8, y + 0.05); }
     r.jumpReq = false;
@@ -1507,18 +1565,19 @@ const Render3D = (() => {
       const step = Math.sign(d) * Math.min(Math.abs(d), dt * 8); r.yaw += step; r.lean += (step / Math.max(dt, 1e-3) * 0.045 * Math.min(1, sp / MAX) - r.lean) * Math.min(1, dt * 8);
     } else r.lean *= 1 - Math.min(1, dt * 8);
     b.rotation.y = r.yaw;
-    const e = 0.35, hx = (gy(nx + e, nz) - gy(nx - e, nz)) / (2 * e), hz = (gy(nx, nz + e) - gy(nx, nz - e)) / (2 * e);
+    const e = 0.35, hx = r.sail ? 0 : (gy(nx + e, nz) - gy(nx - e, nz)) / (2 * e), hz = r.sail ? 0 : (gy(nx, nz + e) - gy(nx, nz - e)) / (2 * e);
     const cy = Math.cos(r.yaw), sy = -Math.sin(r.yaw), along = hx * cy + hz * sy, across = -hx * sy + hz * cy;
     const body = b.userData.body, kb = Math.min(1, dt * 8);
     const fwd = r.vel.x * cy + r.vel.z * sy, acc = (fwd - r.prevFwd) / Math.max(dt, 1e-3); r.prevFwd = fwd; r.pitch += (Math.max(-0.14, Math.min(0.14, acc * 0.012)) - r.pitch) * Math.min(1, dt * 6); // nose lifts when he pulls away, dips when he brakes
     body.rotation.z += (Math.atan(along) * 0.9 + r.pitch - body.rotation.z) * kb; body.rotation.x += (-Math.atan(across) * 0.9 - r.lean - body.rotation.x) * kb;
     body.position.y = b.userData.bodyY + Math.sin(clock * 16) * 0.006 * (sp / MAX);
-    r.tracks.dist += sp * dt; if (r.tracks.dist > 0.2 && !plat(nx, nz) && !r.air) { r.tracks.dist = 0; dropTrack(r, nx, nz, r.yaw, y < 0.35); }
+    r.tracks.dist += sp * dt; if (r.tracks.dist > 0.2 && !plat(nx, nz) && !r.air && !r.sail) { r.tracks.dist = 0; dropTrack(r, nx, nz, r.yaw, y < 0.35); }
     if (r.boosting && sp > 2) { r.boostT -= dt; if (r.boostT <= 0) { r.boostT = 0.03; burst(nx - cy * 0.5, nz - sy * 0.5, 0x7fd8ff, 2, 0.5, b.position.y + 0.35); } }
-    r.dustT -= dt; if (sp > 1.2 && r.dustT <= 0 && !plat(nx, nz) && !r.air) { r.dustT = 0.07; burst(nx - cy * 0.45, nz - sy * 0.45, y < 0.35 ? 0xe0cfa2 : 0xb8c99a, 2, 0.45, y + 0.08); }
+    r.dustT -= dt; if (sp > 1.2 && r.dustT <= 0 && !plat(nx, nz) && !r.air && !r.sail) { r.dustT = 0.07; burst(nx - cy * 0.45, nz - sy * 0.45, y < 0.35 ? 0xe0cfa2 : 0xb8c99a, 2, 0.45, y + 0.08); }
     // townsfolk turn to face Bolt when he drives up; portals spin; boats bob; the lighthouse sweeps; the fountain sprays
     for (const q of r.props) {
       const m = q.m; if (m.userData.spin) m.userData.spin.rotation.y += dt * 0.8;
+      if (m.userData.lid) m.userData.lid.rotation.x += (m.userData.lidTo - m.userData.lid.rotation.x) * Math.min(1, dt * 5);
       if (m.userData.flag) { const pa = m.userData.flag.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) + 0.4; pa.setZ(i, Math.sin(clock * 6 - x * 6) * 0.06 * x); } pa.needsUpdate = true; }
     }
     lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); if (r.rain) rainFrame(r, dt);
@@ -1540,10 +1599,10 @@ const Render3D = (() => {
     else if (!best || best !== r.latch) r.latch = null;
     // chase camera: swings in behind Bolt while he drives, unless the player just dragged it
     cam.introK = Math.min(1, cam.introK + dt / 1.4); const ik = 1 - Math.pow(1 - cam.introK, 3);
-    if (sp > 0.5 && clock - r.lastDrag > 1.5) { const behind = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); let d = behind - cam.az; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; const fwd = Math.max(0, (-Math.sin(cam.az) * r.vel.x - Math.cos(cam.az) * r.vel.z) / sp); cam.az += d * Math.min(1, dt * (0.4 + 1.4 * fwd)); } // swing round faster the more Bolt drives away from the camera, barely when he strafes
+    if (sp > 0.5 && clock - r.lastDrag > 1.5 && !r.photo) { const behind = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); let d = behind - cam.az; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; const fwd = Math.max(0, (-Math.sin(cam.az) * r.vel.x - Math.cos(cam.az) * r.vel.z) / sp); cam.az += d * Math.min(1, dt * (0.4 + 1.4 * fwd)); } // swing round faster the more Bolt drives away from the camera, barely when he strafes
     cam.look.lerp(new THREE.Vector3(nx, r.gyS + r.air * 0.45 + 0.9, nz), Math.min(1, dt * 7));
     const fovT = r.boosting && sp > 3 ? 46 : 38; if (Math.abs(camera.fov - fovT) > 0.02) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix(); } // speed rush
-    const dist = cam.dist * (1 + (1 - ik) * 1.4), el = cam.el + (1 - ik) * 0.5;
+    const dist = cam.dist * (1 + (1 - ik) * 1.4) * (r.sail ? 1.5 : 1), el = cam.el + (1 - ik) * 0.5;
     camera.position.set(cam.look.x + Math.sin(cam.az) * Math.cos(el) * dist, cam.look.y + Math.sin(el) * dist, cam.look.z + Math.cos(cam.az) * Math.cos(el) * dist);
     const floorY = Math.max(r.height(camera.position.x, camera.position.z), -0.05) + 0.5; if (camera.position.y < floorY) camera.position.y = floorY;
     camera.lookAt(cam.look);
@@ -1558,9 +1617,9 @@ const Render3D = (() => {
     const g = ray.intersectObject(r.terrain); if (g.length && r.height(g[0].point.x, g[0].point.z) > -0.04) setTarget(r, g[0].point.x, g[0].point.z);
   }
   function drawPrompt() {
-    const r = roam; if (!r || !r.near || r.race || !modalHidden()) return;
+    const r = roam; if (!r || !r.near || r.race || r.photo || !modalHidden()) return;
     const q = r.near, p = q.p, name = p.label.replace(/^\S+\s/, "");
-    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : "open the " + name);
+    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : p.kind === "moor" ? (r.sail ? "tie up and go ashore" : "board your boat") : p.kind === "chest" ? (p.open ? "an empty chest" : "open the chest") : "open the " + name);
     const v = new THREE.Vector3(q.m.position.x, q.m.position.y + 1.55 * q.s, q.m.position.z).project(camera);
     if (v.z > 1) return;
     const sx = (v.x + 1) / 2 * fx.width, sy = (1 - v.y) / 2 * fx.height;
@@ -1576,9 +1635,17 @@ const Render3D = (() => {
     near() { return roam && roam.near ? roam.near.p : null; },
     goto(x, z, prop) { if (roam) setTarget(roam, x, z, prop); }, // drive there on autopilot (a click on the ground does this)
     talking(id) { if (roam) roam.talking = id || null; },
+    sail(on, at) { const r = roam; if (!r || !r.moor || r.indoor) return false; const bt = r.moor.boat, b = r.bolt, mp = r.moor.p;
+      if (on) { const x = at ? at.x : mp.boat.x, z = at ? at.z : mp.boat.z; r.sail = true; r.sailOut = false; r.floats = r.floats.filter(f => f !== bt); b.position.set(x, 0.5, z); r.yaw = at ? at.yaw : (mp.boat.ry || 0); b.rotation.y = r.yaw; r.gyS = 0.5; r.air = 0; r.vy = 0; r.vel.set(0, 0, 0); r.target = null; r.path = null; cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); r.lastDrag = -9; }
+      else { r.sail = false; bt.position.set(mp.boat.x, -0.1, mp.boat.z); bt.rotation.set(0, mp.boat.ry || 0, 0); r.floats.push(bt); const y = r.platforms.find(f => mp.land.x > f.x1 && mp.land.x < f.x2 && mp.land.z > f.z1 && mp.land.z < f.z2); b.position.set(mp.land.x, y ? y.y : r.height(mp.land.x, mp.land.z), mp.land.z); r.gyS = b.position.y; r.vel.set(0, 0, 0); r.yaw = mp.land.yaw || 0; b.rotation.y = r.yaw; cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); }
+      return true; },
+    get sailing() { return !!(roam && roam.sail); },
+    openChest(id) { const q = roam && roam.props.find(q => q.p.kind === "chest" && q.p.id === id); if (!q) return; q.p.open = true; q.m.userData.lidTo = -1.9; for (let k = 0; k < 3; k++) burst(q.p.x, q.p.z, [0xffd24a, 0xfff2b0, 0xffb020][k], 12, 1.6, q.m.position.y + 0.5); },
+    photo(on) { const r = roam; if (!r) return; r.photo = !!on; r.input.x = r.input.y = 0; r.target = null; r.boostOn = false; for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { if (on) { o.userData.was = o.visible; o.visible = false; } else if (o.userData.was !== undefined) o.visible = o.userData.was; } }); },
+    snapshot() { if (!roam) return null; if (quality === "realistic") composer.render(); else renderer.render(scene, camera); return canvas.toDataURL("image/jpeg", 0.92); },
     jump() { if (roam) roam.jumpReq = true; }, boost(on) { if (roam) roam.boostOn = !!on; },
     race: { start: (course, done) => startRace(course, done), stop: () => stopRace(), get on() { return !!(roam && roam.race); } }, // the townsperson in conversation nods and gestures
-    pose() { return roam ? { x: roam.bolt.position.x, z: roam.bolt.position.z, yaw: roam.yaw } : null; },
+    pose() { return roam ? { x: roam.bolt.position.x, z: roam.bolt.position.z, yaw: roam.yaw, sail: !!roam.sail } : null; },
     // for tests: advance the town by dt seconds and draw it, without waiting for the animation loop
     step(dt = 1 / 60) { if (roam) { clock += dt; roamFrame(dt); stepParticles(dt); } },
     render() { if (roam) { if (quality === "realistic") composer.render(); else renderer.render(scene, camera); drawBubble(); drawPrompt(); drawHud(); } },

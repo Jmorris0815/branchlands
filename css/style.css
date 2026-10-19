@@ -256,3 +256,9 @@ footer { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: cen
 .codebox { font: 13px/1.5 var(--mono); background: var(--term-bg); color: var(--term-ink); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; max-height: 220px; overflow: auto; margin: 6px 0; }
 .qcard textarea { width: 100%; min-height: 56px; margin: 6px 0; }
 #famBadge { background: var(--amber); color: #222; font-weight: 700; }
+
+/* photo mode */
+.photobar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; max-width: calc(100% - 24px); padding: 8px 14px; border-radius: 14px; background: rgba(22, 30, 44, 0.82); color: #fff; z-index: 5; }
+.photobar .muted { color: #b9c6d8; }
+.photobar input[type=range] { vertical-align: middle; width: 140px; }
+#screen-level.photo #joy, #screen-level.photo #talkBtn, #screen-level.photo #jumpBtn, #screen-level.photo #boostBtn { display: none; }

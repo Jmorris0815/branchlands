@@ -15,7 +15,7 @@ const Hub = (() => {
     { kind: "npc", id: "odo", model: "villager3", wx: -16, wz: 7, label: "🛶 Odo", color: "#4a6b86" }, { kind: "npc", id: "wrenna", model: "villager5", inside: "workshop", wx: 1.5, wz: -1.6, label: "🔧 Wrenna", color: "#b07a2a" },
     { kind: "npc", id: "clock", model: "villager4", inside: "tower", wx: -1.2, wz: -1.0, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", model: "villager", wx: 6, wz: 9, label: "🧔 Dad", color: "#3f7a6a" },
     { kind: "npc", id: "oracle", model: "villager4", wx: -6.5, wz: -13.5, label: "🔮 Oracle", color: "#5fb8b0" }, { kind: "npc", id: "nyx", model: "villager3", wx: 16.5, wz: 10, label: "🏴‍☠️ Nyx", color: "#2f3e5c" },
-    { kind: "stall", tab: "market", wx: -9.5, wz: 2.5, label: "🏪 Market" }, { kind: "stall", tab: "workshop", wx: 9.5, wz: 3.5, label: "🔧 Workshop" },
+    { kind: "stall", tab: "market", wx: -8.7, wz: 1.3, label: "🏪 Market" }, { kind: "stall", tab: "workshop", wx: 9.5, wz: 3.5, label: "🔧 Workshop" },
     { kind: "stall", tab: "paint", wx: 8, wz: -6.5, label: "🎨 Style" }, { kind: "stall", tab: "pack", wx: -8.5, wz: -6, label: "🎒 Storehouse" },
     { kind: "stall", tab: "board", wx: -4, wz: 10.5, label: "📜 Quest board" }, { kind: "stall", tab: "skills", wx: 5.5, wz: -11, label: "📈 Skills" },
     { kind: "sign", wx: 0, wz: -9.5, label: "🗺️ World map" },
@@ -24,10 +24,22 @@ const Hub = (() => {
     // doors into buildings (drive through them)
     { kind: "door", to: "workshop", wx: 13.95, wz: -0.9, label: "🔧 Wrenna's Workshop" },
     { kind: "door", to: "tower", wx: 10.7, wz: -12.55, label: "🕰️ The Time Tower" },
+    { kind: "door", to: "shop", wx: -10.6, wz: 4.4, label: "🧺 Juno's Trading Post" },
+    { kind: "npc", id: "juno", model: "villager6", inside: "shop", wx: 2.35, wz: -1.3, label: "🧺 Juno", color: "#d08a3a" },
+    // your boat, tied up at the end of the pier (boat: where it floats, land: where you step off)
+    { kind: "moor", wx: 1.05, wz: 22.8, label: "⛵ Your boat", boat: { x: 2.9, z: 22.2, ry: -Math.PI / 2 }, land: { x: 0, z: 22, yaw: Math.PI / 2 } },
+    { kind: "npc", id: "gully", island: "gull", model: "villager3", wx: -2.6, wz: 5, label: "🦜 Old Gully", color: "#3a7a8a" },
   ];
   // Rooms you can drive into. Each has a size (w × d), what stands in it (things), the people and things you can
   // use (props: npcs come from PROPS with inside: <room>), and where Bolt appears (start, by the way out).
   const INTERIORS = {
+    shop: { title: "Juno's Trading Post", w: 11, d: 8, wall: 0xe8d6b0, start: { x: 0, z: 2.6 }, outside: { x: -9.4, z: 3.9, yaw: 0.4 },
+      things: [{ kind: "rug", x: 0, z: 1 }, { kind: "counter", x: 0, z: -1.6 }, { kind: "post", x: -1, z: -1.6, r: 0.62 }, { kind: "post", x: 1, z: -1.6, r: 0.62 },
+        { kind: "shelf", x: -3.4, z: -3.65, r: 0.5 }, { kind: "shelf", x: 3.4, z: -3.65, r: 0.5 }, { kind: "fruit", x: -3.3, z: 0.6, r: 0.8 }, { kind: "fruit", x: 3.3, z: 0.6, r: 0.8, ry: 0.2 },
+        { kind: "sacks", x: -4.7, z: 2.8, r: 0.6 }, { kind: "crates", x: 4.1, z: 2.9, r: 0.8 }, { kind: "barrel", x: -5, z: -1.2, r: 0.45 }, { kind: "barrel", x: 5, z: -1.4, r: 0.45 },
+        { kind: "lantern", x: -2, z: 0 }, { kind: "lantern", x: 2, z: -0.5 }],
+      props: [{ kind: "spot", tab: "market", x: -2.2, z: 2.2, label: "🏪 Sell and buy: the Market", color: "#f0b24a" }, { kind: "spot", tab: "pack", x: 2.2, z: 2.2, label: "🎒 Your storehouse", color: "#7fd0a8" },
+        { kind: "exit", x: 0, z: 3.8, ry: Math.PI, label: "🚪 Back to town" }] },
     workshop: { title: "Wrenna's Workshop", w: 12, d: 9, wall: 0xe2d2b4, start: { x: 0, z: 3.2 }, outside: { x: 12.6, z: -0.8, yaw: Math.PI },
       things: [{ kind: "rug", x: 0, z: 0.6 }, { kind: "bench", x: -3.2, z: -3.6, r: 1.1 }, { kind: "toolwall", x: -3.2, z: -4.38 }, { kind: "anvil", x: 3.6, z: -2.4, r: 0.6 }, { kind: "fireplace", x: 4.6, z: -4.1, r: 0.9 },
         { kind: "lift", x: 3.8, z: 1.6, r: 0.9, ry: -0.5 }, { kind: "barrel", x: -5.3, z: 3.6, r: 0.45 }, { kind: "barrel", x: -4.6, z: 3.9, r: 0.45 }, { kind: "shelf", x: -5.75, z: -0.5, ry: Math.PI / 2, r: 0.5 }, { kind: "shelf", x: 5.75, z: 0.2, ry: -Math.PI / 2, r: 0.5 },
@@ -76,9 +88,38 @@ const Hub = (() => {
     race: { start: { x: 0.6, z: 10.6, yaw: -0.21 }, medals: { gold: 22, silver: 28, bronze: 38 },
       rings: [{ x: 7, z: 12 }, { x: 15, z: 7 }, { x: 12, z: 0 }, { x: 9, z: -9 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: -12, z: 0 }, { x: -17, z: 4 }, { x: -6, z: 10 }, { x: 0, z: 15 }, { x: 0, z: 21.5 }] },
     bots: [{ from: 3, color: "#c8553d" }, { from: 7, color: "#3f9a6a", s: 0.7 }, { from: 11, color: "#e6b422", s: 0.75 }],
-    get props() { return props().filter(p => !p.inside).map(p => ({ ...p, x: p.wx, z: p.wz })); },
+    get props() { return props().filter(p => !p.inside && !p.island).map(p => ({ ...p, x: p.wx, z: p.wz })); },
+    name: "Harbor Town",
   };
-  let active = false, nearProp = null, saveT = null, room = null; const keys = new Set(); // room: the interior Bolt is in, or null in town
+  // Gull Isle: a small wild island past the horizon. Sail out of the harbor in your boat and keep going.
+  const P = (x, z, ry = 0) => ({ kind: "stone", x, z, s: 1, ry });
+  const GULL = {
+    name: "Gull Isle", size: 64, radius: 17, seed: 2.4, start: { x: 0, z: 6 }, plaza: { x: 0, z: -1, r: 4.5 }, bay: { x: 0, z: 19, r: 6.5 },
+    hills: [{ x: -6, z: -8, r: 5, h: 2.2 }, { x: 7, z: -7, r: 4.5, h: 1.6 }],
+    flats: [{ x: 0, z: -1, r: 5.5, y: 1.1 }],
+    decor: [
+      { kind: "dock", x: 0, z: 11, len: 7 }, { kind: "wreck", x: 11, z: 7, ry: 0.9 },
+      P(-4.2, -1), P(-3, -4), P(0, -5.2), P(3, -4), P(4.2, -1), P(-3, 2), // the old stone circle (open to the south)
+      H(6.5, 2.5, 2.2), { kind: "lamp", x: 2.4, z: 5.2 }, { kind: "lamp", x: -2.4, z: 7.2 },
+      T(-10, -4), T(-11, 2, 2.5), T(8, -11), T(4, -12, 2.4), T(-3, -13), T(12, -5), T(10, 1.5, 2.4), T(-8.5, 7), T(-12, -9, 2.4), T(-1, -9.5, 1.9), T(14, 0),
+      RK(-15, -4), RK(-9, -13.5), RK(5.5, -15), RK(13.5, -10), RK(15, 4), RK(-14, 8), RK(-4, 12.5, 1.4),
+      { kind: "crystal", x: -6.5, z: -9.5, s: 1.4 }, { kind: "crystal", x: -4.5, z: -7, s: 1.2 }, { kind: "crate", x: 9, z: 4.5, ry: 0.5 }, { kind: "crate", x: 2.2, z: 9.6, ry: 0.2 },
+    ],
+    spots: [], strollers: [], bots: [],
+    gears: [
+      { id: "g-hill", x: -6, z: -8, lift: 1.9 }, { id: "g-circle", x: 0, z: -1, lift: 1.9 }, { id: "g-pier", x: 0, z: 12.6 }, { id: "g-wreck", x: 8.5, z: 9.5 }, { id: "g-north", x: 0, z: -11.5 },
+      { id: "g-east", x: 13, z: -2 }, { id: "g-west", x: -14, z: 1 }, { id: "g-cove", x: -7, z: 8.5 }, { id: "g-hut", x: 9, z: 0, lift: 1.55 }, { id: "g-ridge", x: 7, z: -7, lift: 1.9 },
+    ],
+    chests: [{ id: "c-circle", x: 2.6, z: -2.8 }, { id: "c-wreck", x: 9.4, z: 3.6 }, { id: "c-hill", x: -7.5, z: -10.5 }, { id: "c-west", x: -12.5, z: 4.5 }, { id: "c-north", x: 3, z: -12.5 }],
+    moor: { kind: "moor", x: 1.05, z: 17.3, label: "⛵ Your boat", boat: { x: 2.9, z: 16.8, ry: -Math.PI / 2 }, land: { x: 0, z: 16.6, yaw: Math.PI / 2 } },
+    get props() {
+      const t = town();
+      return PROPS.filter(p => p.island === "gull").map(p => ({ ...p, x: p.wx, z: p.wz })).concat(
+        this.chests.map(c => ({ kind: "chest", id: c.id, x: c.x, z: c.z, label: "💰 Treasure chest", open: (t.chests || []).includes(c.id) })), [this.moor]);
+    },
+  };
+  const TOWNS = { harbor: TOWN, gull: GULL };
+  let active = false, nearProp = null, saveT = null, room = null, island = "harbor", photoOn = false; const keys = new Set(); // room: the interior Bolt is in, or null in town
 
   function props() { return PROPS.map(p => p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
 
@@ -88,16 +129,16 @@ const Hub = (() => {
     $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false; $("jumpBtn").hidden = false; $("boostBtn").hidden = false;
     const r = api.R.pick();
     if (!r) { renderPanel(); return; } // 3D still loading: render3d-ready calls open() again
-    r.setLook(RPG.look()); room = null; r.roam.start(TOWN, hooks, s.hub3 || null);
+    r.setLook(RPG.look()); room = null; island = TOWNS[s.island] ? s.island : "harbor"; r.roam.start(TOWNS[island], hooks, s.hub3 || null);
     clearInterval(saveT); saveT = setInterval(() => { if (active) remember(); }, 4000);
     renderPanel();
   }
   function close() {
-    if (!active) return; active = false; clearInterval(saveT); keys.clear(); if (window.Audio_) { Audio_.engine(null); Audio_.ambient("level"); }
+    if (!active) return; photo(false); active = false; clearInterval(saveT); keys.clear(); if (window.Audio_) { Audio_.engine(null); Audio_.ambient("level"); }
     if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true; $("jumpBtn").hidden = true; $("boostBtn").hidden = true;
   }
-  function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.persistSave(); } } // inside a room, a reload puts you just outside its door
+  function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.save().island = room ? "harbor" : island; api.persistSave(); } } // inside a room, a reload puts you just outside its door
 
   // ---------- free roam (3D) ----------
   const hooks = {
@@ -105,16 +146,46 @@ const Hub = (() => {
     onInteract: p => interact(p),                        // the player clicked / drove up to p
     onEnter: p => { if ($("modal").hidden) interact(p); }, // Bolt drove into a portal ring
     gearTaken: id => town().gears.includes(id),
+    onSail: () => sailAway(),
     onGear: id => gotGear(id),
     marks: () => { const m = {}; for (const p of PROPS) if (p.kind === "npc") { const qs = RPG.questsFor(p.id); if (qs.some(q => q.ready)) m[p.id] = "?"; else if (qs.length) m[p.id] = "!"; } return m; }, // over their heads and on the minimap
   };
   // what you have done around town: gears found, rally best time and medals
   function town() { const s = api.save(); if (!s.town) s.town = { gears: [], best: null, medals: {} }; return s.town; }
   function gotGear(id) {
-    const t = town(), N = TOWN.gears.length; if (!t.gears.includes(id)) t.gears.push(id); RPG.addCoins(15); api.persistSave();
-    if (t.gears.length >= N && !t.allGears) { t.allGears = true; RPG.addCoins(300); const st = RPG.state; if (st.titles && !st.titles.includes("Gear Hunter")) st.titles.push("Gear Hunter"); api.persistSave(); api.toast(`<b>⚙️ All ${N} golden gears!</b> +300 🪙 and the title Gear Hunter.`); api.sfx("unlock"); }
-    else api.toast(`⚙️ Golden gear ${t.gears.length} of ${N} · +15 🪙`);
+    const t = town(), T = TOWNS[island], N = T.gears.length; if (!t.gears.includes(id)) t.gears.push(id); RPG.addCoins(15); api.persistSave();
+    const n = gearsFound(), flag = island === "harbor" ? "allGears" : "allGears_" + island, [prize, title] = island === "harbor" ? [300, "Gear Hunter"] : [200, "Beachcomber"];
+    if (n >= N && !t[flag]) { t[flag] = true; RPG.addCoins(prize); const st = RPG.state; if (st.titles && !st.titles.includes(title)) st.titles.push(title); api.persistSave(); api.toast(`<b>⚙️ All ${N} golden gears on ${T.name}!</b> +${prize} 🪙 and the title ${title}.`); api.sfx("unlock"); }
+    else api.toast(`⚙️ Golden gear ${n} of ${N} on ${T.name} · +15 🪙`);
     renderPanel();
+  }
+  const gearsFound = () => TOWNS[island].gears.filter(g => town().gears.includes(g.id)).length;
+  function openChest(p) {
+    const t = town(); t.chests = t.chests || [];
+    if (t.chests.includes(p.id)) { api.toast("This chest is empty. You found what was in it already."); return; }
+    t.chests.push(p.id); const coins = 25 + Math.floor(Math.random() * 36), goods = Object.keys(RPG.GOODS).filter(g => !RPG.GOODS[g].crafted), g = goods[Math.floor(Math.random() * goods.length)], got = RPG.add(g, 2 + Math.floor(Math.random() * 3));
+    RPG.addCoins(coins); api.persistSave(); Render3D.roam.openChest(p.id); api.sfx("gem");
+    api.toast(`<b>💰 Treasure!</b> +${coins} 🪙${got ? ` and ${RPG.GOODS[g].icon} ${got} ${RPG.GOODS[g].name}${got > 1 && !/s$/.test(RPG.GOODS[g].name) ? "s" : ""}` : ""} · ${t.chests.length} of ${GULL.chests.length} chests`);
+  }
+  // sail far enough from one island and the current carries you to the other
+  function sailAway() {
+    const to = island === "harbor" ? "gull" : "harbor", T = TOWNS[to]; api.toast(`⛵ Sailing to ${T.name}…`); api.sfx("teleport");
+    fade(() => { island = to; nearProp = null; Render3D.roam.start(T, hooks, { x: 0, z: T.radius + 13, yaw: Math.PI / 2, sail: true }); remember(); renderPanel(); });
+  }
+  function sailToggle() {
+    if (Render3D.roam.race.on) return; const on = !Render3D.roam.sailing; if (!Render3D.roam.sail(on)) return;
+    api.sfx(on ? "splash" : "doors"); if (on) api.toast(island === "harbor" ? "⛵ Steer out to sea and keep going. Gull Isle is past the horizon." : "⛵ Sail away from the island and the current takes you home."); renderPanel();
+  }
+  // photo mode: no labels or map, the clock stops, drag to frame the shot
+  function photo(on) {
+    if (!window.Render3D || on === photoOn || (on && Render3D.roam.race.on)) return; photoOn = on; Render3D.roam.photo(on); $("screen-level").classList.toggle("photo", on);
+    const old = $("photoBar"); if (old) old.remove();
+    if (on) {
+      $("world3d").parentNode.insertAdjacentHTML("beforeend", `<div id="photoBar" class="photobar"><b>📷 Photo mode</b>${room ? "" : `<label>Time of day <input id="phTime" type="range" min="0" max="1" step="0.005" value="${Render3D.townTime}"></label>`}<button id="phSave" class="primary small">Save photo</button><button id="phDone" class="small">Done</button><span class="muted">drag to look, scroll to zoom</span></div>`);
+      const tm = $("phTime"); if (tm) tm.oninput = () => { Render3D.townTime = +tm.value; };
+      $("phSave").onclick = () => { const url = Render3D.roam.snapshot(); if (!url) return; const a = document.createElement("a"); a.href = url; a.download = "branchlands-" + new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-") + ".jpg"; document.body.appendChild(a); a.click(); a.remove(); api.sfx("star"); api.toast("📷 Photo saved to your downloads."); };
+      $("phDone").onclick = () => photo(false);
+    } else { const tod = api.save().settings.tod; if (tod && tod !== "cycle") Render3D.setTimeMode(tod); }
   }
   const MEDALS = [["gold", "🥇", "Gold", 150], ["silver", "🥈", "Silver", 80], ["bronze", "🥉", "Bronze", 40]];
   const fmt = t => Math.floor(t / 60) + ":" + (t % 60).toFixed(2).padStart(5, "0");
@@ -163,7 +234,7 @@ const Hub = (() => {
 
   function onKey(e) {
     if (!active || !$("modal").hidden) return;
-    const t = e.target.tagName; if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
+    const t = e.target.tagName; if (photoOn) { if (e.key === "Escape" || e.key.toLowerCase() === "p") photo(false); return; } if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
     const k = e.key.toLowerCase();
     const m = ["arrowright", "d", "arrowdown", "s", "arrowleft", "a", "arrowup", "w"].includes(k);
     if (m) { e.preventDefault(); keys.add(k); sendInput(); }
@@ -171,6 +242,7 @@ const Hub = (() => {
     else if (k === "shift") { keys.add(k); if (window.Render3D) Render3D.roam.boost(true); }
     else if (k === "escape" && window.Render3D && Render3D.roam.race.on) { Render3D.roam.race.stop(); api.toast("🏁 Race stopped."); renderPanel(); }
     else if (k === "e" || k === "enter") { e.preventDefault(); interactNear(); }
+    else if (k === "p") photo(true);
   }
   function enterRoom(id) {
     const R = INTERIORS[id]; if (!R || !window.Render3D) return; remember(); fade(() => {
@@ -187,6 +259,8 @@ const Hub = (() => {
     if (p.kind === "exit") return leaveRoom();
     if (p.kind === "spot") return p.map ? api.showScreen("map") : api.openTown(p.tab);
     if (p.kind === "race") return raceMenu();
+    if (p.kind === "moor") return sailToggle();
+    if (p.kind === "chest") return openChest(p);
     if (p.kind === "npc") talk(p.id);
     else if (p.kind === "stall") api.openTown(p.tab);
     else if (p.kind === "sign") api.showScreen("map");
@@ -211,12 +285,14 @@ const Hub = (() => {
     const s = api.save();
     {
       const p = nearProp, phone = document.documentElement.dataset.device === "phone";
-      el.innerHTML = `<div class="zonechip">⚓ Harbor Town</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
+      el.innerHTML = `<div class="zonechip">${island === "gull" ? "🏝️ Gull Isle" : "⚓ Harbor Town"}</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. <b>Space</b> jumps, <b>Shift</b> boosts. Dark gates are sealed until you finish the zone before them."}</p>
-        <p class="muted">⚙️ ${town().gears.length} of ${TOWN.gears.length} golden gears found${town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
+        <p class="muted">⚙️ ${gearsFound()} of ${TOWNS[island].gears.length} golden gears found here${island === "gull" ? ` · 💰 ${(town().chests || []).length} of ${GULL.chests.length} chests` : town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · ⛵ your boat is at the end of the pier · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
+        <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button></div>
         <div id="nearby">${p ? `<button class="primary" data-near="1">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + (p.locked ? " Sealed: " : " Enter ") + ZONES[p.zone - 1].name : p.kind === "door" ? "🚪 Go into " + p.label : p.kind === "exit" ? "🚪 Back to town" : (p.kind === "npc" ? "🗣️ Talk to " : "Use: ") + p.label}</button>` : room ? `<span class="muted">You're in ${INTERIORS[room].title}. Drive to the glowing rings to use things, talk to whoever is here, and leave by the door.</span>` : `<span class="muted">Nobody within reach. The quest board and Marisol are down by the harbour, the shops ring the plaza, the portals stand along the shore. Lit doorways lead inside: Wrenna's Workshop and the Time Tower.</span>`}</div>
         <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()} · ${LEVELS.filter(l => api.completed()[l.id]).length}/${LEVELS.length} missions</p>`;
       const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
+      const pb = $("photoBtn"); if (pb) pb.onclick = () => photo(true);
       return;
     }
   }
@@ -284,6 +360,22 @@ const Hub = (() => {
         { q: "Is it alive?", a: () => `No. It predicts the next word very well. Which is sometimes enough to be useful and never enough to be trusted without checking. Remember that in all things.` },
       ],
     },
+    juno: {
+      greet: () => `Welcome to the Trading Post! Marisol's my aunt: she runs the harbor, I run the haggling. Sell here, buy here, and ask me how prices work.`,
+      topics: [
+        { q: "Why do prices drop when I sell a lot?", a: () => `Supply and demand. If you dump forty apples on me in one go, apples get cheap, because now I have forty apples. Spread your selling over different goods and different days, and prices bounce back by tomorrow.`, tab: "market" },
+        { q: "How do I make more coins?", a: () => `Buy low, craft, sell high. Three apples are worth about twelve coins, one cider is twenty-two. A prism is worth more than the two gems and the lens that made it. That's what the 🔧 Workshop is for.` },
+        { q: "Anything fun to spend time on?", a: () => `Twenty golden gears are hidden round Harbor Town, the 🏁 Rally pays medals, and old Gully swears there are treasure chests on Gull Isle. Take your boat from the end of the pier and sail south till the harbor disappears.` },
+      ],
+    },
+    gully: {
+      greet: () => `Ahoy! A robot in a boat. Nobody sails out to Gull Isle. I washed up here forty years ago and never found a reason to leave.`,
+      topics: [
+        { q: "What is this place?", a: () => `The stone circle is older than the lighthouse. Whoever built it liked patterns: six stones, evenly spaced, one gap facing the sea. A loop in stone, if you ask me.` },
+        { q: "Treasure?", a: () => `Five chests from the wreck of the old <i>Maybe</i>, scattered round the island, and ten golden gears that the gulls keep stealing and dropping. A careful robot would check every corner. A clever one would write <code>while chests_left &gt; 0:</code>.` },
+        { q: "How do I get home?", a: () => `Board your boat at the post on the pier and sail away from the island, any way you like. Keep going and the current carries you back to Harbor Town.` },
+      ],
+    },
     nyx: {
       greet: k => k.z(8) ? `Same robot, same islands, different tongue. JavaScript. Braces instead of indents, <code>let</code> instead of nothing, <code>;</code> if you're polite. You already know how to think; you're just learning to spell.` : `Mirror Sea's for people who've met the Oracle. Have you?`,
       topics: [
@@ -328,6 +420,6 @@ const Hub = (() => {
     catch (e) { return "(The free-talk line is down: " + (e.message || e) + ". Is Ollama running with OLLAMA_ORIGINS set?)"; }
   }
 
-  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, get room() { return room; }, get active() { return active; }, PROPS, TOWN, INTERIORS };
+  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, photo, get room() { return room; }, get island() { return island; }, get active() { return active; }, PROPS, TOWN, GULL, TOWNS, INTERIORS };
 })();
 window.Hub = Hub;

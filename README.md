@@ -49,6 +49,10 @@ buttons). Twenty golden gears are hidden round the island, a few floating high e
 through twelve rings to the end of the pier, with gold, silver and bronze times. The minimap in the corner shows
 portals, shops and townsfolk; **!** over someone means a quest for you, **?** a reward waiting. Some days it rains
 (⚙️ Settings → Weather in town).
+Your ⛵ boat is tied up at the end of the pier: board it, sail out to sea, and keep going to reach **Gull Isle**, a wild
+island with a stone circle, a beached wreck, a castaway called Old Gully, five treasure chests and ten more gears.
+**Juno's Trading Post** is the third building you can drive into. Press **P** (or 📷 Photo mode) to hide the labels,
+stop the clock, pick the time of day, and save a picture.
 Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by changing two numbers. Around town:
 
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
