@@ -11,10 +11,10 @@ const Hub = (() => {
   const PROPS = [
     { kind: "portal", zone: 1, wx: 19.5, wz: -7.5 }, { kind: "portal", zone: 2, wx: -19, wz: -6.5 }, { kind: "portal", zone: 3, wx: -20.5, wz: 3 }, { kind: "portal", zone: 4, wx: 20, wz: 5 },
     { kind: "portal", zone: 5, wx: 12, wz: -17.5 }, { kind: "portal", zone: 6, wx: 14.5, wz: 12.5 }, { kind: "portal", zone: 7, wx: -10.5, wz: -17.5 }, { kind: "portal", zone: 8, wx: -15, wz: 12 },
-    { kind: "npc", id: "marisol", wx: 3.2, wz: 13, label: "⚓ Marisol", color: "#c8553d" }, { kind: "npc", id: "pip", wx: -12.5, wz: -9.5, label: "🧑‍🌾 Old Pip", color: "#6a8c3a" },
-    { kind: "npc", id: "odo", wx: -16, wz: 7, label: "🛶 Odo", color: "#4a6b86" }, { kind: "npc", id: "wrenna", inside: "workshop", wx: 1.5, wz: -1.6, label: "🔧 Wrenna", color: "#b07a2a" },
-    { kind: "npc", id: "clock", inside: "tower", wx: -1.2, wz: -1.0, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", wx: 6, wz: 9, label: "🧔 Dad", color: "#3f7a6a" },
-    { kind: "npc", id: "oracle", wx: -6.5, wz: -13.5, label: "🔮 Oracle", color: "#5fb8b0" }, { kind: "npc", id: "nyx", wx: 16.5, wz: 10, label: "🏴‍☠️ Nyx", color: "#2f3e5c" },
+    { kind: "npc", id: "marisol", model: "villager2", wx: 3.2, wz: 13, label: "⚓ Marisol", color: "#c8553d" }, { kind: "npc", id: "pip", model: "villager", wx: -12.5, wz: -9.5, label: "🧑‍🌾 Old Pip", color: "#6a8c3a" },
+    { kind: "npc", id: "odo", model: "villager3", wx: -16, wz: 7, label: "🛶 Odo", color: "#4a6b86" }, { kind: "npc", id: "wrenna", model: "villager5", inside: "workshop", wx: 1.5, wz: -1.6, label: "🔧 Wrenna", color: "#b07a2a" },
+    { kind: "npc", id: "clock", model: "villager4", inside: "tower", wx: -1.2, wz: -1.0, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", model: "villager", wx: 6, wz: 9, label: "🧔 Dad", color: "#3f7a6a" },
+    { kind: "npc", id: "oracle", model: "villager4", wx: -6.5, wz: -13.5, label: "🔮 Oracle", color: "#5fb8b0" }, { kind: "npc", id: "nyx", model: "villager3", wx: 16.5, wz: 10, label: "🏴‍☠️ Nyx", color: "#2f3e5c" },
     { kind: "stall", tab: "market", wx: -9.5, wz: 2.5, label: "🏪 Market" }, { kind: "stall", tab: "workshop", wx: 9.5, wz: 3.5, label: "🔧 Workshop" },
     { kind: "stall", tab: "paint", wx: 8, wz: -6.5, label: "🎨 Style" }, { kind: "stall", tab: "pack", wx: -8.5, wz: -6, label: "🎒 Storehouse" },
     { kind: "stall", tab: "board", wx: -4, wz: 10.5, label: "📜 Quest board" }, { kind: "stall", tab: "skills", wx: 5.5, wz: -11, label: "📈 Skills" },
@@ -62,7 +62,7 @@ const Hub = (() => {
     // places townsfolk and helper robots wander between (they find their own way)
     spots: [{ x: 4, z: 5 }, { x: -4, z: 5 }, { x: -6, z: -3 }, { x: 6, z: -2 }, { x: 0, z: 8.5 }, { x: 0, z: 15 }, { x: 0, z: 20 }, { x: -6, z: 10 }, { x: 7, z: 12 },
       { x: -12, z: 0 }, { x: 12, z: 0 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: 15, z: 7 }, { x: -17, z: 4 }, { x: 9, z: -9 }],
-    strollers: [{ from: 0 }, { from: 5 }, { from: 9 }, { from: 13, tint: 0xcfd8ff }, { from: 14 }],
+    strollers: [{ from: 0, model: "villager6" }, { from: 5, model: "villager" }, { from: 9, model: "villager5", tint: 0xd8e4ff }, { from: 13, model: "villager3", tint: 0xffe2c8 }, { from: 14, model: "villager4" }],
     bots: [{ from: 3, color: "#c8553d" }, { from: 7, color: "#3f9a6a", s: 0.7 }, { from: 11, color: "#e6b422", s: 0.75 }],
     get props() { return props().filter(p => !p.inside).map(p => ({ ...p, x: p.wx, z: p.wz })); },
   };

@@ -919,7 +919,7 @@ const Render3D = (() => {
     robot = robotMesh(); const sx = pose ? pose.x : room.start.x, sz = pose ? pose.z : room.start.z; robot.position.set(sx, 0.01, sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot;
     buildWalkGrid(r); for (const q of r.props) if ((q.p.kind === "exit") && Math.hypot(q.p.x - sx, q.p.z - sz) < 1.6) r.latch = q;
     r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = []; r.tracks = makeTracks(); world.add(r.tracks.mesh); r.prevFwd = 0; r.pitch = 0;
-    for (const q of r.props) if (q.p.kind === "npc" && q.vis) { const v = q.vis; const ad = A_POSE.has(v.userData.modelName) ? 0.32 : 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; }
+    for (const q of r.props) if (q.p.kind === "npc" && q.vis) { const v = q.vis; const ad = ARM_DOWN[v.userData.modelName] || 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; }
     // indoor light: warm lamps, a soft window light, no sky or sea
     sky.visible = false; ocean.visible = false; scene.background = new THREE.Color(0x15110d); scene.fog = new THREE.FogExp2(0x15110d, 0.02);
     sun.color.set(0xfff0d8); sun.intensity = 0.4 + day * 0.9; r.lightDir = new THREE.Vector3(0.5, 1, 0.35).normalize();
@@ -1033,7 +1033,8 @@ const Render3D = (() => {
   // below the hips the two legs swing about a sideways axis (left and right opposite), the arms swing the other
   // way, the head turns about the neck, and the chest breathes. The cut-off points are fractions of the model's
   // height, which works for any standing person the Spark makes.
-  const A_POSE = new Set(["villager2", "villager3", "villager4", "villager5", "villager6"]); // made standing with arms out: lower them to the sides
+  const ARM_DOWN = { villager3: 0.12, villager5: 0.12 }; // how far to bring each model's arms in to its sides (radians)
+  const A_POSE = { has: n => n in ARM_DOWN };
   function rigHuman(inst, armDown = 0) {
     const sets = [];
     inst.traverse(o => {
@@ -1084,13 +1085,13 @@ const Render3D = (() => {
   function rigSet(sets, k, v) { if (sets) for (const u of sets) u[k].value = v; }
   // fill group vis with a person model and rig it as soon as the model is there
   function person(vis, model, fallbackColor) {
-    vis.userData.onModel = inst => { vis.userData.rig = rigHuman(inst, A_POSE.has(model) ? 0.32 : 0); };
+    vis.userData.onModel = inst => { vis.userData.rig = rigHuman(inst, ARM_DOWN[model] || 0); };
     useAsset(vis, model, () => {
       const c = new THREE.Color(fallbackColor);
       vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4 }), 0, 0.45, 0));
       vis.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
     });
-    if (vis.userData.model && !vis.userData.rig) vis.userData.rig = rigHuman(vis.userData.model, A_POSE.has(model) ? 0.32 : 0);
+    if (vis.userData.model && !vis.userData.rig) vis.userData.rig = rigHuman(vis.userData.model, ARM_DOWN[model] || 0);
     return vis;
   }
   const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
@@ -1134,7 +1135,7 @@ const Render3D = (() => {
     const town = r.town, height = r.height;
     r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = [];
     // the talking townsfolk: rig them so heads turn and chests breathe
-    for (const q of r.props) if (q.p.kind === "npc" && q.m.userData.vis) { const v = q.m.userData.vis; q.vis = v; const ad = A_POSE.has(v.userData.modelName) ? 0.32 : 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; q.phase = Math.random() * 6; }
+    for (const q of r.props) if (q.p.kind === "npc" && q.m.userData.vis) { const v = q.m.userData.vis; q.vis = v; const ad = ARM_DOWN[v.userData.modelName] || 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; q.phase = Math.random() * 6; }
     // strollers wander between spots around town
     const SPOTS = town.spots || [];
     const TINTS = [0xffffff, 0xd8e4ff, 0xffe2c8, 0xe2ffd8];

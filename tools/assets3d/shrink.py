@@ -5,7 +5,7 @@ Run from the repo root: python tools/assets3d/shrink.py [names...]   (idempotent
 import sys, os, io, glob
 import trimesh
 from PIL import Image
-HERO = {"bolt", "house", "villager", "villager2", "stall"}
+HERO = {"bolt", "house", "stall"} | {f"villager{i}" for i in ("", 2, 3, 4, 5, 6)}
 def jpeg(im, size, q):
     im = im.convert("RGB")
     if max(im.size) > size: im = im.resize((size, size), Image.LANCZOS)

@@ -14,7 +14,7 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/+esm";
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm";
 import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm";
 import { RoomEnvironment } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js/+esm";
-const names = ["bolt","house","tree","rock","crate","pillar","crystal","ice","crab","apple","gem","key","lens","villager","villager2","stall"];
+const names = ["bolt","house","tree","rock","crate","pillar","crystal","ice","crab","apple","key","lens","villager","villager2","villager3","villager4","villager5","villager6","stall"];
 const name = new URLSearchParams(location.search).get("m") || "bolt";
 document.getElementById("bar").innerHTML = names.map(n => `<a href="?m=${n}" ${n === name ? 'style="font-weight:700"' : ""}>${n}</a>`).join("") + `<span id="info"></span>`;
 const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight);
