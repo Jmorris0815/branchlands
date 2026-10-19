@@ -83,7 +83,7 @@ const Game = (() => {
   let r3dInited = false;
   const R = {
     init() { R.init3d(); },
-    init3d() { if (!r3dInited && window.Render3D) { r3dInited = true; Render3D.init($("world"), $("fx")); if (!Render3D.ok) noWebGL(); } },
+    init3d() { if (!r3dInited && window.Render3D) { r3dInited = true; Render3D.init($("world"), $("fx")); if (!Render3D.ok) noWebGL(); else Render3D.setFollow(save.settings.follow !== false); } },
     get ready() { return r3dInited && Render3D.ok; },
     pick() {
       if (!R.ready) return null;
@@ -149,7 +149,7 @@ const Game = (() => {
   function applySettings() {
     const t = save.settings.theme; if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
     Audio_.enabled = save.settings.sound; $("soundBtn").textContent = save.settings.sound ? "🔊" : "🔇";
-    $("speed").value = save.settings.speed; $("olEndpoint").value = save.settings.ollama;
+    $("speed").value = save.settings.speed; $("followCam").checked = save.settings.follow !== false; if (window.Render3D && Render3D.setFollow) Render3D.setFollow(save.settings.follow !== false); $("olEndpoint").value = save.settings.ollama;
     $("xp").textContent = save.xp + " XP"; $("rank").textContent = rank();
   }
 
@@ -593,6 +593,7 @@ const Game = (() => {
     $("soundBtn").onclick = () => { save.settings.sound = !save.settings.sound; persist(); applySettings(); sfx("click"); if (save.settings.sound) Audio_.ambient(Hub.active ? "harbor" : "level"); };
     $("remixBtn").onclick = () => openEditor(current);
     $("speed").onchange = () => { save.settings.speed = $("speed").value; persist(); };
+    $("followCam").onchange = () => { save.settings.follow = $("followCam").checked; persist(); if (window.Render3D) Render3D.setFollow(save.settings.follow); };
     $("modal").addEventListener("click", e => { if (e.target === $("modal")) hideModal(); });
     window.addEventListener("hashchange", () => { const h = location.hash.replace("#", ""); if (h === "" && !$("screen-home").hidden) return; if (h === "") showScreen("home"); });
     route();

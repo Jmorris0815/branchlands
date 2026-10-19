@@ -212,7 +212,7 @@ const Render3D = (() => {
     const geo = OCEAN_LEVEL = new THREE.PlaneGeometry(90, 90, 110, 110); geo.rotateX(-Math.PI / 2);
     const mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false,
-      uniforms: { uHT: { value: null }, uHas: { value: 0 }, uHHalf: { value: 1 }, uHSize: { value: 1 }, uTime: { value: 0 }, uDeep: { value: new THREE.Color(0x1b5f9e) }, uShallow: { value: new THREE.Color(0x62c3e8) }, uSky: { value: new THREE.Color(0xd9e6f2) }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uFogColor: { value: new THREE.Color(0xd9e6f2) }, uFogDensity: { value: 0.012 } },
+      uniforms: { uHOff: { value: new THREE.Vector2() }, uHT: { value: null }, uHas: { value: 0 }, uHHalf: { value: 1 }, uHSize: { value: 1 }, uTime: { value: 0 }, uDeep: { value: new THREE.Color(0x1b5f9e) }, uShallow: { value: new THREE.Color(0x62c3e8) }, uSky: { value: new THREE.Color(0xd9e6f2) }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uFogColor: { value: new THREE.Color(0xd9e6f2) }, uFogDensity: { value: 0.012 } },
       vertexShader: `
         uniform float uTime; varying vec3 vWorld; varying vec3 vN;
         float h(vec2 p){ return sin(p.x*1.6+uTime*1.1)*0.035 + sin(p.y*2.1-uTime*1.5)*0.03 + sin((p.x+p.y)*0.8+uTime*0.7)*0.045 + sin(p.x*4.0-p.y*3.0+uTime*2.2)*0.012; }
@@ -220,9 +220,9 @@ const Render3D = (() => {
           float e = 0.06; float hx = h(wp.xz+vec2(e,0.0)) - y; float hz = h(wp.xz+vec2(0.0,e)) - y;
           vN = normalize(vec3(-hx/e, 1.0, -hz/e)); vWorld = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
       fragmentShader: `
-        uniform float uTime; uniform vec3 uDeep, uShallow, uSky, uSunDir, uFogColor; uniform float uFogDensity; uniform sampler2D uHT; uniform float uHas, uHHalf, uHSize; varying vec3 vWorld; varying vec3 vN;
+        uniform float uTime; uniform vec3 uDeep, uShallow, uSky, uSunDir, uFogColor; uniform float uFogDensity; uniform sampler2D uHT; uniform float uHas, uHHalf, uHSize; uniform vec2 uHOff; varying vec3 vWorld; varying vec3 vN;
         void main(){ vec3 V = normalize(cameraPosition - vWorld); vec3 N = normalize(vN);
-          float depth = 9.0; if (uHas > 0.5) depth = vWorld.y - texture2D(uHT, (vWorld.xz + uHHalf) / uHSize).r;
+          float depth = 9.0; if (uHas > 0.5) { float ground = texture2D(uHT, (vWorld.xz - uHOff + uHHalf) / uHSize).r; if (ground > -0.07) discard; depth = -0.1 - ground; } // dry land: wave crests must not poke through
           float fres = pow(1.0 - max(dot(N,V),0.0), 2.5);
           vec3 col = mix(uDeep, uShallow, 0.25 + 0.5*max(dot(N,uSunDir),0.0));
           col = mix(col, uSky, fres*0.7);
@@ -407,13 +407,15 @@ const Render3D = (() => {
       else if ("1234".includes(c)) { const m = padMesh(c); m.position.set(x, 0, y); world.add(m); pads.push(m); }
     }
     // numbers along two edges: the x of each column (top) and the y of each row (left), same as robot.x() / robot.y()
-    for (let x = 0; x < w; x++) world.add(label(String(x), x, -0.95, 0.56));
-    for (let y = 0; y < h; y++) world.add(label(String(y), -0.95, y, 0.56));
+    edgeLabels = [];
+    for (let x = 0; x < w; x++) { const l = label(String(x), x, -0.95, 0.56); edgeLabels.push(l); world.add(l); }
+    for (let y = 0; y < h; y++) { const l = label(String(y), -0.95, y, 0.56); edgeLabels.push(l); world.add(l); }
     trail = new THREE.Group(); world.add(trail); moveN = 0;
     for (const k in state.items) { const [x, y] = k.split(",").map(Number); const m = item(state.items[k]); m.position.set(x, 0, y); m.userData.phase = Math.random() * 6; world.add(m); items[k] = m; }
     for (const c of state.crabs || []) { const m = crabMesh(); m.position.set(c.x, 0, c.y); world.add(m); crabs[c.id] = m; }
     for (const p of state.props || []) { const m = propMesh(p); m.position.set(p.x, 0, p.y); world.add(m); propsList.push(m); }
     robot = robotMesh(); robot.position.set(state.robot.x, 0, state.robot.y); robot.rotation.y = -state.robot.dir * Math.PI / 2; world.add(robot);
+    if (!state.hub) buildLevelLand(w, h); else { ocean.material.uniforms.uHas.value = 0; levelLand = null; }
     // weather
     const center = new THREE.Vector3(w / 2 - 0.5, 0, h / 2 - 0.5);
     applyWeather(th, center, Math.max(w, h) * 0.75 + 1.5);
@@ -436,8 +438,8 @@ const Render3D = (() => {
   const draw = sync;
 
   // ---------- frame loop ----------
-  function frame(now) {
-    requestAnimationFrame(frame);
+  function frame(now) { requestAnimationFrame(frame); tick(now); }
+  function tick(now) {
     if (!active || !(state || roam) || !canvas || canvas.offsetParent === null) { lastNow = now; return; }
     const dt = Math.min(0.05, (now - lastNow) / 1000 || 0.016); lastNow = now; clock += dt;
     ocean.material.uniforms.uTime.value = clock;
@@ -458,7 +460,18 @@ const Render3D = (() => {
     cam.look.copy(cam.center).lerp(cam.follow, phone ? 0.85 : 0.25); // on a phone the camera follows Bolt closely
     const dist = cam.dist * (1 + (1 - ik) * 0.9), el = cam.el + (1 - ik) * 0.35, az = cam.az + sway - (1 - ik) * 0.6;
     camera.position.set(cam.look.x + Math.sin(az) * Math.cos(el) * dist, Math.sin(el) * dist + 0.3, cam.look.z + Math.cos(az) * Math.cos(el) * dist);
-    camera.lookAt(cam.look.x, 0.2, cam.look.z);
+    const lookP = new THREE.Vector3(cam.look.x, 0.2, cam.look.z);
+    if (levelLand) { for (const t of levelLand.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; } if (levelLand.grass) { levelLand.grass.uni.uTime.value = clock; if (robot) levelLand.grass.uni.uBolt.value.copy(robot.position); } }
+    // ride along: behind Bolt while the code runs, back to the planning view afterwards
+    ride.k += ((ride.on && ride.playing ? 1 : 0) - ride.k) * Math.min(1, dt * 2.5);
+    for (const l of edgeLabels) l.visible = ride.k < 0.3; // the coordinates are for planning; they would fill the screen up close
+    if (robot && ride.k > 0.002) {
+      const ry = robot.rotation.y, fx2 = Math.cos(ry), fz2 = -Math.sin(ry), want = Math.atan2(-fx2, -fz2);
+      let d = want - ride.az; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; ride.az += d * Math.min(1, dt * 3);
+      const rd = phone ? 5.2 : 4.4, re = 0.45, fp = new THREE.Vector3(robot.position.x + Math.sin(ride.az) * Math.cos(re) * rd, robot.position.y + 0.4 + Math.sin(re) * rd, robot.position.z + Math.cos(ride.az) * Math.cos(re) * rd);
+      const e = ride.k * ride.k * (3 - 2 * ride.k); camera.position.lerp(fp, e); lookP.lerp(new THREE.Vector3(robot.position.x, robot.position.y + 0.5, robot.position.z), e);
+    } else if (robot) { const ry = robot.rotation.y; ride.az = Math.atan2(-Math.cos(ry), Math.sin(ry)); }
+    camera.lookAt(lookP);
     if (quality === "realistic") composer.render(); else renderer.render(scene, camera);
     drawBubble();
   }
@@ -592,9 +605,9 @@ const Render3D = (() => {
     mat.customProgramCacheKey = () => "grass";
     const m = new THREE.InstancedMesh(blade, mat, N); m.receiveShadow = true; m.castShadow = false; m.frustumCulled = false;
     const M = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
-    let k = 0, tries = 0; const R = town.radius + 2;
+    let k = 0, tries = 0; const R = town.radius + 2, ox = town.cx || 0, oz = town.cz || 0;
     while (k < N && tries < N * 6) {
-      tries++; const x = (Math.random() * 2 - 1) * R, z = (Math.random() * 2 - 1) * R, y = height(x, z);
+      tries++; const x = ox + (Math.random() * 2 - 1) * R, z = oz + (Math.random() * 2 - 1) * R, y = height(x, z);
       if (y < 0.45) continue; // no grass on sand
       if (Math.hypot(x - town.plaza.x, z - town.plaza.z) < town.plaza.r + 0.3) continue;
       if (flats.some(f => f.r < 3 && Math.hypot(x - f.x, z - f.z) < f.r * 0.6)) continue; // keep paving and doorsteps clear
@@ -687,6 +700,66 @@ const Render3D = (() => {
     }
     g.userData.phase = Math.random() * 6; return g;
   }
+  // ---------- levels as places: an island around every board, and a camera that rides along ----------
+  // The board keeps its countable tiles, but it now sits in a real landscape in the zone's colours: rolling ground,
+  // grass, trees and rocks, a beach and surf. While the code runs the camera follows Bolt from behind; when the
+  // run ends it eases back to the overhead planning view.
+  const LAND = {
+    sand:    { tint: 0xe6dccb, sandTo: 0.55, trees: 10, rocks: 8, apples: false },
+    grass:   { tint: 0xffffff, sandTo: 0.3,  trees: 22, rocks: 4, apples: true },
+    stone:   { tint: 0xc4c8cc, sandTo: 0.25, trees: 6,  rocks: 16, apples: false },
+    wood:    { tint: 0xffe0b8, sandTo: 0.35, trees: 14, rocks: 6, apples: false },
+    crystal: { tint: 0xa8d8d4, sandTo: 0.3,  trees: 8,  rocks: 10, apples: false, crystals: 10 },
+    ice:     { tint: 0xeef6ff, sandTo: 0.3,  trees: 8,  rocks: 8, apples: false, snow: true },
+  };
+  let levelLand = null, edgeLabels = [];
+  function buildLevelLand(w, h) {
+    const L = LAND[theme] || LAND.sand, cx = w / 2 - 0.5, cz = h / 2 - 0.5, R = Math.max(w, h) * 0.6 + 7;
+    const inBoard = (x, z, m) => x > -0.5 - m && x < w - 0.5 + m && z > -0.5 - m && z < h - 0.5 + m;
+    const seed = w * 13 + h * 7 + theme.length; let sd = seed; const rand = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+    const hills = Array.from({ length: 5 }, () => { const a = rand() * 6.28, d = R * (0.55 + rand() * 0.3); return { x: cx + Math.cos(a) * d, z: cz + Math.sin(a) * d, r: 2.5 + rand() * 3, h: 0.6 + rand() * 1.4 }; });
+    const height = (x, z) => {
+      const dx = x - cx, dz = z - cz, r = Math.hypot(dx, dz), a = Math.atan2(dz, dx), edge = R + Math.sin(a * 3 + seed) * 1.4 + Math.sin(a * 5 + 1) * 0.8;
+      let y = 0.55 + 0.3 * Math.sin(x * 0.4 + 1) * Math.sin(z * 0.33 - 0.5);
+      for (const hl of hills) { const d = Math.hypot(x - hl.x, z - hl.z) / hl.r; y += hl.h * Math.exp(-d * d * 2); }
+      const shore = smoothstep(edge - 4, edge + 2, r); y = y * (1 - shore) - 1.6 * shore;
+      // the board sits on a flat shelf just under its tiles
+      const bx = Math.max(-0.5 - x, 0, x - (w - 0.5)), bz = Math.max(-0.5 - z, 0, z - (h - 0.5)), bd = Math.hypot(bx, bz);
+      const k = smoothstep(0.9, 3.2, bd); return -0.05 * (1 - k) + y * k;
+    };
+    const town = { size: R * 2 + 12 };
+    const terr = terrainMesh(town, (x, z) => height(x + cx, z + cz)); terr.position.set(cx, 0, cz);
+    // zone colouring on top of the painted ground
+    const col = terr.geometry.attributes.color, tint = new THREE.Color(L.tint), spl = terr.geometry.attributes.aSplat, P = terr.geometry.attributes.position;
+    for (let i = 0; i < col.count; i++) {
+      col.setXYZ(i, col.getX(i) * tint.r, col.getY(i) * tint.g, col.getZ(i) * tint.b);
+      const y = P.getY(i), sand = 1 - smoothstep(L.sandTo - 0.3, L.sandTo + 0.1, y);
+      if (L.snow) spl.setXYZW(i, 0.2 + sand, 0.02, 0.02, spl.getW(i)); // pale, sandy-white ground for the winter island
+      else if (y < L.sandTo + 0.2) spl.setXYZW(i, Math.max(spl.getX(i), sand), spl.getY(i) * (1 - sand), spl.getZ(i) * (1 - sand), spl.getW(i));
+    }
+    if (L.snow) for (let i = 0; i < col.count; i++) col.setXYZ(i, 1.35, 1.38, 1.45);
+    col.needsUpdate = true; spl.needsUpdate = true;
+    world.add(terr);
+    const colliders = [], flats = [], put = (m, x, z) => { m.position.set(x, height(x, z) - 0.05, z); world.add(m); return m; };
+    const spot = (margin) => { for (let t = 0; t < 60; t++) { const a = rand() * 6.28, d = rand() * (R - 2), x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; const front = z > h - 1 && Math.abs(x - cx) < w * 0.5 + 7; // the camera looks from the south: keep that side open
+        if (!front && !inBoard(x, z, margin) && height(x, z) > 0.35 && !colliders.some(c => Math.hypot(c.x - x, c.z - z) < c.r + 0.8)) return { x, z }; } return null; };
+    const trees = [];
+    for (let i = 0; i < (phone ? Math.ceil(L.trees / 2) : L.trees); i++) { const s = spot(2.2); if (!s) continue; const t = leafyTree(2.2 + rand() * 1.4, L.apples && rand() < 0.6); t.rotation.y = rand() * 6; if (L.snow) t.userData.crown.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.set(0xd8ecf0); } }); put(t, s.x, s.z); trees.push(t); colliders.push({ x: s.x, z: s.z, r: 0.4 }); }
+    for (let i = 0; i < L.rocks; i++) { const s = spot(1.6); if (!s) continue; const m = wall("rock", 0x8f7a5e); m.scale.setScalar(1.2 + rand() * 1.4); m.rotation.y = rand() * 6; put(m, s.x, s.z); colliders.push({ x: s.x, z: s.z, r: 0.6 }); }
+    for (let i = 0; i < (L.crystals || 0); i++) { const s = spot(1.6); if (!s) continue; const m = wall("crystal", 0x8ff0f4); m.scale.setScalar(1.2 + rand()); put(m, s.x, s.z); colliders.push({ x: s.x, z: s.z, r: 0.5 }); }
+    let grass = null;
+    if (!L.snow && theme !== "stone") {
+      grass = grassField({ radius: R, cx, cz, plaza: { x: 1e6, z: 1e6, r: 0 } }, (x, z) => (inBoard(x, z, 1.2) ? -9 : height(x, z)), colliders, flats);
+      grass.mesh.position.set(0, 0, 0); world.add(grass.mesh);
+    }
+    const ht = heightTexture(town, (x, z) => height(x + cx, z + cz));
+    const u = ocean.material.uniforms; u.uHT.value = ht.tex; u.uHas.value = 1; u.uHHalf.value = ht.half; u.uHSize.value = ht.size; u.uHOff.value.set(cx, cz);
+    if (levelLand && levelLand.ht) levelLand.ht.tex.dispose();
+    levelLand = { trees, grass, ht };
+  }
+  // follow camera during a run
+  const ride = { on: true, k: 0, playing: false, az: 0, el: 0.5, dist: 5 };
+  function setFollow(on) { ride.on = !!on; }
   // town furniture that is not a level piece
   function lampMesh(withLight) {
     const g = new THREE.Group(), iron = std({ color: 0x2b2f36, metalness: 0.6, roughness: 0.5 });
@@ -1029,7 +1102,7 @@ const Render3D = (() => {
     buildWalkGrid(r); addLife(r);
     r.grass = grassField(town, height, r.colliders, flats); world.add(r.grass.mesh);
     r.clouds = cloudLayer(); world.add(r.clouds);
-    const ht = heightTexture(town, height); r.ht = ht; Object.assign(ocean.material.uniforms, {}); ocean.material.uniforms.uHT.value = ht.tex; ocean.material.uniforms.uHas.value = 1; ocean.material.uniforms.uHHalf.value = ht.half; ocean.material.uniforms.uHSize.value = ht.size;
+    const ht = heightTexture(town, height); r.ht = ht; Object.assign(ocean.material.uniforms, {}); ocean.material.uniforms.uHT.value = ht.tex; ocean.material.uniforms.uHas.value = 1; ocean.material.uniforms.uHOff.value.set(0, 0); ocean.material.uniforms.uHHalf.value = ht.half; ocean.material.uniforms.uHSize.value = ht.size;
     for (const q of r.props) if (q.p.kind === "portal" && Math.hypot(q.p.x - sx, q.p.z - sz) - q.r < 0.6) r.latch = q; // back from a level: do not reopen the gate you are standing in
     ocean.geometry = bigOceanGeo(); ocean.position.set(0, -0.1, 0);
     r.lightDir = applyWeather(HARBOR, new THREE.Vector3(sx, 0, sz), 17);
@@ -1160,7 +1233,7 @@ const Render3D = (() => {
     tween(ms, k => { c.position.x = from.x + (to.x - from.x) * k; c.position.z = from.y + (to.y - from.y) * k; }).then(() => c.userData.moving = false);
   }
   async function play(events, speed, onEvent) {
-    cancelFlag = false;
+    cancelFlag = false; ride.playing = events.length > 2;
     const instant = document.hidden || !ok;
     const base = instant ? 0 : speed === "fast" ? 55 : speed === "slow" ? 320 : 160;
     for (const ev of events) {
@@ -1185,12 +1258,13 @@ const Render3D = (() => {
         case "pinch": bubble = "ouch!"; burst(ev.x, ev.y, 0xe0523a, 20); await tween(base * 2, k => { robot.rotation.z = Math.sin(k * Math.PI * 6) * 0.15 * (1 - k); }); robot.rotation.z = 0; await sleep(base); break;
       }
     }
+    ride.playing = false;
     sync();
   }
   function cancel() { cancelFlag = true; }
   function celebrate() { if (!ok || !state || !state.goal) return; for (let i = 0; i < 4; i++) setTimeout(() => burst(state.goal.x, state.goal.y, [0x5fcf8f, 0xf0b24a, 0x7fb3ff, 0xff7b72][i], 30, 3), i * 180); }
 
-  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, setPaint, setLook, pickTile, roam: roamApi, get ok() { return ok; } };
+  return { init, load, draw, play, cancel, celebrate, setActive, setQuality, setPaint, setLook, pickTile, setFollow, get scene() { return scene; }, get ride() { return ride; }, tick: (ms) => { lastNow = performance.now() - ms; tick(performance.now()); }, roam: roamApi, get ok() { return ok; } };
 })();
 window.Render3D = Render3D;
 window.dispatchEvent(new Event("render3d-ready"));
