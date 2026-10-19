@@ -40,7 +40,7 @@ const Render3D = (() => {
     tree:     { fit: "h", size: 1.15 }, rock: { fit: "w", size: 0.92 }, crate: { fit: "w", size: 0.84 }, pillar: { fit: "h", size: 0.95 }, crystal: { fit: "w", size: 0.95 }, ice: { fit: "w", size: 0.86 },
     crab:     { fit: "w", size: 0.62 },
     apple:    { fit: "h", size: 0.34, lift: 0.08 }, key: { fit: "w", size: 0.42, lift: 0.18 }, lens: { fit: "w", size: 0.45, lift: 0.12 },
-    villager: { fit: "h", size: 1.1 }, villager2: { fit: "h", size: 1.1 }, stall: { fit: "w", size: 1.05 },
+    villager: { fit: "h", size: 1.1 }, villager2: { fit: "h", size: 1.08 }, villager3: { fit: "h", size: 1.1 }, villager4: { fit: "h", size: 1.02 }, villager5: { fit: "h", size: 1.15 }, villager6: { fit: "h", size: 0.82 }, stall: { fit: "w", size: 1.05 },
   };
   const MODEL_BASE = "assets/models/", assetTpl = {}, assetWaiters = {}, gltfLoader = new GLTFLoader();
   function loadAsset(name) {
@@ -127,7 +127,8 @@ const Render3D = (() => {
       if (!p.locked) { const l = new THREE.PointLight(c, 1.5, 3, 2); l.position.set(0, 0.7, 0); g.add(l); }
     } else if (p.kind === "npc") {
       const vis = new THREE.Group(); g.add(vis); g.add(label(name, 0, 0, 0.5, 1.35)); g.userData.vis = vis;
-      useAsset(vis, name.length % 2 ? "villager" : "villager2", () => {
+      const model = p.model && ASSETS[p.model] ? p.model : (name.length % 2 ? "villager" : "villager2"); vis.userData.modelName = model;
+      useAsset(vis, model, () => {
         const c = new THREE.Color(p.color);
         vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4, clearcoat: 0.6 }), 0, 0.45, 0));
         vis.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
@@ -918,7 +919,7 @@ const Render3D = (() => {
     robot = robotMesh(); const sx = pose ? pose.x : room.start.x, sz = pose ? pose.z : room.start.z; robot.position.set(sx, 0.01, sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot;
     buildWalkGrid(r); for (const q of r.props) if ((q.p.kind === "exit") && Math.hypot(q.p.x - sx, q.p.z - sz) < 1.6) r.latch = q;
     r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = []; r.tracks = makeTracks(); world.add(r.tracks.mesh); r.prevFwd = 0; r.pitch = 0;
-    for (const q of r.props) if (q.p.kind === "npc" && q.vis) { const v = q.vis; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst); }; }
+    for (const q of r.props) if (q.p.kind === "npc" && q.vis) { const v = q.vis; const ad = A_POSE.has(v.userData.modelName) ? 0.32 : 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; }
     // indoor light: warm lamps, a soft window light, no sky or sea
     sky.visible = false; ocean.visible = false; scene.background = new THREE.Color(0x15110d); scene.fog = new THREE.FogExp2(0x15110d, 0.02);
     sun.color.set(0xfff0d8); sun.intensity = 0.4 + day * 0.9; r.lightDir = new THREE.Vector3(0.5, 1, 0.35).normalize();
@@ -1032,16 +1033,17 @@ const Render3D = (() => {
   // below the hips the two legs swing about a sideways axis (left and right opposite), the arms swing the other
   // way, the head turns about the neck, and the chest breathes. The cut-off points are fractions of the model's
   // height, which works for any standing person the Spark makes.
-  function rigHuman(inst) {
+  const A_POSE = new Set(["villager2", "villager3", "villager4", "villager5", "villager6"]); // made standing with arms out: lower them to the sides
+  function rigHuman(inst, armDown = 0) {
     const sets = [];
     inst.traverse(o => {
       if (!o.isMesh || o.userData.rigged) return; o.userData.rigged = true;
       const g = o.geometry; g.computeBoundingBox(); const b = g.boundingBox, h = b.max.y - b.min.y, hw = (b.max.x - b.min.x) / 2;
-      const u = { uPhase: { value: 0 }, uAmp: { value: 0 }, uHead: { value: 0 }, uNod: { value: 0 }, uBreath: { value: 0 }, uHip: { value: b.min.y + h * 0.47 }, uNeck: { value: b.min.y + h * 0.83 }, uShoulder: { value: b.min.y + h * 0.78 }, uC: { value: new THREE.Vector2((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2) }, uH: { value: h }, uHW: { value: hw } };
+      const u = { uArmDown: { value: armDown }, uGesture: { value: 0 }, uPhase: { value: 0 }, uAmp: { value: 0 }, uHead: { value: 0 }, uNod: { value: 0 }, uBreath: { value: 0 }, uHip: { value: b.min.y + h * 0.47 }, uNeck: { value: b.min.y + h * 0.83 }, uShoulder: { value: b.min.y + h * 0.78 }, uC: { value: new THREE.Vector2((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2) }, uH: { value: h }, uHW: { value: hw } };
       o.material = o.material.clone(); // geometry stays shared with the template
       o.material.onBeforeCompile = sh => {
         Object.assign(sh.uniforms, u);
-        sh.vertexShader = "uniform float uPhase, uAmp, uHead, uNod, uBreath, uHip, uNeck, uShoulder, uH, uHW; uniform vec2 uC;\n" +
+        sh.vertexShader = "uniform float uPhase, uAmp, uHead, uNod, uBreath, uHip, uNeck, uShoulder, uH, uHW, uArmDown, uGesture; uniform vec2 uC;\n" +
           "vec2 rot2(vec2 v, float a){ float c = cos(a), s = sin(a); return vec2(c*v.x - s*v.y, s*v.x + c*v.y); }\n" +
           sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
           {
@@ -1058,6 +1060,10 @@ const Render3D = (() => {
             float armK = smoothstep(uHW * 0.42, uHW * 0.62, abs(dx)) * smoothstep(uShoulder + uH * 0.04, uShoulder - uH * 0.02, p.y) * smoothstep(uHip - uH * 0.18, uHip, p.y);
             float aa = -sin(uPhase) * uAmp * 0.7 * sign(dx) * armK;
             vec2 ayz = rot2(vec2(p.y - uShoulder, p.z - uC.y), aa); p.y = mix(p.y, uShoulder + ayz.x, armK); p.z = mix(p.z, uC.y + ayz.y, armK);
+            // arms held out (A-pose) come down to the sides, about the shoulder
+            float sx = uC.x + sign(dx) * uHW * 0.4; vec2 xy = rot2(vec2(p.x - sx, p.y - uShoulder), -sign(dx) * uArmDown * armK); p.x = sx + xy.x; p.y = uShoulder + xy.y;
+            // talking: the right hand comes up and forward
+            float gk = armK * step(0.0, dx) * uGesture; vec2 gyz = rot2(vec2(p.y - uShoulder, p.z - uC.y), -1.1 * gk); p.y = uShoulder + gyz.x; p.z = uC.y + gyz.y;
             // chest breathing
             float chest = smoothstep(uHip, uHip + uH * 0.1, p.y) * smoothstep(uNeck, uNeck - uH * 0.06, p.y);
             p.x = uC.x + (p.x - uC.x) * (1.0 + uBreath * 0.012 * chest); p.z = uC.y + (p.z - uC.y) * (1.0 + uBreath * 0.02 * chest);
@@ -1078,13 +1084,13 @@ const Render3D = (() => {
   function rigSet(sets, k, v) { if (sets) for (const u of sets) u[k].value = v; }
   // fill group vis with a person model and rig it as soon as the model is there
   function person(vis, model, fallbackColor) {
-    vis.userData.onModel = inst => { vis.userData.rig = rigHuman(inst); };
+    vis.userData.onModel = inst => { vis.userData.rig = rigHuman(inst, A_POSE.has(model) ? 0.32 : 0); };
     useAsset(vis, model, () => {
       const c = new THREE.Color(fallbackColor);
       vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4 }), 0, 0.45, 0));
       vis.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
     });
-    if (vis.userData.model && !vis.userData.rig) vis.userData.rig = rigHuman(vis.userData.model);
+    if (vis.userData.model && !vis.userData.rig) vis.userData.rig = rigHuman(vis.userData.model, A_POSE.has(model) ? 0.32 : 0);
     return vis;
   }
   const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
@@ -1128,7 +1134,7 @@ const Render3D = (() => {
     const town = r.town, height = r.height;
     r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = [];
     // the talking townsfolk: rig them so heads turn and chests breathe
-    for (const q of r.props) if (q.p.kind === "npc" && q.m.userData.vis) { const v = q.m.userData.vis; q.vis = v; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst); }; q.phase = Math.random() * 6; }
+    for (const q of r.props) if (q.p.kind === "npc" && q.m.userData.vis) { const v = q.m.userData.vis; q.vis = v; const ad = A_POSE.has(v.userData.modelName) ? 0.32 : 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; q.phase = Math.random() * 6; }
     // strollers wander between spots around town
     const SPOTS = town.spots || [];
     const TINTS = [0xffffff, 0xd8e4ff, 0xffe2c8, 0xe2ffd8];
@@ -1163,6 +1169,7 @@ const Render3D = (() => {
   }
 
   function lifeFrame(r, dt, bx, bz) {
+    if (r.talking && modalHidden()) r.talking = null; // conversation closed some other way
     const SPOTS = r.town.spots || [];
     // talking townsfolk: breathe, shift weight, and look at Bolt with the head first, then the body
     for (const q of r.props) {
@@ -1172,7 +1179,7 @@ const Render3D = (() => {
       if (Math.abs(rel) > lim) m.rotation.y += Math.sign(rel) * Math.min(Math.abs(rel) - lim, dt * 2.2);
       q.head = (q.head || 0) + (Math.max(-lim, Math.min(lim, angDiff(want, m.rotation.y))) - (q.head || 0)) * Math.min(1, dt * 4);
       m.position.y = m.userData.baseY;
-      if (rig) { rigSet(rig, "uHead", q.head); rigSet(rig, "uBreath", Math.sin(clock * 1.7 + q.phase)); rigSet(rig, "uNod", d < 2.2 ? Math.sin(clock * 3 + q.phase) * 0.06 : 0); rigSet(rig, "uPhase", Math.sin(clock * 0.4 + q.phase) * 0.5); rigSet(rig, "uAmp", 0.05); }
+      if (rig) { const talk = r.talking === q.p.id; rigSet(rig, "uGesture", talk ? 0.35 + 0.35 * Math.sin(clock * 2.6 + q.phase) : 0); rigSet(rig, "uHead", q.head); rigSet(rig, "uBreath", Math.sin(clock * 1.7 + q.phase)); rigSet(rig, "uNod", talk ? Math.sin(clock * 4.2) * 0.07 : d < 2.2 ? Math.sin(clock * 3 + q.phase) * 0.06 : 0); rigSet(rig, "uPhase", Math.sin(clock * 0.4 + q.phase) * 0.5); rigSet(rig, "uAmp", 0.05); }
     }
     // strollers and robots: walk a found path to a new spot, stop, look around, pick another
     const walk = (w, isBot) => {
@@ -1382,6 +1389,7 @@ const Render3D = (() => {
     input(x, y) { if (roam) { roam.input.x = x; roam.input.y = y; if (x || y) { roam.target = null; roam.path = null; } } },
     near() { return roam && roam.near ? roam.near.p : null; },
     goto(x, z, prop) { if (roam) setTarget(roam, x, z, prop); }, // drive there on autopilot (a click on the ground does this)
+    talking(id) { if (roam) roam.talking = id || null; }, // the townsperson in conversation nods and gestures
     pose() { return roam ? { x: roam.bolt.position.x, z: roam.bolt.position.z, yaw: roam.yaw } : null; },
     // for tests: advance the town by dt seconds and draw it, without waiting for the animation loop
     step(dt = 1 / 60) { if (roam) { clock += dt; roamFrame(dt); stepParticles(dt); } },

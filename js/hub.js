@@ -249,10 +249,10 @@ const Hub = (() => {
     if (quests.length) h += `<button class="small" data-work="1">📜 Any work for me? (${quests.length})</button>`;
     h += `</div><div class="free"><input id="freeIn" type="text" placeholder="${api.ollama().model ? "Ask " + name.split(",")[0] + " anything (Ollama)" : "Free chat needs Ollama running (see the Oracle)"}" ${api.ollama().model ? "" : "disabled"}></div>
       <div class="row"><button id="closeBtn">Bye</button></div>`;
-    api.showModal(h);
+    api.showModal(h); if (window.Render3D) Render3D.roam.talking(id);
     $("modalBody").querySelectorAll("button[data-t]").forEach(b => b.onclick = () => { const t = d.topics[b.dataset.t]; api.sfx("click"); const a = t.a(k); talk(id, a + (t.go ? ` <button class="small primary" id="goLvl">Go to ${t.go(k)}</button>` : "") + (t.tab ? ` <button class="small" id="goTab">Open the ${t.tab}</button>` : "")); if ($("goLvl")) $("goLvl").onclick = () => { api.hideModal(); api.openLevel(LEVEL_BY_ID[t.go(k)]); }; if ($("goTab")) $("goTab").onclick = () => { api.hideModal(); api.openTown(t.tab); }; });
     const w = $("modalBody").querySelector("button[data-work]"); if (w) w.onclick = () => work(id);
-    $("closeBtn").onclick = () => { api.hideModal(); chat = []; };
+    $("closeBtn").onclick = () => { api.hideModal(); chat = []; if (window.Render3D) Render3D.roam.talking(null); };
     const fi = $("freeIn"); if (fi && !fi.disabled) fi.onkeydown = async (e) => { if (e.key !== "Enter" || !fi.value.trim()) return; const q = fi.value.trim(); fi.value = ""; fi.disabled = true; fi.placeholder = "…"; const r = await freeTalk(id, q, k); talk(id, `<span class="muted">You: ${q.replace(/</g, "&lt;")}</span><br>${r.replace(/</g, "&lt;")}`); };
   }
   function work(id) {
