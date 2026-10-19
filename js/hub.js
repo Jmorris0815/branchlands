@@ -12,15 +12,34 @@ const Hub = (() => {
     { kind: "portal", zone: 1, wx: 19.5, wz: -7.5 }, { kind: "portal", zone: 2, wx: -19, wz: -6.5 }, { kind: "portal", zone: 3, wx: -20.5, wz: 3 }, { kind: "portal", zone: 4, wx: 20, wz: 5 },
     { kind: "portal", zone: 5, wx: 12, wz: -17.5 }, { kind: "portal", zone: 6, wx: 14.5, wz: 12.5 }, { kind: "portal", zone: 7, wx: -10.5, wz: -17.5 }, { kind: "portal", zone: 8, wx: -15, wz: 12 },
     { kind: "npc", id: "marisol", wx: 3.2, wz: 13, label: "⚓ Marisol", color: "#c8553d" }, { kind: "npc", id: "pip", wx: -12.5, wz: -9.5, label: "🧑‍🌾 Old Pip", color: "#6a8c3a" },
-    { kind: "npc", id: "odo", wx: -16, wz: 7, label: "🛶 Odo", color: "#4a6b86" }, { kind: "npc", id: "wrenna", wx: 11, wz: 1.5, label: "🔧 Wrenna", color: "#b07a2a" },
-    { kind: "npc", id: "clock", wx: 12.5, wz: -10.5, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", wx: 6, wz: 9, label: "🧔 Dad", color: "#3f7a6a" },
+    { kind: "npc", id: "odo", wx: -16, wz: 7, label: "🛶 Odo", color: "#4a6b86" }, { kind: "npc", id: "wrenna", inside: "workshop", wx: 1.5, wz: -1.6, label: "🔧 Wrenna", color: "#b07a2a" },
+    { kind: "npc", id: "clock", inside: "tower", wx: -1.2, wz: -1.0, label: "🕰️ Clockwright", color: "#6c5a8e" }, { kind: "npc", id: "dad", wx: 6, wz: 9, label: "🧔 Dad", color: "#3f7a6a" },
     { kind: "npc", id: "oracle", wx: -6.5, wz: -13.5, label: "🔮 Oracle", color: "#5fb8b0" }, { kind: "npc", id: "nyx", wx: 16.5, wz: 10, label: "🏴‍☠️ Nyx", color: "#2f3e5c" },
     { kind: "stall", tab: "market", wx: -9.5, wz: 2.5, label: "🏪 Market" }, { kind: "stall", tab: "workshop", wx: 9.5, wz: 3.5, label: "🔧 Workshop" },
     { kind: "stall", tab: "paint", wx: 8, wz: -6.5, label: "🎨 Style" }, { kind: "stall", tab: "pack", wx: -8.5, wz: -6, label: "🎒 Storehouse" },
     { kind: "stall", tab: "board", wx: -4, wz: 10.5, label: "📜 Quest board" }, { kind: "stall", tab: "skills", wx: 5.5, wz: -11, label: "📈 Skills" },
     { kind: "sign", wx: 0, wz: -9.5, label: "🗺️ World map" },
     { kind: "stall", tab: "family", wx: -12.5, wz: -2, label: "👨‍👩‍👦 Family" },
+    // doors into buildings (drive through them)
+    { kind: "door", to: "workshop", wx: 13.95, wz: -0.9, label: "🔧 Wrenna's Workshop" },
+    { kind: "door", to: "tower", wx: 10.7, wz: -12.55, label: "🕰️ The Time Tower" },
   ];
+  // Rooms you can drive into. Each has a size (w × d), what stands in it (things), the people and things you can
+  // use (props: npcs come from PROPS with inside: <room>), and where Bolt appears (start, by the way out).
+  const INTERIORS = {
+    workshop: { title: "Wrenna's Workshop", w: 12, d: 9, wall: 0xe2d2b4, start: { x: 0, z: 3.2 }, outside: { x: 12.6, z: -0.8, yaw: Math.PI },
+      things: [{ kind: "rug", x: 0, z: 0.6 }, { kind: "bench", x: -3.2, z: -3.6, r: 1.1 }, { kind: "toolwall", x: -3.2, z: -4.38 }, { kind: "anvil", x: 3.6, z: -2.4, r: 0.6 }, { kind: "fireplace", x: 4.6, z: -4.1, r: 0.9 },
+        { kind: "lift", x: 3.8, z: 1.6, r: 0.9, ry: -0.5 }, { kind: "barrel", x: -5.3, z: 3.6, r: 0.45 }, { kind: "barrel", x: -4.6, z: 3.9, r: 0.45 }, { kind: "shelf", x: -5.75, z: -0.5, ry: Math.PI / 2, r: 0.5 }, { kind: "shelf", x: 5.75, z: 0.2, ry: -Math.PI / 2, r: 0.5 },
+        { kind: "lantern", x: -2, z: -1 }, { kind: "lantern", x: 2.5, z: 1.2 }],
+      props: [{ kind: "spot", tab: "workshop", x: -3.2, z: -2.4, label: "🔧 Workbench: upgrades and crafting", color: "#f0b24a" }, { kind: "spot", tab: "paint", x: 2.6, z: 2.7, label: "🎨 Paint bay: style Bolt", color: "#c9a7ff" },
+        { kind: "exit", x: 0, z: 4.3, ry: Math.PI, label: "🚪 Back to town" }] },
+    tower: { title: "The Time Tower", w: 10, d: 10, wall: 0xc9ccd4, floor: "stone", start: { x: 0, z: 3.4 }, outside: { x: 10.1, z: -11.8, yaw: Math.PI * 0.75 },
+      things: [{ kind: "rug", x: 0, z: 0.5 }, { kind: "pendulum", x: 0, z: -3.6 }, { kind: "desk", x: -3, z: -2.2, r: 0.9, ry: 0.4 }, { kind: "shelf", x: -4.75, z: 1, ry: Math.PI / 2, r: 0.5 }, { kind: "shelf", x: 4.75, z: 1, ry: -Math.PI / 2, r: 0.5 },
+        { kind: "lantern", x: -1.8, z: 0 }, { kind: "lantern", x: 2, z: -1.5 }],
+      gears: [{ x: 0, y: 2.1, z: -4.85, r: 1.1, teeth: 18, speed: 0.25 }, { x: 1.95, y: 2.75, z: -4.8, r: 0.62, teeth: 11, speed: -0.45, color: 0xc9a227 }, { x: -1.9, y: 1.4, z: -4.8, r: 0.7, teeth: 12, speed: -0.39 }, { x: 3.2, y: 1.5, z: -4.75, r: 0.4, teeth: 8, speed: 0.7, color: 0xc9a227 }],
+      banners: [{ x: -4.85, z: -2.2, ry: Math.PI / 2, lines: ["a1b2c3", "d4e5f6", "main", "merge!"] }, { x: 4.85, z: -2.2, ry: -Math.PI / 2, lines: ["git add", "commit", "branch", "push"], bg: "#3d2c4a" }],
+      props: [{ kind: "spot", map: true, x: 2.6, z: -1.6, label: "🗺️ Star chart: the world map", color: "#7fb3ff" }, { kind: "exit", x: 0, z: 4.3, ry: Math.PI, label: "🚪 Back to town" }] },
+  };
   // The rest of the 3D island: scenery you cannot talk to. render3d.js shapes the land from this (a wobbly coast of
   // radius `radius`, a bay for the harbour, `hills`, flat `plaza` cobbles and flat pads under every building).
   const H = (x, z, s = 2.6) => ({ kind: "house", x, z, s }), T = (x, z, s = 2.2) => ({ kind: "tree", x, z, s, ry: (x * 7 + z * 3) % 6 }), RK = (x, z, s = 1.7) => ({ kind: "rock", x, z, s, ry: (x + z) % 6 });
@@ -45,9 +64,9 @@ const Hub = (() => {
       { x: -12, z: 0 }, { x: 12, z: 0 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: 15, z: 7 }, { x: -17, z: 4 }, { x: 9, z: -9 }],
     strollers: [{ from: 0 }, { from: 5 }, { from: 9 }, { from: 13, tint: 0xcfd8ff }, { from: 14 }],
     bots: [{ from: 3, color: "#c8553d" }, { from: 7, color: "#3f9a6a", s: 0.7 }, { from: 11, color: "#e6b422", s: 0.75 }],
-    get props() { return props().map(p => ({ ...p, x: p.wx, z: p.wz })); },
+    get props() { return props().filter(p => !p.inside).map(p => ({ ...p, x: p.wx, z: p.wz })); },
   };
-  let active = false, nearProp = null, saveT = null; const keys = new Set();
+  let active = false, nearProp = null, saveT = null, room = null; const keys = new Set(); // room: the interior Bolt is in, or null in town
 
   function props() { return PROPS.map(p => p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
 
@@ -57,7 +76,7 @@ const Hub = (() => {
     $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false;
     const r = api.R.pick();
     if (!r) { renderPanel(); return; } // 3D still loading: render3d-ready calls open() again
-    r.setLook(RPG.look()); r.roam.start(TOWN, hooks, s.hub3 || null);
+    r.setLook(RPG.look()); room = null; r.roam.start(TOWN, hooks, s.hub3 || null);
     clearInterval(saveT); saveT = setInterval(() => { if (active) remember(); }, 4000);
     renderPanel();
   }
@@ -66,7 +85,7 @@ const Hub = (() => {
     if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true;
   }
-  function remember() { if (!window.Render3D) return; const p = Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.persistSave(); } }
+  function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.persistSave(); } } // inside a room, a reload puts you just outside its door
 
   // ---------- free roam (3D) ----------
   const hooks = {
@@ -99,8 +118,20 @@ const Hub = (() => {
     const m = ["arrowright", "d", "arrowdown", "s", "arrowleft", "a", "arrowup", "w"].includes(k);
     if (m) { e.preventDefault(); keys.add(k); sendInput(); } else if (k === "e" || k === "enter" || k === " ") { e.preventDefault(); interactNear(); }
   }
+  function enterRoom(id) {
+    const R = INTERIORS[id]; if (!R || !window.Render3D) return; remember(); fade(() => {
+      room = id; nearProp = null;
+      const people = PROPS.filter(p => p.inside === id).map(p => ({ ...p, x: p.wx, z: p.wz }));
+      Render3D.roam.enter({ ...R, props: R.props.concat(people) }, hooks, null); renderPanel(); api.sfx("doors");
+    });
+  }
+  function leaveRoom() { const R = INTERIORS[room]; if (!R) return; fade(() => { room = null; nearProp = null; Render3D.roam.start(TOWN, hooks, R.outside); remember(); renderPanel(); api.sfx("doors"); }); }
+  function fade(fn) { const f = document.createElement("div"); f.className = "roomfade"; $("world3d").parentNode.appendChild(f); requestAnimationFrame(() => f.classList.add("on")); setTimeout(() => { fn(); f.classList.remove("on"); setTimeout(() => f.remove(), 400); }, 260); }
   function interact(p) {
     api.sfx("click");
+    if (p.kind === "door") return enterRoom(p.to);
+    if (p.kind === "exit") return leaveRoom();
+    if (p.kind === "spot") return p.map ? api.showScreen("map") : api.openTown(p.tab);
     if (p.kind === "npc") talk(p.id);
     else if (p.kind === "stall") api.openTown(p.tab);
     else if (p.kind === "sign") api.showScreen("map");
@@ -127,7 +158,7 @@ const Hub = (() => {
       const p = nearProp, phone = document.documentElement.dataset.device === "phone";
       el.innerHTML = `<div class="zonechip">⚓ Harbor Town</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. Dark gates are sealed until you finish the zone before them."}</p>
-        <div id="nearby">${p ? `<button class="primary" data-near="1">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + (p.locked ? " Sealed: " : " Enter ") + ZONES[p.zone - 1].name : (p.kind === "npc" ? "🗣️ Talk to " : "Open the ") + p.label}</button>` : `<span class="muted">Nobody within reach. The quest board and Marisol are down by the harbour, the shops ring the plaza, the portals stand along the shore.</span>`}</div>
+        <div id="nearby">${p ? `<button class="primary" data-near="1">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + (p.locked ? " Sealed: " : " Enter ") + ZONES[p.zone - 1].name : p.kind === "door" ? "🚪 Go into " + p.label : p.kind === "exit" ? "🚪 Back to town" : (p.kind === "npc" ? "🗣️ Talk to " : "Use: ") + p.label}</button>` : room ? `<span class="muted">You're in ${INTERIORS[room].title}. Drive to the glowing rings to use things, talk to whoever is here, and leave by the door.</span>` : `<span class="muted">Nobody within reach. The quest board and Marisol are down by the harbour, the shops ring the plaza, the portals stand along the shore. Lit doorways lead inside: Wrenna's Workshop and the Time Tower.</span>`}</div>
         <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()} · ${LEVELS.filter(l => api.completed()[l.id]).length}/${LEVELS.length} missions</p>`;
       const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
       return;
@@ -241,6 +272,6 @@ const Hub = (() => {
     catch (e) { return "(The free-talk line is down: " + (e.message || e) + ". Is Ollama running with OLLAMA_ORIGINS set?)"; }
   }
 
-  return { init, open, close, pressE: interactNear, get active() { return active; }, PROPS, TOWN };
+  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, get room() { return room; }, get active() { return active; }, PROPS, TOWN, INTERIORS };
 })();
 window.Hub = Hub;

@@ -133,6 +133,17 @@ const Render3D = (() => {
         vis.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
         vis.add(mesh(new THREE.CylinderGeometry(0.19, 0.23, 0.08, 16), std({ color: c.clone().multiplyScalar(0.6) }), 0, 0.99, 0));
       });
+    } else if (p.kind === "door" || p.kind === "exit") {
+      const wood = std({ color: 0x4a3324, roughness: 0.85 }), slab = std({ color: 0xffffff, map: texture("planks", 0x7a4a2a), roughness: 0.85 });
+      for (const sx of [-0.62, 0.62]) g.add(mesh(new THREE.BoxGeometry(0.16, 2.1, 0.2), wood, sx, 1.05, 0));
+      g.add(mesh(new THREE.BoxGeometry(1.44, 0.18, 0.22), wood, 0, 2.15, 0));
+      const d = mesh(new THREE.BoxGeometry(1.08, 2.0, 0.08), slab, -0.54, 1.0, 0); d.geometry.translate(0.54, 0, 0); d.rotation.y = -1.1; g.add(d);
+      g.add(mesh(new THREE.PlaneGeometry(1.08, 2.0), std({ color: 0x8a6a48, emissive: 0xffa050, emissiveIntensity: p.kind === "door" ? 0.55 : 0.25, side: THREE.DoubleSide }), 0, 1.0, -0.02));
+      const bulb = std({ color: 0xffe2a8, emissive: 0xffb347, emissiveIntensity: 2.4 }); g.add(mesh(new THREE.BoxGeometry(0.16, 0.22, 0.16), bulb, 0.82, 1.9, 0.12));
+      g.add(label(name, 0, 0, 0.5, 2.6));
+    } else if (p.kind === "spot") {
+      const c = new THREE.Color(p.color || 0xf0b24a); const ring = mesh(new THREE.TorusGeometry(0.42, 0.04, 8, 36), std({ color: c, emissive: c, emissiveIntensity: 1.6 })); ring.rotation.x = Math.PI / 2; ring.castShadow = false; const spin = new THREE.Group(); spin.position.y = 0.03; spin.add(ring); for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2, d = mesh(new THREE.SphereGeometry(0.05, 8, 6), std({ color: c, emissive: c, emissiveIntensity: 2.2 }), Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42); spin.add(d); } g.add(spin); g.userData.spin = spin;
+      g.add(label(name, 0, 0, 0.5, 1.5));
     } else {
       const vis = new THREE.Group(); g.add(vis); g.add(label(name, 0, 0, 0.5, 1.3));
       const build = () => {
@@ -809,6 +820,120 @@ const Render3D = (() => {
     if (r.todT > 0.25) { const full = r.envT > 4; r.todT = 0; if (full) r.envT = 0; applyTimeOfDay(r, full); }
     r.stars.position.copy(camera.position); r.moon.position.copy(camera.position).addScaledVector(r.moonDir, 250);
   }
+  // ---------- interiors: rooms you can drive into ----------
+  // A building's door in town is a prop of kind "door"; driving through it swaps the town for a furnished room
+  // built here from a small description in hub.js (INTERIORS): size, style, where the people and the things you
+  // can use stand. The wall between the camera and Bolt fades out so you can always see him.
+  function plasterTex(hex) { const key = "plaster" + hex; if (texCache[key]) return texCache[key]; const b = fbmTex(256, n => { const c = new THREE.Color(hex); const k = 0.88 + n * 0.2; return [c.r * 255 * k, c.g * 255 * k, c.b * 255 * k]; }); const t = new THREE.CanvasTexture(b.c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return texCache[key] = t; }
+  function gearMesh(r, teeth, color) {
+    const g = new THREE.Group(), m = std({ color, metalness: 0.85, roughness: 0.35 });
+    const ring = mesh(new THREE.CylinderGeometry(r, r, 0.12, 40), m); ring.rotation.x = Math.PI / 2; g.add(ring);
+    const hub = mesh(new THREE.CylinderGeometry(r * 0.25, r * 0.25, 0.2, 20), std({ color: 0x3a3226, metalness: 0.6, roughness: 0.5 })); hub.rotation.x = Math.PI / 2; g.add(hub);
+    for (let i = 0; i < teeth; i++) { const a = i / teeth * Math.PI * 2, t = mesh(new THREE.BoxGeometry(r * 0.16, r * 0.22, 0.12), m, Math.cos(a) * (r + r * 0.08), Math.sin(a) * (r + r * 0.08), 0); t.rotation.z = a + Math.PI / 2; g.add(t); }
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2, s = mesh(new THREE.BoxGeometry(r * 0.75, r * 0.07, 0.08), m, Math.cos(a) * r * 0.45, Math.sin(a) * r * 0.45, 0); s.rotation.z = a; g.add(s); }
+    return g;
+  }
+  function bannerTex(lines, bg) {
+    const c = document.createElement("canvas"); c.width = 256; c.height = 512; const g = c.getContext("2d"); g.fillStyle = bg; g.fillRect(0, 0, 256, 512);
+    g.strokeStyle = "#e6c36a"; g.lineWidth = 6; g.strokeRect(10, 10, 236, 492); g.fillStyle = "#f4e6c0"; g.font = "700 26px monospace"; g.textAlign = "center";
+    lines.forEach((l, i) => { g.beginPath(); g.arc(128, 70 + i * 80, 12, 0, 7); g.fill(); if (i < lines.length - 1) g.fillRect(126, 82 + i * 80, 4, 56); g.fillText(l, 128, 112 + i * 80); });
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  }
+  function furniture(kind) {
+    const g = new THREE.Group(), wood = std({ color: 0xffffff, map: texture("planks", 0x8a5a3a), roughness: 0.85 }), dark = std({ color: 0x3b2a1f, roughness: 0.8 }), iron = std({ color: 0x3a3f47, metalness: 0.7, roughness: 0.45 });
+    if (kind === "bench") {
+      g.add(mesh(new THREE.BoxGeometry(2.4, 0.12, 1.0), wood, 0, 0.9, 0)); for (const x of [-1.1, 1.1]) for (const z of [-0.4, 0.4]) g.add(mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1), dark, x, 0.45, z));
+      g.add(mesh(new THREE.BoxGeometry(0.5, 0.25, 0.3), iron, -0.7, 1.08, 0)); { const o = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8), iron, 0.3, 1.0, 0.1); o.rotation.z = 1.2; g.add(o); }
+      g.add(mesh(new THREE.BoxGeometry(0.3, 0.06, 0.2), std({ color: 0xc8553d }), 0.75, 0.99, -0.2));
+    } else if (kind === "toolwall") {
+      g.add(mesh(new THREE.BoxGeometry(3, 1.6, 0.06), std({ color: 0xc9a77a, roughness: 0.9 }), 0, 1.7, 0));
+      for (let i = 0; i < 9; i++) { const x = -1.2 + (i % 5) * 0.6, y = 1.2 + Math.floor(i / 5) * 0.8; g.add(mesh(new THREE.BoxGeometry(0.06, 0.4, 0.04), iron, x, y, 0.06)); g.add(mesh(new THREE.BoxGeometry(0.2, 0.08, 0.06), i % 2 ? std({ color: 0xb03a26 }) : iron, x, y + 0.22, 0.06)); }
+    } else if (kind === "anvil") {
+      g.add(mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.5, 10), dark, 0, 0.25, 0)); g.add(mesh(new THREE.BoxGeometry(0.8, 0.22, 0.32), iron, 0, 0.6, 0)); { const o = mesh(new THREE.ConeGeometry(0.16, 0.36, 8), iron, 0.52, 0.62, 0); o.rotation.z = -Math.PI / 2; g.add(o); }
+    } else if (kind === "barrel") {
+      const b = mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.9, 16), wood, 0, 0.45, 0); g.add(b); for (const y of [0.15, 0.75]) { const o = mesh(new THREE.TorusGeometry(0.345, 0.02, 6, 20), iron, 0, y, 0); o.rotation.x = Math.PI / 2; g.add(o); }
+    } else if (kind === "shelf") {
+      for (const y of [0.4, 1.1, 1.8]) g.add(mesh(new THREE.BoxGeometry(2, 0.06, 0.45), wood, 0, y, 0)); for (const x of [-0.97, 0.97]) g.add(mesh(new THREE.BoxGeometry(0.06, 2.2, 0.45), dark, x, 1.1, 0));
+      for (let i = 0; i < 14; i++) { const y = [0.4, 1.1, 1.8][i % 3] + 0.15, x = -0.8 + (i * 0.37) % 1.6; g.add(mesh(new THREE.BoxGeometry(0.12 + Math.random() * 0.1, 0.24 + Math.random() * 0.1, 0.3), std({ color: new THREE.Color().setHSL(Math.random(), 0.45, 0.4) }), x, y, 0)); }
+    } else if (kind === "fireplace") {
+      const st = std({ color: 0xffffff, map: texture("cobble", 0x8d8578), roughness: 0.95 });
+      g.add(mesh(new THREE.BoxGeometry(1.8, 1.4, 0.6), st, 0, 0.7, 0)); g.add(mesh(new THREE.BoxGeometry(1.0, 0.8, 0.62), std({ color: 0x120c08 }), 0, 0.45, 0.01));
+      const fire = mesh(new THREE.ConeGeometry(0.25, 0.5, 8), std({ color: 0xffa040, emissive: 0xff6a10, emissiveIntensity: 3, transparent: true, opacity: 0.9 }), 0, 0.35, 0.15); g.add(fire); g.userData.fire = fire;
+      const l = new THREE.PointLight(0xff8a3a, 3, 8, 2); l.position.set(0, 0.6, 0.6); g.add(l); g.userData.light = l;
+    } else if (kind === "lift") {
+      g.add(mesh(new THREE.BoxGeometry(1.4, 0.12, 1.0), iron, 0, 0.5, 0)); for (const x of [-0.6, 0.6]) g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8), iron, x, 0.25, 0));
+      const bot = new THREE.Group(); useAsset(bot, "bolt", () => robotShape(bot)); bot.position.set(0, 0.56, 0); bot.rotation.y = 0.6; g.add(bot);
+    } else if (kind === "pendulum") {
+      const p = new THREE.Group(); p.position.y = 3.2; g.add(p); p.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 2.2, 6), std({ color: 0xc9a227, metalness: 0.9, roughness: 0.3 }), 0, -1.1, 0)); p.add(mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 24), std({ color: 0xe6b422, metalness: 0.9, roughness: 0.25 }), 0, -2.25, 0)).rotation.x = Math.PI / 2; g.userData.swing = p;
+    } else if (kind === "desk") {
+      g.add(mesh(new THREE.BoxGeometry(1.6, 0.08, 0.8), wood, 0, 0.78, 0)); for (const x of [-0.72, 0.72]) g.add(mesh(new THREE.BoxGeometry(0.1, 0.78, 0.7), dark, x, 0.39, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.25, 10), std({ color: 0xe6b422, metalness: 0.8, roughness: 0.3 }), 0.5, 0.95, 0)); g.add(mesh(new THREE.BoxGeometry(0.5, 0.04, 0.35), std({ color: 0xf2e8d0 }), -0.2, 0.84, 0));
+    } else if (kind === "rug") {
+      const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d"); x.fillStyle = "#7a2e2a"; x.fillRect(0, 0, 128, 128); x.strokeStyle = "#e6c36a"; x.lineWidth = 6; x.strokeRect(10, 10, 108, 108); x.strokeStyle = "#2e4a6a"; x.lineWidth = 4; x.strokeRect(24, 24, 80, 80);
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const r = mesh(new THREE.PlaneGeometry(3, 2), std({ map: t, roughness: 1 }), 0, 0.012, 0); r.rotation.x = -Math.PI / 2; r.castShadow = false; g.add(r);
+    } else if (kind === "lantern") {
+      g.add(mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.8, 4), iron, 0, 3.0, 0)); const bulb = std({ color: 0xffe2a8, emissive: 0xffb347, emissiveIntensity: 2.6 });
+      g.add(mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22), bulb, 0, 2.5, 0)); const l = new THREE.PointLight(0xffc27a, 4, 9, 2); l.position.set(0, 2.4, 0); g.add(l);
+    }
+    return g;
+  }
+  function startInterior(room, hooks, pose) {
+    stopRoam(); if (!ok) return;
+    clearWorld(); state = null; bubble = null; cancelFlag = false;
+    setSize(phone ? 600 : 960, phone ? 760 : 540); canvas.classList.add("roam");
+    const Wd = room.w, Dp = room.d, RH = 3.2, half = { x: Wd / 2, z: Dp / 2 };
+    const height = (x, z) => (Math.abs(x) < half.x - 0.05 && Math.abs(z) < half.z - 0.05 ? 0.01 : -1); // outside the walls counts as "water": Bolt cannot go there
+    const r = roam = { town: { size: Math.max(Wd, Dp) + 4, spots: [] }, hooks, height, indoor: true, colliders: [], platforms: [], props: [], floats: [], beams: [], hands: [], fountains: [], trees: [], walls: [], gears: [], swings: [], fires: [],
+      input: { x: 0, y: 0 }, vel: new THREE.Vector3(), yaw: pose ? pose.yaw : Math.PI / 2, lean: 0, near: null, latch: null, target: null, lastDrag: -9, dustT: 0, sprayT: 0 };
+    // floor, walls with windows and beams
+    const floorTex = (room.floor === "stone" ? paving() : texture("planks", 0x9a6a42)).clone(); floorTex.repeat.set(Wd / 1.5, Dp / 1.5); floorTex.needsUpdate = true;
+    const floor = mesh(new THREE.PlaneGeometry(Wd, Dp), std({ color: 0xffffff, map: floorTex, roughness: 0.85 })); floor.rotation.x = -Math.PI / 2; floor.castShadow = false; world.add(floor); r.terrain = floor;
+    const wallTex = plasterTex(room.wall || 0xe8dcc4).clone(); wallTex.repeat.set(3, 1); wallTex.needsUpdate = true;
+    const day = smoothstep(-6, 10, 68 * Math.sin((townTime - 0.25) * Math.PI * 2));
+    const glass = std({ color: 0xffffff, emissive: new THREE.Color(0xbfdcff).lerp(new THREE.Color(0x14203a), 1 - day), emissiveIntensity: 1.2, roughness: 0.2 });
+    for (const [x, z, len, n] of [[0, -half.z, Wd, [0, 1]], [0, half.z, Wd, [0, -1]], [-half.x, 0, Dp, [1, 0]], [half.x, 0, Dp, [-1, 0]]]) {
+      const g = new THREE.Group(), along = n[1] !== 0, mat = std({ color: 0xffffff, map: wallTex, roughness: 0.95, transparent: true });
+      const wall = mesh(new THREE.BoxGeometry(along ? len : 0.2, RH, along ? 0.2 : len), mat, 0, RH / 2, 0); g.add(wall);
+      const beamM = std({ color: 0x4a3324, roughness: 0.85, transparent: true }); g.add(mesh(new THREE.BoxGeometry(along ? len : 0.26, 0.2, along ? 0.26 : len), beamM, 0, RH - 0.1, 0)); g.add(mesh(new THREE.BoxGeometry(along ? len : 0.24, 0.14, along ? 0.24 : len), beamM, 0, 0.07, 0));
+      for (let k = -1; k <= 1; k += 2) if (len > 7) { const wnd = mesh(new THREE.PlaneGeometry(1.0, 1.1), glass.clone(), along ? k * len * 0.28 : n[0] * 0.11, 1.8, along ? n[1] * 0.11 : k * len * 0.28); wnd.rotation.y = along ? (n[1] > 0 ? 0 : Math.PI) : (n[0] > 0 ? Math.PI / 2 : -Math.PI / 2); wnd.material.transparent = true; g.add(wnd); }
+      g.position.set(x, 0, z); world.add(g); r.walls.push({ g, n: new THREE.Vector2(n[0], n[1]), p: new THREE.Vector2(x, z), mats: [] }); g.traverse(o => { if (o.isMesh) r.walls[r.walls.length - 1].mats.push(o.material); });
+    }
+    // furniture
+    for (const f of room.things || []) {
+      const m = furniture(f.kind); m.position.set(f.x, 0, f.z); m.rotation.y = f.ry || 0; if (f.s) m.scale.setScalar(f.s); world.add(m);
+      if (f.r) r.colliders.push({ x: f.x, z: f.z, r: f.r });
+      if (m.userData.swing) r.swings.push(m.userData.swing); if (m.userData.fire) r.fires.push(m.userData);
+    }
+    for (const gr of room.gears || []) { const gm = gearMesh(gr.r, gr.teeth, gr.color || 0xb08d3a); gm.position.set(gr.x, gr.y, gr.z); world.add(gm); r.gears.push({ m: gm, speed: gr.speed }); }
+    for (const b of room.banners || []) { const m = mesh(new THREE.PlaneGeometry(0.9, 1.8), std({ map: bannerTex(b.lines, b.bg || "#2c3550"), roughness: 0.9 })); m.position.set(b.x, 1.9, b.z); m.rotation.y = b.ry || 0; m.castShadow = false; world.add(m); }
+    // people and the things you can use
+    const SCALE = { stall: 1.0, npc: 1.0, spot: 1, exit: 1 }, REACH = { stall: 0.9, npc: 0.45, spot: 0.7, exit: 0.6 };
+    for (const p of room.props) {
+      const m = propMesh(p), s = SCALE[p.kind] || 1; m.position.set(p.x, 0, p.z); m.rotation.y = p.ry !== undefined ? p.ry : Math.atan2(-p.x, half.z - 1 - p.z); m.scale.setScalar(s); world.add(m);
+      m.userData.baseY = 0; m.userData.home = m.rotation.y; r.props.push({ p, m, r: REACH[p.kind] || 0.5, s, vis: m.userData.vis, phase: Math.random() * 6 });
+      if (p.kind === "npc" || p.kind === "stall") r.colliders.push({ x: p.x, z: p.z, r: REACH[p.kind] });
+    }
+    for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { o.material = o.material.clone(); o.material.sizeAttenuation = false; const asp = o.scale.x / o.scale.y; o.scale.set(0.055 * asp * H / W / q.s, 0.055 / q.s, 1); } });
+    const south = r.walls.find(w => w.n.y < 0); for (const q of r.props) if (q.p.kind === "exit") { q.m.position.z = half.z - 0.14; q.m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; south.mats.push(o.material); } else if (o.isSprite) o.visible = false; }); }
+    robot = robotMesh(); const sx = pose ? pose.x : room.start.x, sz = pose ? pose.z : room.start.z; robot.position.set(sx, 0.01, sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot;
+    buildWalkGrid(r); for (const q of r.props) if ((q.p.kind === "exit") && Math.hypot(q.p.x - sx, q.p.z - sz) < 1.6) r.latch = q;
+    r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = []; r.tracks = makeTracks(); world.add(r.tracks.mesh); r.prevFwd = 0; r.pitch = 0;
+    for (const q of r.props) if (q.p.kind === "npc" && q.vis) { const v = q.vis; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst); }; }
+    // indoor light: warm lamps, a soft window light, no sky or sea
+    sky.visible = false; ocean.visible = false; scene.background = new THREE.Color(0x15110d); scene.fog = new THREE.FogExp2(0x15110d, 0.02);
+    sun.color.set(0xfff0d8); sun.intensity = 0.4 + day * 0.9; r.lightDir = new THREE.Vector3(0.5, 1, 0.35).normalize();
+    Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 60 }); sun.shadow.camera.updateProjectionMatrix();
+    hemi.color.set(0xffe6c8); hemi.groundColor.set(0x3a2a1e); hemi.intensity = 0.45; renderer.toneMappingExposure = 0.85;
+    cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); cam.el = 0.42; cam.dist = phone ? 5.2 : 4.6; cam.introK = 0.6; cam.look.set(sx, 0.9, sz);
+  }
+  function restoreOutdoor() { if (sky) sky.visible = true; if (ocean) ocean.visible = true; if (scene) scene.background = null; }
+  function interiorFrame(r, dt) {
+    // fade any wall the camera is behind, so Bolt is never hidden
+    for (const w of r.walls) { const out = (camera.position.x - w.p.x) * w.n.x + (camera.position.z - w.p.y) * w.n.y < 0.3; const target = out ? 0.12 : 1; for (const m of w.mats) { m.opacity += (target - m.opacity) * Math.min(1, dt * 8); m.depthWrite = m.opacity > 0.9; } }
+    for (const g of r.gears) g.m.rotation.z += g.speed * dt;
+    for (const s of r.swings) s.rotation.z = Math.sin(clock * 1.6) * 0.35;
+    for (const f of r.fires) { const k = 0.8 + Math.sin(clock * 13) * 0.1 + Math.sin(clock * 7.3) * 0.1; f.fire.scale.set(1, k, 1); f.light.intensity = 2.4 * k + 0.6; }
+  }
   // town furniture that is not a level piece
   function lampMesh(withLight) {
     const g = new THREE.Group(), iron = std({ color: 0x2b2f36, metalness: 0.6, roughness: 0.5 });
@@ -1097,7 +1222,7 @@ const Render3D = (() => {
       const tx = -Math.sin(c.a), tz = Math.cos(c.a), x = c.home.x + tx * c.t, z = c.home.z + tz * c.t; p.set(x, r.height(x, z) + Math.abs(Math.sin(clock * 30)) * 0.01 * (c.wait > 0 && c.flee <= 0 ? 0 : 1), z);
     }
     // a fish jumps in the bay now and then
-    const f = r.fish; f.t += dt;
+    const f = r.fish; if (!f) return; f.t += dt;
     if (f.t > 0 && !f.g.visible) { const a = rnd(-1.2, 1.2), d = rnd(6, 14); f.x = r.town.bay.x + Math.sin(a) * d * 0.6; f.z = r.town.bay.z + Math.cos(a) * d * 0.3 - 2; f.dir = Math.random() * 6; if (r.height(f.x, f.z) < -0.6) { f.g.visible = true; f.t = 0; burst(f.x, f.z, 0xdff4ff, 10, 1.2, -0.05); } else f.t = -0.5; }
     if (f.g.visible) { const k = f.t / 0.9; if (k >= 1) { f.g.visible = false; f.t = -rnd(3, 7); burst(f.x + Math.cos(f.dir) * 0.9, f.z - Math.sin(f.dir) * 0.9, 0xdff4ff, 12, 1.4, -0.05); } else { f.g.position.set(f.x + Math.cos(f.dir) * 0.9 * k, -0.1 + Math.sin(k * Math.PI) * 0.9, f.z - Math.sin(f.dir) * 0.9 * k); f.g.rotation.set(0, f.dir, Math.cos(k * Math.PI) * 1.1); } }
   }
@@ -1141,8 +1266,8 @@ const Render3D = (() => {
       put(m, p.x, p.z, p.ry !== undefined ? p.ry : faceCentre(p.x, p.z), s);
       m.userData.baseY = m.position.y; m.userData.home = m.rotation.y;
       r.props.push({ p, m, r: REACH[p.kind] || 0.5, s });
-      if (p.kind !== "portal") r.colliders.push({ x: p.x, z: p.z, r: REACH[p.kind] || 0.5 });
-      else for (const side of [-1, 1]) r.colliders.push({ x: p.x + side * 1.36 * Math.cos(m.rotation.y), z: p.z - side * 1.36 * Math.sin(m.rotation.y), r: 0.22 }); // the gate's two pillars
+      if (p.kind !== "portal" && p.kind !== "door") r.colliders.push({ x: p.x, z: p.z, r: REACH[p.kind] || 0.5 });
+      else if (p.kind === "portal") for (const side of [-1, 1]) r.colliders.push({ x: p.x + side * 1.36 * Math.cos(m.rotation.y), z: p.z - side * 1.36 * Math.sin(m.rotation.y), r: 0.22 }); // the gate's two pillars
     }
     // name tags keep one size on screen however close Bolt gets
     for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { o.material = o.material.clone(); o.material.sizeAttenuation = false; const asp = o.scale.x / o.scale.y; o.scale.set(0.055 * asp * H / W / q.s, 0.055 / q.s, 1); } });
@@ -1158,7 +1283,7 @@ const Render3D = (() => {
     r.stars = makeStars(); world.add(r.stars); r.moon = moonMesh(); world.add(r.moon); applyTimeOfDay(r, true);
     cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); cam.el = 0.3; cam.dist = phone ? 6.2 : 5.4; cam.introK = 0; cam.look.set(sx, height(sx, sz) + 0.9, sz);
   }
-  function stopRoam() { if (!roam) return; if (window.Audio_) Audio_.engine(null); if (roam.ht) roam.ht.tex.dispose(); ocean.material.uniforms.uHas.value = 0; roam = null; canvas.classList.remove("roam"); ocean.geometry = OCEAN_LEVEL; }
+  function stopRoam() { restoreOutdoor(); if (!roam) return; if (window.Audio_) Audio_.engine(null); if (roam.ht) roam.ht.tex.dispose(); ocean.material.uniforms.uHas.value = 0; roam = null; canvas.classList.remove("roam"); ocean.geometry = OCEAN_LEVEL; }
 
   function roamFrame(dt) {
     const r = roam, b = r.bolt, MAX = 4.4;
@@ -1207,19 +1332,19 @@ const Render3D = (() => {
     lifeFrame(r, dt, nx, nz);
     if (window.Audio_) Audio_.engine(Math.min(1, sp / MAX));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
-    r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock;
+    if (!r.indoor) { r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock; }
     for (const f of r.floats) { f.position.y = -0.08 + Math.sin(clock * 1.1 + f.userData.phase) * 0.06; f.rotation.z = Math.sin(clock * 0.9 + f.userData.phase) * 0.03; f.rotation.x = Math.cos(clock * 0.7 + f.userData.phase) * 0.025; }
     for (const t of r.beams) t.position.set(Math.cos(clock * 0.5) * 14, 5.5, Math.sin(clock * 0.5) * 14);
     for (const h of r.hands) h.rotation.z = -clock * 0.3;
     r.sprayT -= dt; if (r.sprayT <= 0) { r.sprayT = 0.05; for (const f of r.fountains) burst(f.x, f.z, 0xbfe9ff, 2, 1.6, f.y); }
     // the sun (and its shadow box) travels with Bolt so shadows stay sharp wherever he is
-    tickTime(r, dt);
+    if (!r.indoor) tickTime(r, dt); else interiorFrame(r, dt);
     sun.position.copy(b.position).addScaledVector(r.lightDir, 30); sun.target.position.copy(b.position);
     // who is close enough to talk to? driving into a portal ring opens it
     let best = null, bd = 1e9;
     for (const q of r.props) { const d = Math.hypot(q.p.x - nx, q.p.z - nz) - q.r; if (d < 1.7 && d < bd) { bd = d; best = q; } }
     if (best !== r.near) { r.near = best; if (r.hooks.onNear) r.hooks.onNear(best ? best.p : null); }
-    if (best && best.p.kind === "portal" && bd < 0.3) { if (r.latch !== best) { r.latch = best; r.vel.set(0, 0, 0); r.target = null; if (r.hooks.onEnter) r.hooks.onEnter(best.p); } }
+    if (best && (best.p.kind === "portal" || best.p.kind === "door" || best.p.kind === "exit") && bd < 0.3) { if (r.latch !== best) { r.latch = best; r.vel.set(0, 0, 0); r.target = null; if (r.hooks.onEnter) r.hooks.onEnter(best.p); } }
     else if (!best || best !== r.latch) r.latch = null;
     // chase camera: swings in behind Bolt while he drives, unless the player just dragged it
     cam.introK = Math.min(1, cam.introK + dt / 1.4); const ik = 1 - Math.pow(1 - cam.introK, 3);
@@ -1242,7 +1367,7 @@ const Render3D = (() => {
   function drawPrompt() {
     const r = roam; if (!r || !r.near || !modalHidden()) return;
     const q = r.near, p = q.p, name = p.label.replace(/^\S+\s/, "");
-    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : "open the " + name);
+    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : "open the " + name);
     const v = new THREE.Vector3(q.m.position.x, q.m.position.y + 1.55 * q.s, q.m.position.z).project(camera);
     if (v.z > 1) return;
     const sx = (v.x + 1) / 2 * fx.width, sy = (1 - v.y) / 2 * fx.height;
@@ -1253,7 +1378,7 @@ const Render3D = (() => {
   }
   const modalHidden = () => { const m = document.getElementById("modal"); return !m || m.hidden; };
   const roamApi = {
-    start: startRoam, stop: stopRoam,
+    start: startRoam, stop: stopRoam, enter: startInterior, get indoor() { return !!(roam && roam.indoor); },
     input(x, y) { if (roam) { roam.input.x = x; roam.input.y = y; if (x || y) { roam.target = null; roam.path = null; } } },
     near() { return roam && roam.near ? roam.near.p : null; },
     goto(x, z, prop) { if (roam) setTarget(roam, x, z, prop); }, // drive there on autopilot (a click on the ground does this)

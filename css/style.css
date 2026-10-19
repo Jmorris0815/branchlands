@@ -94,6 +94,8 @@ main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.
 #screen-level.roam .worldwrap { width: 100%; max-width: 1120px; }
 #screen-level.roam #world3d { width: 100%; }
 #screen-level.roam .camhint { display: none; }
+.roomfade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.25s; pointer-events: none; border-radius: 10px; }
+.roomfade.on { opacity: 1; }
 #joy { position: absolute; left: 14px; bottom: 14px; width: 124px; height: 124px; border-radius: 50%; background: rgba(20, 28, 40, 0.35); border: 2px solid rgba(255, 255, 255, 0.55); touch-action: none; }
 #joyKnob { position: absolute; left: 36px; top: 36px; width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); pointer-events: none; }
 #talkBtn { position: absolute; right: 16px; bottom: 22px; width: 76px; height: 76px; border-radius: 50%; font: 700 17px var(--display); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); }
