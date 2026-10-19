@@ -38,6 +38,11 @@ a big game: a plaza with a fountain, market stalls, cottages, a pier with boats,
 Pip's orchard, and eight stone gates along the shore. Drive Bolt with **WASD / the arrow keys**, **click where to
 go** (he finds his own way round things), or the **joystick** on a phone; drag to look around, scroll to zoom.
 Drive up to someone and press **E** (tap **Talk** on a phone). Townsfolk turn to face you when you arrive.
+Lit doorways lead inside: **Wrenna's Workshop** (workbench, paint bay, a robot on the repair lift, a fire) and
+the **Time Tower** (turning brass gears, a pendulum, Git timeline banners, the Clockwright). Rooms are described in
+`INTERIORS` in `js/hub.js`. Town days last ten minutes: golden sunsets, lamps that come on at dusk, moonlight and
+stars (⚙️ Settings → Time of day can pin it). Townsfolk breathe, look at Bolt, and nod and gesture while you talk;
+strollers and Bolt's robot cousins wander between spots, gulls circle, crabs scuttle, fish jump.
 Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by changing two numbers. Around town:
 
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
