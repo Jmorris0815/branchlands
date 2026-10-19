@@ -590,7 +590,7 @@ const Game = (() => {
     $("homeBtn").onclick = () => showScreen("home"); $("mapBtn").onclick = () => showScreen("map"); $("hubBtn").onclick = openHub; $("townBack").onclick = openHub;
     $("backBtn").onclick = openHub; $("edBack").onclick = () => showScreen("map");
     $("codexBtn").onclick = showCodex; $("settingsBtn").onclick = showSettings;
-    $("soundBtn").onclick = () => { save.settings.sound = !save.settings.sound; persist(); applySettings(); sfx("click"); };
+    $("soundBtn").onclick = () => { save.settings.sound = !save.settings.sound; persist(); applySettings(); sfx("click"); if (save.settings.sound) Audio_.ambient(Hub.active ? "harbor" : "level"); };
     $("remixBtn").onclick = () => openEditor(current);
     $("speed").onchange = () => { save.settings.speed = $("speed").value; persist(); };
     $("modal").addEventListener("click", e => { if (e.target === $("modal")) hideModal(); });

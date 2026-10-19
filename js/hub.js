@@ -53,7 +53,7 @@ const Hub = (() => {
 
   function init(a) { api = a; window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); }); initJoy(); }
   function open() {
-    active = true; nearProp = null; const s = api.save();
+    active = true; nearProp = null; const s = api.save(); if (window.Audio_) Audio_.ambient("harbor");
     $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false;
     const r = api.R.pick();
     if (!r) { renderPanel(); return; } // 3D still loading: render3d-ready calls open() again
@@ -62,7 +62,7 @@ const Hub = (() => {
     renderPanel();
   }
   function close() {
-    if (!active) return; active = false; clearInterval(saveT); keys.clear();
+    if (!active) return; active = false; clearInterval(saveT); keys.clear(); if (window.Audio_) { Audio_.engine(null); Audio_.ambient("level"); }
     if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true;
   }

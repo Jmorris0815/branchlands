@@ -1035,7 +1035,7 @@ const Render3D = (() => {
     r.lightDir = applyWeather(HARBOR, new THREE.Vector3(sx, 0, sz), 17);
     cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); cam.el = 0.3; cam.dist = phone ? 6.2 : 5.4; cam.introK = 0; cam.look.set(sx, height(sx, sz) + 0.9, sz);
   }
-  function stopRoam() { if (!roam) return; if (roam.ht) roam.ht.tex.dispose(); ocean.material.uniforms.uHas.value = 0; roam = null; canvas.classList.remove("roam"); ocean.geometry = OCEAN_LEVEL; }
+  function stopRoam() { if (!roam) return; if (window.Audio_) Audio_.engine(null); if (roam.ht) roam.ht.tex.dispose(); ocean.material.uniforms.uHas.value = 0; roam = null; canvas.classList.remove("roam"); ocean.geometry = OCEAN_LEVEL; }
 
   function roamFrame(dt) {
     const r = roam, b = r.bolt, MAX = 4.4;
@@ -1082,6 +1082,7 @@ const Render3D = (() => {
       const m = q.m; if (m.userData.spin) m.userData.spin.rotation.y += dt * 0.8;
     }
     lifeFrame(r, dt, nx, nz);
+    if (window.Audio_) Audio_.engine(Math.min(1, sp / MAX));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
     r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock;
     for (const f of r.floats) { f.position.y = -0.08 + Math.sin(clock * 1.1 + f.userData.phase) * 0.06; f.rotation.z = Math.sin(clock * 0.9 + f.userData.phase) * 0.03; f.rotation.x = Math.cos(clock * 0.7 + f.userData.phase) * 0.025; }
