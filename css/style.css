@@ -87,6 +87,16 @@ main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.
 #world3d:active { cursor: grabbing; }
 #world3d[hidden], #world[hidden] { display: none; }
 .camhint { font-size: 12px; text-align: center; margin-top: 6px; }
+/* free-roam Harbor Town: the picture takes the whole width, the panel sits under it */
+#screen-level.roam main { grid-template-columns: 1fr; }
+#screen-level.roam #mission { order: 2; }
+#screen-level.roam .worldwrap { width: 100%; max-width: 1120px; }
+#screen-level.roam #world3d { width: 100%; }
+#screen-level.roam .camhint { display: none; }
+#joy { position: absolute; left: 14px; bottom: 14px; width: 124px; height: 124px; border-radius: 50%; background: rgba(20, 28, 40, 0.35); border: 2px solid rgba(255, 255, 255, 0.55); touch-action: none; }
+#joyKnob { position: absolute; left: 36px; top: 36px; width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); pointer-events: none; }
+#talkBtn { position: absolute; right: 16px; bottom: 22px; width: 76px; height: 76px; border-radius: 50%; font: 700 17px var(--display); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); }
+#joy[hidden], #talkBtn[hidden], :root:not([data-device="phone"]) #joy, :root:not([data-device="phone"]) #talkBtn { display: none; }
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .toolbar .sp { flex: 1; }
 #lineCount { color: var(--muted); font-size: 12px; } #lineCount.over { color: var(--err); font-weight: 700; }
