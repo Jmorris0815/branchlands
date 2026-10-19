@@ -42,7 +42,9 @@ Lit doorways lead inside: **Wrenna's Workshop** (workbench, paint bay, a robot o
 the **Time Tower** (turning brass gears, a pendulum, Git timeline banners, the Clockwright). Rooms are described in
 `INTERIORS` in `js/hub.js`. Town days last ten minutes: golden sunsets, lamps that come on at dusk, moonlight and
 stars (⚙️ Settings → Time of day can pin it). Townsfolk breathe, look at Bolt, and nod and gesture while you talk;
-strollers and Bolt's robot cousins wander between spots, gulls circle, crabs scuttle, fish jump.
+strollers and Bolt's robot cousins wander between spots, gulls circle, crabs scuttle, fish jump. Old Pip, Dad, Wrenna and
+most of the strollers have real skeletons (rigged in Mixamo): they walk with real steps, wave when Bolt drives up,
+and talk with their hands.
 **Space** jumps (over crates and small rocks) and **Shift** boosts while the blue bar lasts (phone: Jump and Boost
 buttons). Twenty golden gears are hidden round the island, a few floating high enough to need a jump (15 🪙 each,
 300 more and the title Gear Hunter for all twenty). The 🏁 **Harbor Rally** flag by the pier starts a timed run
@@ -96,7 +98,7 @@ policies; only game state (coins, levels, goods, review text) ever leaves the br
 
 ## Graphics
 
-The realistic renderer draws real 3D models from `assets/models/` (Bolt, the cottage, zone walls, crabs, pick-ups, townsfolk, market stalls). They were generated on the family's DGX Spark from text prompts with the pipeline in `tools/assets3d/` (concept picture → Hunyuan3D mesh → small textured glTF); `tools/assets3d/preview.html?all=1` shows the whole set. Anything without a model file falls back to a built-in shape.
+The realistic renderer draws real 3D models from `assets/models/` (Bolt, the cottage, zone walls, crabs, pick-ups, townsfolk, market stalls). They were generated on the family's DGX Spark from text prompts with the pipeline in `tools/assets3d/` (concept picture → Hunyuan3D mesh → small textured glTF); `tools/assets3d/preview.html?all=1` shows the whole set. Anything without a model file falls back to a built-in shape. Two of the people (`villager_rig`, `villager5_rig`) were then rigged in [Mixamo](https://www.mixamo.com) and carry idle, walk, wave and talk clips: `tools/assets3d/mixamo_prep.py` turns a model into an upload for Mixamo's auto-rigger and `tools/assets3d/mixamo_convert.html` turns the downloaded FBX files into one glTF (notes at the top of each). Mixamo's auto-rigger fails on people whose hands touch their body (hands on hips, hands clasped), so those townsfolk keep the vertex-shader sway.
 
 Harbor Town is one continuous island: the ground is a height field shaped from a few sine waves, hills, a bay
 and flat pads under the buildings (`makeHeight` in `js/render3d.js`), Bolt drives over it with real speed,

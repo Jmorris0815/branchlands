@@ -12,6 +12,7 @@ import { OutputPass } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/
 import { ShaderPass } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js/+esm";
 import { Sky } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/objects/Sky.js/+esm";
 import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm";
+import { clone as cloneSkinned } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/SkeletonUtils.js/+esm";
 
 const Render3D = (() => {
   const phone = document.documentElement.dataset.device === "phone";
@@ -40,7 +41,9 @@ const Render3D = (() => {
     tree:     { fit: "h", size: 1.15 }, rock: { fit: "w", size: 0.92 }, crate: { fit: "w", size: 0.84 }, pillar: { fit: "h", size: 0.95 }, crystal: { fit: "w", size: 0.95 }, ice: { fit: "w", size: 0.86 },
     crab:     { fit: "w", size: 0.62 },
     apple:    { fit: "h", size: 0.34, lift: 0.08 }, key: { fit: "w", size: 0.42, lift: 0.18 }, lens: { fit: "w", size: 0.45, lift: 0.12 },
-    villager: { fit: "h", size: 1.1 }, villager2: { fit: "h", size: 1.08 }, villager3: { fit: "h", size: 1.1 }, villager4: { fit: "h", size: 1.02 }, villager5: { fit: "h", size: 1.15 }, villager6: { fit: "h", size: 0.82 }, stall: { fit: "w", size: 1.05 },
+    villager: { fit: "h", size: 1.1 }, villager2: { fit: "h", size: 1.08 }, villager3: { fit: "h", size: 1.1 }, villager4: { fit: "h", size: 1.02 }, villager5: { fit: "h", size: 1.15 }, villager6: { fit: "h", size: 0.82 },
+    villager_rig: { fit: "h", size: 1.1 }, villager5_rig: { fit: "h", size: 1.15 }, // rigged in Mixamo, with idle / walk / wave / talk clips
+    stall: { fit: "w", size: 1.05 },
   };
   const MODEL_BASE = "assets/models/", assetTpl = {}, assetWaiters = {}, gltfLoader = new GLTFLoader();
   function loadAsset(name) {
@@ -52,7 +55,7 @@ const Render3D = (() => {
       const s = (a.size / (a.fit === "h" ? sz.y : Math.max(sz.x, sz.z))) || 1;
       const g = new THREE.Group(); g.add(root); root.scale.setScalar(s); root.position.set(-c.x * s, -box.min.y * s + (a.lift || 0), -c.z * s);
       root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.shared = true; const m = o.material; if (m) { m.envMapIntensity = 0.35; if (m.map) m.map.anisotropy = 4; } } });
-      g.userData.top = sz.y * s + (a.lift || 0);
+      g.userData.top = sz.y * s + (a.lift || 0); g.userData.clips = gltf.animations;
       assetTpl[name] = g; (assetWaiters[name] || []).forEach(fn => fn()); delete assetWaiters[name];
     }, undefined, () => console.info("no model file for " + name + ", drawing the built-in shape"));
   }
@@ -62,7 +65,8 @@ const Render3D = (() => {
     loadAsset(name);
     const place = () => {
       const t = assetTpl[name]; if (!t) return false;
-      g.clear(); const inst = t.clone(true); if (ASSETS[name].tint) tintModel(inst, paint); g.add(inst);
+      g.clear(); const inst = t.userData.clips.length ? cloneSkinned(t) : t.clone(true); if (ASSETS[name].tint) tintModel(inst, paint); g.add(inst);
+      if (t.userData.clips.length) { inst.userData.clips = t.userData.clips; inst.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.userData.shared = false; } }); }
       g.userData.model = inst; g.userData.top = t.userData.top; if (g.userData.onModel) g.userData.onModel(inst); return true;
     };
     if (!place()) { fallback(); if (assetTpl[name] === null) (assetWaiters[name] = assetWaiters[name] || []).push(() => { if (g.parent) place(); }); }
@@ -127,7 +131,7 @@ const Render3D = (() => {
       if (!p.locked) { const l = new THREE.PointLight(c, 1.5, 3, 2); l.position.set(0, 0.7, 0); g.add(l); }
     } else if (p.kind === "npc") {
       const vis = new THREE.Group(); g.add(vis); g.add(label(name, 0, 0, 0.5, 1.35)); g.userData.vis = vis;
-      const model = p.model && ASSETS[p.model] ? p.model : (name.length % 2 ? "villager" : "villager2"); vis.userData.modelName = model;
+      const model = personModel(p.model && ASSETS[p.model] ? p.model : (name.length % 2 ? "villager" : "villager2")); vis.userData.modelName = model;
       useAsset(vis, model, () => {
         const c = new THREE.Color(p.color);
         vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4, clearcoat: 0.6 }), 0, 0.45, 0));
@@ -954,7 +958,7 @@ const Render3D = (() => {
     robot = robotMesh(); const sx = pose ? pose.x : room.start.x, sz = pose ? pose.z : room.start.z; robot.position.set(sx, 0.01, sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot;
     buildWalkGrid(r); initPlay(r); for (const q of r.props) if ((q.p.kind === "exit") && Math.hypot(q.p.x - sx, q.p.z - sz) < 1.6) r.latch = q;
     r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = []; r.tracks = makeTracks(); world.add(r.tracks.mesh); r.prevFwd = 0; r.pitch = 0;
-    for (const q of r.props) if (q.p.kind === "npc" && q.vis) { const v = q.vis; const ad = ARM_DOWN[v.userData.modelName] || 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; }
+    for (const q of r.props) if (q.p.kind === "npc" && q.vis) bindPerson(q.vis, q.vis.userData.modelName);
     // indoor light: warm lamps, a soft window light, no sky or sea
     sky.visible = false; ocean.visible = false; scene.background = new THREE.Color(0x15110d); scene.fog = new THREE.FogExp2(0x15110d, 0.02);
     sun.color.set(0xfff0d8); sun.intensity = 0.4 + day * 0.9; r.lightDir = new THREE.Vector3(0.5, 1, 0.35).normalize();
@@ -1138,15 +1142,43 @@ const Render3D = (() => {
     return sets;
   }
   function rigSet(sets, k, v) { if (sets) for (const u of sets) u[k].value = v; }
+  // a person with a real skeleton: one mixer per person, cross-fading between the Mixamo clips
+  const RIGGED = { villager: "villager_rig", villager5: "villager5_rig" };
+  const personModel = m => RIGGED[m] && ASSETS[RIGGED[m]] ? RIGGED[m] : m;
+  function makeAnim(inst) {
+    const mixer = new THREE.AnimationMixer(inst), acts = {};
+    for (const c of inst.userData.clips) { const a = mixer.clipAction(c); if (c.name === "wave") { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; } acts[c.name] = a; }
+    const anim = { mixer, acts, cur: null, head: inst.getObjectByName("mixamorigHead"), neck: inst.getObjectByName("mixamorigNeck") };
+    mixer.addEventListener("finished", () => { anim.cur = null; anim.busy = false; });
+    animPlay(anim, Math.random() < 0.5 ? "idle" : "idle2", 0); mixer.update(Math.random() * 8);
+    return anim;
+  }
+  function animPlay(anim, name, fade = 0.35) {
+    const a = anim.acts[name]; if (!a || anim.cur === name) return;
+    const prev = anim.cur && anim.acts[anim.cur]; a.reset().setEffectiveWeight(1).play();
+    if (prev && fade > 0) a.crossFadeFrom(prev, fade, true); else if (prev) prev.stop();
+    anim.cur = name; anim.busy = name === "wave";
+  }
+  // advance the clips, then turn the head on top of whatever the clip is doing
+  function animStep(anim, dt, head) {
+    anim.mixer.update(dt);
+    if (head && anim.neck) anim.neck.rotateY(head * 0.35);
+    if (head && anim.head) anim.head.rotateY(head * 0.55);
+  }
+  function bindPerson(v, model) {
+    const ad = ARM_DOWN[model] || 0;
+    const bind = inst => { if (inst.userData.clips && inst.userData.clips.length) { v.userData.anim = makeAnim(inst); v.userData.rig = null; } else v.userData.rig = rigHuman(inst, ad); };
+    v.userData.onModel = bind; if (v.userData.model && !v.userData.rig && !v.userData.anim) bind(v.userData.model);
+  }
   // fill group vis with a person model and rig it as soon as the model is there
   function person(vis, model, fallbackColor) {
-    vis.userData.onModel = inst => { vis.userData.rig = rigHuman(inst, ARM_DOWN[model] || 0); };
+    model = personModel(model); bindPerson(vis, model);
     useAsset(vis, model, () => {
       const c = new THREE.Color(fallbackColor);
       vis.add(mesh(new THREE.CapsuleGeometry(0.2, 0.35, 6, 12), phys({ color: c, roughness: 0.4 }), 0, 0.45, 0));
       vis.add(mesh(new THREE.SphereGeometry(0.17, 16, 12), std({ color: 0xf1dcc4, roughness: 0.6 }), 0, 0.86, 0));
     });
-    if (vis.userData.model && !vis.userData.rig) vis.userData.rig = rigHuman(vis.userData.model, ARM_DOWN[model] || 0);
+    bindPerson(vis, model);
     return vis;
   }
   const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
@@ -1190,7 +1222,7 @@ const Render3D = (() => {
     const town = r.town, height = r.height;
     r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = [];
     // the talking townsfolk: rig them so heads turn and chests breathe
-    for (const q of r.props) if (q.p.kind === "npc" && q.m.userData.vis) { const v = q.m.userData.vis; q.vis = v; const ad = ARM_DOWN[v.userData.modelName] || 0; if (v.userData.model && !v.userData.rig) v.userData.rig = rigHuman(v.userData.model, ad); v.userData.onModel = inst => { v.userData.rig = rigHuman(inst, ad); }; q.phase = Math.random() * 6; }
+    for (const q of r.props) if (q.p.kind === "npc" && q.m.userData.vis) { const v = q.m.userData.vis; q.vis = v; bindPerson(v, v.userData.modelName); q.phase = Math.random() * 6; }
     // strollers wander between spots around town
     const SPOTS = town.spots || [];
     const TINTS = [0xffffff, 0xd8e4ff, 0xffe2c8, 0xe2ffd8];
@@ -1231,10 +1263,18 @@ const Render3D = (() => {
     for (const q of r.props) {
       if (q.p.kind !== "npc") continue; const m = q.m, v = q.vis, rig = v && v.userData.rig;
       const ex = bx - m.position.x, ez = bz - m.position.z, d = Math.hypot(ex, ez), want = d < 6 ? Math.atan2(ex, ez) : m.userData.home;
-      const rel = angDiff(want, m.rotation.y), lim = rig ? 1.0 : 0;
+      const anim = v && v.userData.anim, rel = angDiff(want, m.rotation.y), lim = rig || anim ? 1.0 : 0;
       if (Math.abs(rel) > lim) m.rotation.y += Math.sign(rel) * Math.min(Math.abs(rel) - lim, dt * 2.2);
       q.head = (q.head || 0) + (Math.max(-lim, Math.min(lim, angDiff(want, m.rotation.y))) - (q.head || 0)) * Math.min(1, dt * 4);
       m.position.y = m.userData.baseY;
+      if (anim && !r.photo) {
+        const talk = r.talking === q.p.id;
+        if (d > 6) q.waved = false;
+        if (talk) animPlay(anim, "talk");
+        else if (!q.waved && d < 3.4 && !r.race) { q.waved = true; animPlay(anim, "wave", 0.25); }
+        else if (!anim.busy && (!anim.cur || anim.cur === "talk")) animPlay(anim, q.phase > 3 ? "idle2" : "idle", 0.5);
+        animStep(anim, dt, q.head);
+      } else if (anim) animStep(anim, 0, q.head);
       if (rig) { const talk = r.talking === q.p.id; rigSet(rig, "uGesture", talk ? 0.35 + 0.35 * Math.sin(clock * 2.6 + q.phase) : 0); rigSet(rig, "uHead", q.head); rigSet(rig, "uBreath", Math.sin(clock * 1.7 + q.phase)); rigSet(rig, "uNod", talk ? Math.sin(clock * 4.2) * 0.07 : d < 2.2 ? Math.sin(clock * 3 + q.phase) * 0.06 : 0); rigSet(rig, "uPhase", Math.sin(clock * 0.4 + q.phase) * 0.5); rigSet(rig, "uAmp", 0.05); }
     }
     // strollers and robots: walk a found path to a new spot, stop, look around, pick another
@@ -1265,6 +1305,8 @@ const Render3D = (() => {
       const toB = Math.hypot(bx - w.g.position.x, bz - w.g.position.z);
       const lookAt = toB < 4 ? Math.max(-1, Math.min(1, angDiff(Math.atan2(bx - w.g.position.x, bz - w.g.position.z), w.yaw))) : (w.moving ? 0 : Math.sin(clock * 0.5 + w.speed * 9) * 0.7);
       w.head += (lookAt - w.head) * Math.min(1, dt * 3);
+      const anim = w.vis.userData.anim;
+      if (anim) { if (w.moving) { animPlay(anim, "walk", 0.25); anim.acts.walk.timeScale = w.speed / 0.72; } else if (anim.cur === "walk" || !anim.cur) animPlay(anim, "idle", 0.4); animStep(anim, r.photo ? 0 : dt, w.head); }
       if (rig) { rigSet(rig, "uPhase", w.phase); rigSet(rig, "uAmp", w.amp); rigSet(rig, "uHead", w.head); rigSet(rig, "uBreath", Math.sin(clock * 1.9 + w.speed * 7)); }
     }
     for (const b of r.bots) { walk(b, true); b.vis.position.y = b.moving ? Math.abs(Math.sin(clock * 18 + b.speed)) * 0.012 : 0; b.vis.rotation.z += ((b.moving ? 0.05 : 0) - b.vis.rotation.z) * Math.min(1, dt * 4); }

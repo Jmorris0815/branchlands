@@ -75,7 +75,7 @@ const Hub = (() => {
     // places townsfolk and helper robots wander between (they find their own way)
     spots: [{ x: 4, z: 5 }, { x: -4, z: 5 }, { x: -6, z: -3 }, { x: 6, z: -2 }, { x: 0, z: 8.5 }, { x: 0, z: 15 }, { x: 0, z: 20 }, { x: -6, z: 10 }, { x: 7, z: 12 },
       { x: -12, z: 0 }, { x: 12, z: 0 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: 15, z: 7 }, { x: -17, z: 4 }, { x: 9, z: -9 }],
-    strollers: [{ from: 0, model: "villager6" }, { from: 5, model: "villager" }, { from: 9, model: "villager5", tint: 0xd8e4ff }, { from: 13, model: "villager3", tint: 0xffe2c8 }, { from: 14, model: "villager4" }],
+    strollers: [{ from: 0, model: "villager6" }, { from: 5, model: "villager" }, { from: 9, model: "villager5", tint: 0xd8e4ff }, { from: 13, model: "villager", tint: 0xffe2c8 }, { from: 14, model: "villager5" }],
     // twenty golden gears hidden round the island; lift is how high one floats (about 1.9 needs a jump)
     gears: [
       { id: "dock", x: 0, z: 22.6 }, { id: "orchard", x: -15.2, z: -12.2 }, { id: "crate", x: -10.5, z: -7.5, lift: 1.55 }, { id: "plaza", x: 0, z: -6.4, lift: 1.9 },
