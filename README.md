@@ -43,6 +43,12 @@ the **Time Tower** (turning brass gears, a pendulum, Git timeline banners, the C
 `INTERIORS` in `js/hub.js`. Town days last ten minutes: golden sunsets, lamps that come on at dusk, moonlight and
 stars (⚙️ Settings → Time of day can pin it). Townsfolk breathe, look at Bolt, and nod and gesture while you talk;
 strollers and Bolt's robot cousins wander between spots, gulls circle, crabs scuttle, fish jump.
+**Space** jumps (over crates and small rocks) and **Shift** boosts while the blue bar lasts (phone: Jump and Boost
+buttons). Twenty golden gears are hidden round the island, a few floating high enough to need a jump (15 🪙 each,
+300 more and the title Gear Hunter for all twenty). The 🏁 **Harbor Rally** flag by the pier starts a timed run
+through twelve rings to the end of the pier, with gold, silver and bronze times. The minimap in the corner shows
+portals, shops and townsfolk; **!** over someone means a quest for you, **?** a reward waiting. Some days it rains
+(⚙️ Settings → Weather in town).
 Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by changing two numbers. Around town:
 
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
@@ -164,7 +170,7 @@ item, goal, switch, door, gate, teleporter, crab, floor.
 
 ## Status
 
-Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer (3D only), Harbor Town hub with economy, skills, quests and NPCs, three save slots, phone play, a shared family world with real two-person PR reviews. Not built yet: accounts, Git against your real local folder, an LLM NPC inside the robot world, a rigged robot model, music.
+Playable end to end (35 levels, all verified by a scripted playthrough). Realistic 3D renderer (3D only), Harbor Town hub with economy, skills, quests and NPCs, three save slots, phone play, a shared family world with real two-person PR reviews. Not built yet: accounts, Git against your real local folder, an LLM NPC inside the robot world, a rigged robot model.
 The plan is in [docs/PROGRAM.md](docs/PROGRAM.md).
 
 ## License

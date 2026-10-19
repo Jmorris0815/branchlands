@@ -20,6 +20,7 @@ const Hub = (() => {
     { kind: "stall", tab: "board", wx: -4, wz: 10.5, label: "📜 Quest board" }, { kind: "stall", tab: "skills", wx: 5.5, wz: -11, label: "📈 Skills" },
     { kind: "sign", wx: 0, wz: -9.5, label: "🗺️ World map" },
     { kind: "stall", tab: "family", wx: -12.5, wz: -2, label: "👨‍👩‍👦 Family" },
+    { kind: "race", wx: 2.6, wz: 10.4, label: "🏁 Harbor Rally" },
     // doors into buildings (drive through them)
     { kind: "door", to: "workshop", wx: 13.95, wz: -0.9, label: "🔧 Wrenna's Workshop" },
     { kind: "door", to: "tower", wx: 10.7, wz: -12.55, label: "🕰️ The Time Tower" },
@@ -63,6 +64,17 @@ const Hub = (() => {
     spots: [{ x: 4, z: 5 }, { x: -4, z: 5 }, { x: -6, z: -3 }, { x: 6, z: -2 }, { x: 0, z: 8.5 }, { x: 0, z: 15 }, { x: 0, z: 20 }, { x: -6, z: 10 }, { x: 7, z: 12 },
       { x: -12, z: 0 }, { x: 12, z: 0 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: 15, z: 7 }, { x: -17, z: 4 }, { x: 9, z: -9 }],
     strollers: [{ from: 0, model: "villager6" }, { from: 5, model: "villager" }, { from: 9, model: "villager5", tint: 0xd8e4ff }, { from: 13, model: "villager3", tint: 0xffe2c8 }, { from: 14, model: "villager4" }],
+    // twenty golden gears hidden round the island; lift is how high one floats (about 1.9 needs a jump)
+    gears: [
+      { id: "dock", x: 0, z: 22.6 }, { id: "orchard", x: -15.2, z: -12.2 }, { id: "crate", x: -10.5, z: -7.5, lift: 1.55 }, { id: "plaza", x: 0, z: -6.4, lift: 1.9 },
+      { id: "lighthouse", x: 24.4, z: -3.2 }, { id: "hilltop", x: -8, z: -17.6, lift: 1.9 }, { id: "tower", x: 15.6, z: -14.6 }, { id: "westbeach", x: -23, z: 6 },
+      { id: "eastbeach", x: 23.5, z: 8.5 }, { id: "cottage", x: -9, z: 16.2 }, { id: "northshore", x: 0, z: -23.5 }, { id: "rocks", x: -20, z: -9.5 },
+      { id: "shipyard", x: 17, z: 12.5 }, { id: "westwood", x: -17.5, z: -1 }, { id: "gate7", x: -10.5, z: -20 }, { id: "pines", x: 6, z: -19.5 },
+      { id: "cove", x: -4.5, z: 17 }, { id: "cratepier", x: 2.6, z: 15.5, lift: 1.55 }, { id: "crystals", x: -6.5, z: -16, lift: 1.9 }, { id: "fisher", x: 11, z: 15.5 },
+    ],
+    // the Harbor Rally: start pose, then each ring in order (the last is the finish), and the medal times in seconds
+    race: { start: { x: 0.6, z: 10.6, yaw: -0.21 }, medals: { gold: 22, silver: 28, bronze: 38 },
+      rings: [{ x: 7, z: 12 }, { x: 15, z: 7 }, { x: 12, z: 0 }, { x: 9, z: -9 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: -12, z: 0 }, { x: -17, z: 4 }, { x: -6, z: 10 }, { x: 0, z: 15 }, { x: 0, z: 21.5 }] },
     bots: [{ from: 3, color: "#c8553d" }, { from: 7, color: "#3f9a6a", s: 0.7 }, { from: 11, color: "#e6b422", s: 0.75 }],
     get props() { return props().filter(p => !p.inside).map(p => ({ ...p, x: p.wx, z: p.wz })); },
   };
@@ -70,10 +82,10 @@ const Hub = (() => {
 
   function props() { return PROPS.map(p => p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
 
-  function init(a) { api = a; window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); }); initJoy(); }
+  function init(a) { api = a; window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
   function open() {
     active = true; nearProp = null; const s = api.save(); if (window.Audio_) Audio_.ambient("harbor");
-    $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false;
+    $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false; $("jumpBtn").hidden = false; $("boostBtn").hidden = false;
     const r = api.R.pick();
     if (!r) { renderPanel(); return; } // 3D still loading: render3d-ready calls open() again
     r.setLook(RPG.look()); room = null; r.roam.start(TOWN, hooks, s.hub3 || null);
@@ -83,7 +95,7 @@ const Hub = (() => {
   function close() {
     if (!active) return; active = false; clearInterval(saveT); keys.clear(); if (window.Audio_) { Audio_.engine(null); Audio_.ambient("level"); }
     if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
-    $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true;
+    $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true; $("jumpBtn").hidden = true; $("boostBtn").hidden = true;
   }
   function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.persistSave(); } } // inside a room, a reload puts you just outside its door
 
@@ -92,14 +104,49 @@ const Hub = (() => {
     onNear: p => { nearProp = p; renderPanel(); },      // Bolt is within talking distance of p (or null)
     onInteract: p => interact(p),                        // the player clicked / drove up to p
     onEnter: p => { if ($("modal").hidden) interact(p); }, // Bolt drove into a portal ring
+    gearTaken: id => town().gears.includes(id),
+    onGear: id => gotGear(id),
+    marks: () => { const m = {}; for (const p of PROPS) if (p.kind === "npc") { const qs = RPG.questsFor(p.id); if (qs.some(q => q.ready)) m[p.id] = "?"; else if (qs.length) m[p.id] = "!"; } return m; }, // over their heads and on the minimap
   };
+  // what you have done around town: gears found, rally best time and medals
+  function town() { const s = api.save(); if (!s.town) s.town = { gears: [], best: null, medals: {} }; return s.town; }
+  function gotGear(id) {
+    const t = town(), N = TOWN.gears.length; if (!t.gears.includes(id)) t.gears.push(id); RPG.addCoins(15); api.persistSave();
+    if (t.gears.length >= N && !t.allGears) { t.allGears = true; RPG.addCoins(300); const st = RPG.state; if (st.titles && !st.titles.includes("Gear Hunter")) st.titles.push("Gear Hunter"); api.persistSave(); api.toast(`<b>⚙️ All ${N} golden gears!</b> +300 🪙 and the title Gear Hunter.`); api.sfx("unlock"); }
+    else api.toast(`⚙️ Golden gear ${t.gears.length} of ${N} · +15 🪙`);
+    renderPanel();
+  }
+  const MEDALS = [["gold", "🥇", "Gold", 150], ["silver", "🥈", "Silver", 80], ["bronze", "🥉", "Bronze", 40]];
+  const fmt = t => Math.floor(t / 60) + ":" + (t % 60).toFixed(2).padStart(5, "0");
+  const medalOf = t => { const m = MEDALS.find(([k]) => t < TOWN.race.medals[k]); return m ? { key: m[0], icon: m[1], name: m[2] } : null; };
+  function raceMenu() {
+    const t = town(), M = TOWN.race.medals, phone = document.documentElement.dataset.device === "phone", m = t.best ? medalOf(t.best) : null;
+    api.showModal(`<h2>🏁 Harbor Rally</h2><p>Twelve rings round the island, from the plaza to the end of the pier. The next ring glows gold, and the arrow over Bolt points at it.</p>
+      <p>${phone ? "Hold <b>Boost</b> for speed while the blue bar lasts. Tap <b>Jump</b> to hop crates and rocks." : "Hold <b>Shift</b> to boost while the blue bar lasts. <b>Space</b> jumps crates and rocks. <b>Esc</b> stops the race."}</p>
+      <p>🥇 under ${M.gold} s (+150 🪙) · 🥈 under ${M.silver} s (+80 🪙) · 🥉 under ${M.bronze} s (+40 🪙), paid once each.</p>
+      <p class="muted">${t.best ? `Your best: <b>${fmt(t.best)}</b> ${m ? m.icon : ""}` : "No time on the board yet."}</p>
+      <div class="row"><button id="raceGo" class="primary">Start the race</button><button id="closeBtn">Not now</button></div>`);
+    $("raceGo").onclick = startRace; $("closeBtn").onclick = api.hideModal;
+  }
+  function startRace() { api.hideModal(); if (window.Render3D && Render3D.roam.race.start({ ...TOWN.race, best: town().best }, raceDone)) renderPanel(); }
+  function raceDone(time) {
+    const t = town(), prev = t.best, m = medalOf(time); let coins = 0;
+    for (const [k, , , c] of MEDALS.slice().reverse()) if (time < TOWN.race.medals[k] && !t.medals[k]) { t.medals[k] = true; coins += c; }
+    const better = !prev || time < prev; if (better) t.best = time; api.persistSave(); if (coins) RPG.addCoins(coins);
+    const nextUp = MEDALS.slice().reverse().find(([k]) => time >= TOWN.race.medals[k]);
+    api.showModal(`<h2>${m ? m.icon + " " + m.name + "!" : "🏁 Finished"}</h2><p>Time: <b>${fmt(time)}</b>${better ? (prev ? ` · new best (was ${fmt(prev)})` : " · your first time on the board") : ` · best ${fmt(prev)}`}</p>
+      ${coins ? `<p>+${coins} 🪙 for a new medal.</p>` : ""}${nextUp ? `<p class="muted">${nextUp[1]} ${nextUp[2]} is under ${TOWN.race.medals[nextUp[0]]} s. Boost on the straights and save the bar for the long run past the market.</p>` : ""}
+      <div class="row"><button id="raceGo" class="primary">Race again</button><button id="closeBtn">Done</button></div>`);
+    $("raceGo").onclick = startRace; $("closeBtn").onclick = () => { api.hideModal(); renderPanel(); };
+    renderPanel();
+  }
   function sendInput() {
     const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
     const y = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
     if (window.Render3D) Render3D.roam.input(x, y);
   }
   function interactNear() { const p = window.Render3D && Render3D.roam.near(); if (p && $("modal").hidden) interact(p); }
-  function onKeyUp(e) { keys.delete(e.key.toLowerCase()); sendInput(); }
+  function onKeyUp(e) { const k = e.key.toLowerCase(); keys.delete(k); if (k === "shift" && window.Render3D) Render3D.roam.boost(false); sendInput(); }
   // phone: a thumb joystick over the bottom-left of the picture, a Talk button bottom-right
   function initJoy() {
     const j = $("joy"), k = $("joyKnob"); if (!j) return; let id = null, cx = 0, cy = 0;
@@ -109,6 +156,9 @@ const Hub = (() => {
     const end = e => { if (e.pointerId !== id) return; id = null; k.style.transform = ""; if (window.Render3D) Render3D.roam.input(0, 0); };
     j.addEventListener("pointerup", end); j.addEventListener("pointercancel", end);
     $("talkBtn").onclick = () => interactNear();
+    $("jumpBtn").addEventListener("pointerdown", e => { e.preventDefault(); if (window.Render3D) Render3D.roam.jump(); });
+    const bb = $("boostBtn"), boost = on => e => { e.preventDefault(); if (on) bb.setPointerCapture(e.pointerId); bb.classList.toggle("on", on); if (window.Render3D) Render3D.roam.boost(on); };
+    bb.addEventListener("pointerdown", boost(true)); bb.addEventListener("pointerup", boost(false)); bb.addEventListener("pointercancel", boost(false));
   }
 
   function onKey(e) {
@@ -116,7 +166,11 @@ const Hub = (() => {
     const t = e.target.tagName; if (t === "INPUT" || t === "TEXTAREA" || t === "SELECT") return;
     const k = e.key.toLowerCase();
     const m = ["arrowright", "d", "arrowdown", "s", "arrowleft", "a", "arrowup", "w"].includes(k);
-    if (m) { e.preventDefault(); keys.add(k); sendInput(); } else if (k === "e" || k === "enter" || k === " ") { e.preventDefault(); interactNear(); }
+    if (m) { e.preventDefault(); keys.add(k); sendInput(); }
+    else if (k === " ") { e.preventDefault(); if (window.Render3D) Render3D.roam.jump(); }
+    else if (k === "shift") { keys.add(k); if (window.Render3D) Render3D.roam.boost(true); }
+    else if (k === "escape" && window.Render3D && Render3D.roam.race.on) { Render3D.roam.race.stop(); api.toast("🏁 Race stopped."); renderPanel(); }
+    else if (k === "e" || k === "enter") { e.preventDefault(); interactNear(); }
   }
   function enterRoom(id) {
     const R = INTERIORS[id]; if (!R || !window.Render3D) return; remember(); fade(() => {
@@ -132,6 +186,7 @@ const Hub = (() => {
     if (p.kind === "door") return enterRoom(p.to);
     if (p.kind === "exit") return leaveRoom();
     if (p.kind === "spot") return p.map ? api.showScreen("map") : api.openTown(p.tab);
+    if (p.kind === "race") return raceMenu();
     if (p.kind === "npc") talk(p.id);
     else if (p.kind === "stall") api.openTown(p.tab);
     else if (p.kind === "sign") api.showScreen("map");
@@ -157,7 +212,8 @@ const Hub = (() => {
     {
       const p = nearProp, phone = document.documentElement.dataset.device === "phone";
       el.innerHTML = `<div class="zonechip">⚓ Harbor Town</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
-        <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. Dark gates are sealed until you finish the zone before them."}</p>
+        <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. <b>Space</b> jumps, <b>Shift</b> boosts. Dark gates are sealed until you finish the zone before them."}</p>
+        <p class="muted">⚙️ ${town().gears.length} of ${TOWN.gears.length} golden gears found${town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
         <div id="nearby">${p ? `<button class="primary" data-near="1">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + (p.locked ? " Sealed: " : " Enter ") + ZONES[p.zone - 1].name : p.kind === "door" ? "🚪 Go into " + p.label : p.kind === "exit" ? "🚪 Back to town" : (p.kind === "npc" ? "🗣️ Talk to " : "Use: ") + p.label}</button>` : room ? `<span class="muted">You're in ${INTERIORS[room].title}. Drive to the glowing rings to use things, talk to whoever is here, and leave by the door.</span>` : `<span class="muted">Nobody within reach. The quest board and Marisol are down by the harbour, the shops ring the plaza, the portals stand along the shore. Lit doorways lead inside: Wrenna's Workshop and the Time Tower.</span>`}</div>
         <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()} · ${LEVELS.filter(l => api.completed()[l.id]).length}/${LEVELS.length} missions</p>`;
       const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();

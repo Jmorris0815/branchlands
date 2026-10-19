@@ -34,6 +34,12 @@ const Audio_ = (() => {
     unlock: () => [392, 523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.25, "triangle", 0.08, i * 0.11)),
     click: () => tone(1000, 0.03, "square", 0.03),
     star: () => tone(1500, 0.08, "sine", 0.06),
+    gear: () => [988, 1319, 1568, 1976].forEach((f, i) => tone(f, 0.12, "triangle", 0.07, i * 0.06)),
+    ring: () => { tone(880, 0.1, "sine", 0.08); tone(1320, 0.16, "sine", 0.07, 0.06); },
+    beep: () => tone(660, 0.16, "square", 0.05),
+    go: () => tone(1320, 0.4, "square", 0.06),
+    land: () => { noise(0.1, 0.05); tone(95, 0.12, "sine", 0.09, 0, -40); },
+    thunder: () => { if (!enabled) return; const c = ac(); if (!c) return; const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), t = c.currentTime; s.buffer = noiseBuf(c, 3, true); f.type = "lowpass"; f.frequency.value = 240; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.6, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.9); s.connect(f); f.connect(g); g.connect(c.destination); s.start(); s.stop(t + 3); },
   };
   // ---------- ambience, engine and music (all synthesized) ----------
   // Harbor Town: rolling surf (filtered noise that swells), wind, gulls now and then, a soft chord pad with a
@@ -93,10 +99,20 @@ const Audio_ = (() => {
     if (!eng) { const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain(), n = loopNoise(c, true), ng = c.createGain(); o.type = "sawtooth"; f.type = "lowpass"; f.frequency.value = 300; g.gain.value = 0; ng.gain.value = 0.5; o.connect(f); n.connect(ng); ng.connect(f); f.connect(g); g.connect(c.destination); o.start(); eng = { c, o, f, g, n }; }
     const t = c.currentTime; eng.o.frequency.setTargetAtTime(48 + v * 70, t, 0.08); eng.f.frequency.setTargetAtTime(220 + v * 600, t, 0.08); eng.g.gain.setTargetAtTime(0.012 + v * 0.03, t, 0.08);
   }
+  // rain: v = 0 (dry) .. 1 (downpour), called every frame in town
+  let rainSnd = null, rainLast = -1;
+  function rain(v) {
+    const c = ctx; if (!c || c.state !== "running") return; if (!enabled) v = 0;
+    if (Math.abs(v - rainLast) < 0.01) return; rainLast = v;
+    if (!rainSnd && v > 0.01) { const s = loopNoise(c, false), hp = c.createBiquadFilter(), lp = c.createBiquadFilter(), g = c.createGain(); hp.type = "highpass"; hp.frequency.value = 900; lp.type = "lowpass"; lp.frequency.value = 7000; g.gain.value = 0; s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(c.destination); rainSnd = { s, g }; }
+    if (!rainSnd) return;
+    if (v <= 0.01) { const r = rainSnd; rainSnd = null; r.g.gain.setTargetAtTime(0, c.currentTime, 0.2); setTimeout(() => r.s.stop(), 1500); return; }
+    rainSnd.g.gain.setTargetAtTime(v * 0.05, c.currentTime, 0.3);
+  }
   // browsers only allow sound after a click or key press
   const wake = () => { const c = ac(); if (c && pending) { const k = pending; const go = () => { if (pending === k) { pending = null; startAmbient(k); } }; if (c.state === "running") go(); else c.resume().then(go); } };
   window.addEventListener("pointerdown", wake); window.addEventListener("keydown", wake);
-  return { play: (n) => { if (sfx[n]) sfx[n](); }, ambient, engine,
+  return { play: (n) => { if (sfx[n]) sfx[n](); }, ambient, engine, rain,
     set enabled(v) { enabled = v; if (!v) { startAmbient(null); engine(null); } }, get enabled() { return enabled; } };
 })();
 window.Audio_ = Audio_;

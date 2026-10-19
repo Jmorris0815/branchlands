@@ -99,7 +99,11 @@ main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.
 #joy { position: absolute; left: 14px; bottom: 14px; width: 124px; height: 124px; border-radius: 50%; background: rgba(20, 28, 40, 0.35); border: 2px solid rgba(255, 255, 255, 0.55); touch-action: none; }
 #joyKnob { position: absolute; left: 36px; top: 36px; width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); pointer-events: none; }
 #talkBtn { position: absolute; right: 16px; bottom: 22px; width: 76px; height: 76px; border-radius: 50%; font: 700 17px var(--display); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); }
-#joy[hidden], #talkBtn[hidden], :root:not([data-device="phone"]) #joy, :root:not([data-device="phone"]) #talkBtn { display: none; }
+#jumpBtn, #boostBtn { position: absolute; width: 62px; height: 62px; border-radius: 50%; font: 700 14px var(--display); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); touch-action: none; }
+#jumpBtn { right: 104px; bottom: 16px; }
+#boostBtn { right: 24px; bottom: 112px; background: #2f8fd0; color: #fff; border-color: #2f8fd0; }
+#boostBtn.on { background: #5fd0ff; transform: scale(1.08); }
+#joy[hidden], #talkBtn[hidden], #jumpBtn[hidden], #boostBtn[hidden], :root:not([data-device="phone"]) #joy, :root:not([data-device="phone"]) #talkBtn, :root:not([data-device="phone"]) #jumpBtn, :root:not([data-device="phone"]) #boostBtn { display: none; }
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .toolbar .sp { flex: 1; }
 #lineCount { color: var(--muted); font-size: 12px; } #lineCount.over { color: var(--err); font-weight: 700; }
