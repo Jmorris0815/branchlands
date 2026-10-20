@@ -45,9 +45,40 @@ function lockHead(mesh) {
   log("  head lock: " + nh + " verts to head");
 }
 const LOCK = (new URLSearchParams(location.search).get("head") || "").split(",");
+// Mixamo can't rig some hats (the sailor's cap). Rig a copy cut off at the brow (mixamo_prep.py with CUT=<cm>), then
+// give every vertex of the full model the weights of the nearest rigged vertex; whatever is above the cut follows the head.
+function transfer(base, orig, cut) {
+  let src = null; base.traverse(o => { if (o.isSkinnedMesh) src = o; });
+  let mesh = null; orig.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+  orig.scene.updateMatrixWorld(true);
+  const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), P = g.attributes.position;
+  // the same frame mixamo_prep.py wrote: 180 tall, feet at 0, centred
+  g.computeBoundingBox(); const b = g.boundingBox, s = 180 / (b.max.y - b.min.y);
+  g.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); g.scale(s, s, s);
+  const SP = src.geometry.attributes.position, SI = src.geometry.attributes.skinIndex, SW = src.geometry.attributes.skinWeight;
+  const sv = []; const t = new THREE.Vector3(); for (let i = 0; i < SP.count; i++) sv.push(t.fromBufferAttribute(SP, i).applyMatrix4(src.bindMatrix).clone());
+  const sb = new THREE.Box3().setFromPoints(sv); log("  rigged copy box " + sb.min.toArray().map(Math.round) + " .. " + sb.max.toArray().map(Math.round) + ", full model top " + Math.round((b.max.y - b.min.y) * s));
+  const head = src.skeleton.bones.findIndex(o => o.name === "mixamorigHead");
+  const n = P.count, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4), v = new THREE.Vector3(); let capped = 0;
+  for (let i = 0; i < n; i++) {
+    v.fromBufferAttribute(P, i);
+    if (v.y >= cut - 1) { si[i * 4] = head; sw[i * 4] = 1; capped++; continue; }
+    let best = 0, bd = Infinity; for (let j = 0; j < sv.length; j++) { const d = sv[j].distanceToSquared(v); if (d < bd) { bd = d; best = j; } }
+    for (let k = 0; k < 4; k++) { si[i * 4 + k] = SI.getComponent(best, k); sw[i * 4 + k] = SW.getComponent(best, k); }
+  }
+  // back into the rigged mesh's own frame, glTF texture coordinates turned FBX-way up
+  const inv = src.bindMatrix.clone().invert(); g.applyMatrix4(inv);
+  const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+  g.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute("skinWeight", new THREE.BufferAttribute(sw, 4));
+  for (const k of Object.keys(g.attributes)) if (!["position", "normal", "uv", "skinIndex", "skinWeight"].includes(k)) g.deleteAttribute(k);
+  src.geometry = g; src.normalizeSkinWeights();
+  log("  weights copied to " + n + " verts, " + capped + " on the head");
+}
+const FROM = new URLSearchParams(location.search).get("from"), CUTCM = +(new URLSearchParams(location.search).get("cut") || 0);
 async function convert(name) {
-  const base = await load(fbx, "fbx/" + name + "_rig.fbx");
+  const base = await load(fbx, "fbx/" + (FROM || name) + "_rig.fbx");
   const orig = await load(gltf, name + ".glb");
+  if (FROM) transfer(base, orig, CUTCM);
   let map = null; orig.scene.traverse(o => { if (o.isMesh && o.material.map) map = o.material.map; });
   const tex = new THREE.Texture(map.image); tex.flipY = true; tex.colorSpace = THREE.SRGBColorSpace; tex.needsUpdate = true; tex.userData.mimeType = "image/jpeg";
   let skinned = 0;
