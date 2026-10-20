@@ -18,6 +18,13 @@ for n in sys.argv[1:]:
     g = trimesh.Trimesh(uniq, inv[F], process=False)
     lab = trimesh.graph.connected_component_labels(g.face_adjacency, node_count=len(F))
     keep = np.bincount(lab)[lab] >= 50
+    # duplicate faces, zero-area faces and faces on edges shared by more than two faces confuse the auto-rigger
+    WF = inv[F]; key = np.sort(WF, axis=1)
+    _, first = np.unique(key, axis=0, return_index=True); dup = np.ones(len(F), bool); dup[first] = False
+    area = np.linalg.norm(np.cross(uniq[WF[:, 1]] - uniq[WF[:, 0]], uniq[WF[:, 2]] - uniq[WF[:, 0]]), axis=1)
+    E = np.sort(np.concatenate([WF[:, [0, 1]], WF[:, [1, 2]], WF[:, [2, 0]]]), axis=1)
+    ue, ei, cnt = np.unique(E, axis=0, return_inverse=True, return_counts=True); bad = (cnt[ei.ravel()] > 2).reshape(3, -1).any(0)
+    keep &= ~dup & (area > 1e-8) & ~bad
     lines = [f"mtllib {n}.mtl", "usemtl mat0"]
     lines += [f"v {a:.4f} {b:.4f} {c:.4f}" for a,b,c in uniq]
     lines += [f"vt {u:.5f} {v:.5f}" for u,v in UV]

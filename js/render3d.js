@@ -42,7 +42,7 @@ const Render3D = (() => {
     crab:     { fit: "w", size: 0.62 },
     apple:    { fit: "h", size: 0.34, lift: 0.08 }, key: { fit: "w", size: 0.42, lift: 0.18 }, lens: { fit: "w", size: 0.45, lift: 0.12 },
     villager: { fit: "h", size: 1.1 }, villager2: { fit: "h", size: 1.08 }, villager3: { fit: "h", size: 1.1 }, villager4: { fit: "h", size: 1.02 }, villager5: { fit: "h", size: 1.15 }, villager6: { fit: "h", size: 0.82 },
-    villager_rig: { fit: "h", size: 1.1 }, villager5_rig: { fit: "h", size: 1.15 }, // rigged in Mixamo, with idle / walk / wave / talk clips
+    villager_rig: { fit: "h", size: 1.1 }, villager2_rig: { fit: "h", size: 1.08 }, villager4_rig: { fit: "h", size: 1.02 }, villager5_rig: { fit: "h", size: 1.15 }, villager6_rig: { fit: "h", size: 0.82 }, // rigged in Mixamo, with idle / walk / wave / talk clips
     stall: { fit: "w", size: 1.05 },
   };
   const MODEL_BASE = "assets/models/", assetTpl = {}, assetWaiters = {}, gltfLoader = new GLTFLoader();
@@ -1143,7 +1143,7 @@ const Render3D = (() => {
   }
   function rigSet(sets, k, v) { if (sets) for (const u of sets) u[k].value = v; }
   // a person with a real skeleton: one mixer per person, cross-fading between the Mixamo clips
-  const RIGGED = { villager: "villager_rig", villager5: "villager5_rig" };
+  const RIGGED = { villager: "villager_rig", villager2: "villager2_rig", villager4: "villager4_rig", villager5: "villager5_rig", villager6: "villager6_rig" };
   const personModel = m => RIGGED[m] && ASSETS[RIGGED[m]] ? RIGGED[m] : m;
   function makeAnim(inst) {
     const mixer = new THREE.AnimationMixer(inst), acts = {};
