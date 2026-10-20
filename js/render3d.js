@@ -159,6 +159,8 @@ const Render3D = (() => {
       g.add(label(name, 0, 0, 0.5, 1.05));
     } else if (p.kind === "sorter") {
       sorterMesh(g); g.add(label(name, -0.35, 0, 0.5, 1.75));
+    } else if (p.kind === "botdock") {
+      botDockMesh(g); g.add(label(name, 0, 0, 0.5, 2.45));
     } else if (p.kind === "fish") {
       const wood = std({ color: 0x6a4a30, roughness: 0.9 }), tin = std({ color: 0x8a96a3, metalness: 0.7, roughness: 0.4 });
       g.add(mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.3, 14, 1, true), tin, 0.25, 0.15, 0.1)); g.add(mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 14), tin, 0.25, 0.01, 0.1));
@@ -1494,6 +1496,113 @@ const Render3D = (() => {
     fctx.fillStyle = "#fff"; fctx.font = "800 17px Nunito, sans-serif"; fctx.fillText("🐟 Sorting… " + S.n + " of " + S.items.length, cx, 28);
     fctx.font = "700 13px Nunito, sans-serif"; fctx.fillStyle = "#cfe3ff"; fctx.fillText("✓ " + S.ok + "   ✗ " + (S.n - S.ok), cx, 47);
   }
+  // ---------- helper bots: Bolt's cousins running the player's Python round town (bots.js says what, this draws it) ----------
+  const ITEM_COL = { sardine: 0xc4d2de, mackerel: 0x4f8aa0, bass: 0x7d8a8f, salmon: 0xe0866a, koi: 0xffb020, swordfish: 0x35506e, boot: 0x4a3626, apple: 0xd8382a, scrap: 0x9aa3ad, glass: 0x6fd8e0, gem: 0xd04ae0 };
+  function botDockMesh(g) { // a concrete pad with three chargers under a tin roof, a status screen and the crate
+    const metal = std({ color: 0x8a96a3, metalness: 0.7, roughness: 0.4 }), orange = std({ color: 0xd0692a, metalness: 0.5, roughness: 0.45 }), dark = std({ color: 0x2b2f3a, roughness: 0.6 });
+    g.add(mesh(new THREE.BoxGeometry(2.7, 0.08, 1.9), std({ color: 0xffffff, map: texture("cobble", 0xa4a8ab), roughness: 0.95 }), 0, 0.04, 0.35));
+    for (const x of [-1.28, 1.28]) g.add(mesh(new THREE.BoxGeometry(0.09, 2.05, 0.09), metal, x, 1.02, -0.5));
+    for (const x of [-1.28, 1.28]) g.add(mesh(new THREE.BoxGeometry(0.07, 1.6, 0.07), metal, x, 0.8, 1.15));
+    const roof = mesh(new THREE.BoxGeometry(2.95, 0.06, 1.95), orange, 0, 1.95, 0.32); roof.rotation.x = 0.16; g.add(roof);
+    g.add(mesh(new THREE.BoxGeometry(2.6, 1.0, 0.06), std({ color: 0xffffff, map: texture("planks", 0x8a8f96), roughness: 0.8 }), 0, 0.58, -0.52));
+    const sc = document.createElement("canvas"); sc.width = 256; sc.height = 128; const sg = sc.getContext("2d"); sg.fillStyle = "#0d1a14"; sg.fillRect(0, 0, 256, 128); sg.fillStyle = "#5fe08a"; sg.font = "900 34px Nunito, sans-serif"; sg.textAlign = "center"; sg.fillText("BOT DOCK", 128, 48); sg.font = "bold 18px monospace"; sg.fillText("import bot", 128, 86); sg.fillText("bot.go(\"pier\")", 128, 110);
+    const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace;
+    g.add(mesh(new THREE.BoxGeometry(0.96, 0.52, 0.05), dark, 0, 1.38, -0.48)); const face = mesh(new THREE.PlaneGeometry(0.9, 0.46), new THREE.MeshBasicMaterial({ map: st }), 0, 1.38, -0.452); face.castShadow = false; g.add(face);
+    g.userData.pads = [];
+    for (const x of [-0.7, 0, 0.7]) {
+      g.add(mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.05, 24), dark, x, 0.1, 0.85));
+      const ring = mesh(new THREE.TorusGeometry(0.27, 0.025, 8, 32), std({ color: 0x3fbf6a, emissive: 0x3fbf6a, emissiveIntensity: 0.2, roughness: 0.3 }), x, 0.13, 0.85); ring.rotation.x = Math.PI / 2; ring.castShadow = false; g.add(ring); g.userData.pads.push(ring);
+      const post = mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), metal, x, 0.33, 0.42); g.add(post); g.add(mesh(new THREE.BoxGeometry(0.12, 0.08, 0.04), std({ color: 0x3fbf6a, emissive: 0x3fbf6a, emissiveIntensity: 0.8 }), x, 0.5, 0.48));
+    }
+    const crate = mesh(new THREE.BoxGeometry(0.62, 0.46, 0.52), std({ color: 0xffffff, map: texture("planks", 0x7a4a2a), roughness: 0.85 }), 1.7, 0.23, 0.1); g.add(crate); g.userData.crate = crate;
+    g.add(mesh(new THREE.BoxGeometry(0.66, 0.05, 0.56), std({ color: 0x5a3a22, roughness: 0.9 }), 1.7, 0.47, 0.1));
+  }
+  function workerMesh(color) {
+    const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); const col = new THREE.Color(color);
+    vis.userData.onModel = inst => tintModel(inst, col); useAsset(vis, "bolt", () => robotShape(vis)); if (vis.userData.model) tintModel(vis.userData.model, col);
+    vis.scale.setScalar(0.55);
+    const wick = std({ color: 0x9a7240, roughness: 0.95 }), bk = new THREE.Group(); bk.position.set(-0.22, 0.36, 0); bk.scale.setScalar(0.72); g.add(bk); // the basket on its back
+    bk.add(mesh(new THREE.BoxGeometry(0.24, 0.02, 0.28), wick, 0, 0, 0)); for (const s of [-1, 1]) { bk.add(mesh(new THREE.BoxGeometry(0.24, 0.12, 0.015), wick, 0, 0.06, s * 0.14)); bk.add(mesh(new THREE.BoxGeometry(0.015, 0.12, 0.28), wick, s * 0.12, 0.06, 0)); }
+    const items = [], ball = new THREE.SphereGeometry(0.038, 8, 6);
+    for (let i = 0; i < 12; i++) { const m = mesh(ball, std({ color: 0xffffff, roughness: 0.5 }), -0.07 + (i % 3) * 0.07, 0.045 + Math.floor(i / 9) * 0.06, -0.09 + (Math.floor(i / 3) % 3) * 0.09); m.scale.set(1.5, 0.8, 0.8); m.visible = false; bk.add(m); items.push(m); }
+    const rod = mesh(new THREE.CylinderGeometry(0.008, 0.015, 0.9, 6), std({ color: 0x5a3a22, roughness: 0.7 }), 0.2, 0.62, 0.14); rod.geometry.translate(0, 0.45, 0); rod.position.y = 0.4; rod.rotation.z = -0.95; rod.visible = false; g.add(rod);
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xf4f4f4, transparent: true, opacity: 0.7 })); line.frustumCulled = false; line.visible = false; world.add(line);
+    const bob = mesh(new THREE.SphereGeometry(0.05, 10, 8), std({ color: 0xe8402a, roughness: 0.4 })); bob.visible = false; world.add(bob);
+    const pop = mesh(new THREE.SphereGeometry(0.07, 10, 8), std({ color: 0xffffff, roughness: 0.4 })); pop.visible = false; world.add(pop);
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    return { g, vis, items, rod, line, bob, pop, color };
+  }
+  const gyAt = (r, x, z) => { const p = r.platforms.find(p => x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2); return p ? p.y : r.height(x, z); };
+  function freeNear(r, p) { const { g, n, res, half } = r.walk, ci = v => Math.max(0, Math.min(n - 1, Math.floor((v + half) / res))); let best = p, bd = 1e9; for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) { const i = ci(p.x) + dx, j = ci(p.z) + dz; if (i < 0 || j < 0 || i >= n || j >= n || !g[j * n + i]) continue; const d = dx * dx + dz * dz; if (d < bd) { bd = d; best = { x: -half + (i + 0.5) * res, z: -half + (j + 0.5) * res }; } } return best; }
+  function slotAt(r, place, i) { const P = r.hooks.places[place] || r.hooks.places.dock, s = P.slots[i % P.slots.length]; return s; }
+  function workerPath(r, from, to, i) {
+    const key = from + ">" + to + ">" + i; r.wpaths = r.wpaths || {}; if (r.wpaths[key]) return r.wpaths[key];
+    const a = slotAt(r, from, i), b = slotAt(r, to, i), a2 = freeNear(r, a), b2 = freeNear(r, b);
+    const mid = findPath(r, a2, b2) || [b2], pts = [{ x: a.x, z: a.z }, a2].concat(mid, [{ x: b.x, z: b.z }]).filter((p, k, all) => !k || Math.hypot(p.x - all[k - 1].x, p.z - all[k - 1].z) > 0.05);
+    const cum = [0]; for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].z - pts[k - 1].z));
+    return r.wpaths[key] = { pts, cum, len: cum[cum.length - 1] };
+  }
+  function along(P, k) { const d = k * P.len; let s = 1; while (s < P.cum.length - 1 && P.cum[s] < d) s++; const a = P.pts[s - 1], b = P.pts[s] || a, seg = (P.cum[s] - P.cum[s - 1]) || 1, u = Math.max(0, Math.min(1, (d - P.cum[s - 1]) / seg)); return { x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u, yaw: Math.atan2(-(b.z - a.z), b.x - a.x) }; }
+  function workerFrame(r, dt) {
+    const list = r.hooks.workers ? r.hooks.workers() : []; r.workers = r.workers || {}; const seen = {};
+    const dock = r.props.find(q => q.p.kind === "botdock");
+    if (dock) dock.m.userData.pads.forEach(p => { p.material.emissiveIntensity = 0.15; });
+    for (const P of list) {
+      seen[P.id] = true; let w = r.workers[P.id];
+      if (!w || w.color !== P.color) { if (w) { world.remove(w.g); world.remove(w.line); world.remove(w.bob); world.remove(w.pop); } w = r.workers[P.id] = workerMesh(P.color); world.add(w.g); w.yaw = 0; w.burstKey = null; }
+      w.P = P; let x, z, yaw = w.yaw, moving = false;
+      if ((P.act === "go" || P.act === "flat") && P.from && P.to && P.from !== P.to) { const path = workerPath(r, P.from, P.to, P.slot), q = along(path, P.k); x = q.x; z = q.z; if (P.act === "go" && P.k < 1) { yaw = q.yaw; moving = true; } }
+      else { const s = slotAt(r, P.place, P.slot); x = s.x; z = s.z; yaw = Math.atan2(-(s.look[1] - z), s.look[0] - x); }
+      let dy = yaw - w.yaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI; w.yaw += dy * Math.min(1, dt * 8);
+      const g = w.g, y = gyAt(r, x, z); g.position.set(x, y, z); g.rotation.y = w.yaw;
+      // what's in the basket
+      for (let i = 0; i < w.items.length; i++) { const n = P.carry && P.carry[i]; w.items[i].visible = !!n; if (n) w.items[i].material.color.setHex(ITEM_COL[n] || 0xcccccc); }
+      // body language for each job
+      const vis = w.vis, t = clock; vis.rotation.set(0, 0, 0); vis.position.y = 0;
+      const key = P.act + ":" + P.place + ":" + P.et;
+      const first = key !== w.burstKey; if (first) w.burstKey = key;
+      w.rod.visible = P.act === "fish"; w.line.visible = w.bob.visible = P.act === "fish"; w.pop.visible = false;
+      if (moving) { vis.position.y = Math.abs(Math.sin(t * 18 + P.slot)) * 0.012; vis.rotation.z = 0.05; }
+      else if (P.act === "fish") {
+        const s = slotAt(r, P.place, P.slot), dx = s.look[0] - x, dz = s.look[1] - z, dd = Math.hypot(dx, dz) || 1, bx = x + dx / dd * 2.1, bz = z + dz / dd * 2.1;
+        const bite = P.k > 0.86, by = -0.02 + (bite ? -0.06 * Math.abs(Math.sin(t * 20)) : Math.sin(t * 2.4 + P.slot) * 0.015);
+        w.bob.position.set(bx, by, bz); w.rod.rotation.z = bite ? -0.6 : -0.95;
+        const tip = w.rod.localToWorld(new THREE.Vector3(0, 0.9, 0)), pa = w.line.geometry.attributes.position; pa.setXYZ(0, tip.x, tip.y, tip.z); pa.setXYZ(1, bx, by + 0.03, bz); pa.needsUpdate = true;
+        if (P.k > 0.93 && P.item) { const u = (P.k - 0.93) / 0.07, bk = new THREE.Vector3(-0.27, 0.5, 0).applyMatrix4(g.matrixWorld); w.pop.visible = true; w.pop.material.color.setHex(ITEM_COL[P.item] || 0xffffff); w.pop.scale.set(1.6, 0.7, 0.7); w.pop.position.set(bx + (bk.x - bx) * u, by + (bk.y - by) * u + Math.sin(u * Math.PI) * 0.9, bz + (bk.z - bz) * u); if (first) burst(bx, bz, 0xdff4ff, 8, 1, 0); }
+      }
+      else if (P.act === "pick") { vis.rotation.z = -0.12 + Math.sin(t * 6) * 0.08; const s = slotAt(r, P.place, P.slot); if (P.k > 0.7) { const u = (P.k - 0.7) / 0.3, bk = new THREE.Vector3(-0.27, 0.5, 0).applyMatrix4(g.matrixWorld), ax = s.look[0] * 0.6 + x * 0.4, az = s.look[1] * 0.6 + z * 0.4, ay = y + 1.7; w.pop.visible = true; w.pop.material.color.setHex(ITEM_COL.apple); w.pop.scale.setScalar(0.8); w.pop.position.set(ax + (bk.x - ax) * u, ay + (bk.y - ay) * u + Math.sin(u * Math.PI) * 0.3, az + (bk.z - az) * u); } }
+      else if (P.act === "dig") { vis.rotation.z = -0.25 + Math.sin(t * 14) * 0.1; w.digT = (w.digT || 0) - dt; if (w.digT <= 0) { w.digT = 0.25; const s = slotAt(r, P.place, P.slot); burst(x + (s.look[0] - x) * 0.1, z + (s.look[1] - z) * 0.1, 0xe0cfa2, 4, 0.8, y + 0.05); } if (P.k > 0.9 && first !== true && P.item && !w.dug) { w.dug = true; burst(x, z, P.item === "gem" ? 0xd04ae0 : 0xfff2b0, 10, 1.3, y + 0.3); } if (P.k < 0.5) w.dug = false; }
+      else if (P.act === "sell" || P.act === "sort") { vis.position.y = Math.abs(Math.sin(t * 9)) * 0.04; if (first) { burst(x, z, 0xffd24a, 14, 1.4, y + 0.7); if (window.Audio_ && Math.hypot(x - r.bolt.position.x, z - r.bolt.position.z) < 12) Audio_.play("gem"); } }
+      else if (P.act === "unload") { if (first && dock) { const c = dock.m.userData.crate.getWorldPosition(new THREE.Vector3()); burst(c.x, c.z, 0xfff2b0, 10, 1.1, c.y + 0.3); } vis.rotation.z = Math.sin(t * 10) * 0.06; }
+      else if (P.act === "release") { if (first) burst(x, z, 0x9fdcff, 8, 1, y + 0.3); }
+      else if (P.act === "charge") { if (dock && P.place === "dock") { const ring = dock.m.userData.pads[P.slot % 3]; ring.material.emissive.set(P.color); ring.material.emissiveIntensity = 0.8 + Math.sin(t * 4) * 0.5; } w.sparkT = (w.sparkT || 0) - dt; if (w.sparkT <= 0) { w.sparkT = 1.1; burst(x, z, 0x7fffa0, 3, 0.4, y + 0.6); } }
+      else if (P.act === "flat") { vis.rotation.z = -0.35; vis.rotation.x = 0.25; }
+      else if (P.act === "error" || P.act === "stuck") { vis.rotation.y = Math.sin(t * 7) * 0.3; }
+      else if (P.act === "off") vis.position.y = -0.03;
+    }
+    // watching a bot among the trees: hide the crowns between it and the camera
+    const wq = r.watch && r.workers[r.watch]; if (wq || r.crownsHidden) { r.crownsHidden = !!wq; const a = camera.position, b = wq ? wq.g.position : null;
+      for (const t of r.trees) { let hide = false; if (b) { const abx = b.x - a.x, abz = b.z - a.z, l2 = abx * abx + abz * abz || 1, u = Math.max(0, Math.min(1, ((t.position.x - a.x) * abx + (t.position.z - a.z) * abz) / l2)); hide = Math.hypot(t.position.x - a.x - abx * u, t.position.z - a.z - abz * u) < 2.2; } if (t.userData.crown) t.userData.crown.visible = !hide; } }
+    for (const id in r.workers) if (!seen[id]) { const w = r.workers[id]; world.remove(w.g); world.remove(w.line); world.remove(w.bob); world.remove(w.pop); delete r.workers[id]; }
+  }
+  // name tags, speech bubbles and +coins over the bots, drawn flat on the HUD so they stay sharp
+  function drawWorkerHud(r) {
+    if (!r.workers) return; camera.updateMatrixWorld(); const cp = camera.position;
+    for (const id in r.workers) {
+      const w = r.workers[id], P = w.P, g = w.g; if (!P) continue; const d = g.position.distanceTo(cp); if (d > 26) continue;
+      const v = new THREE.Vector3(g.position.x, g.position.y + 0.95, g.position.z).project(camera); if (v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) continue;
+      const sx = (v.x + 1) / 2 * fx.width, sy = (1 - v.y) / 2 * fx.height, sc = Math.max(0.75, Math.min(1, 9 / d));
+      fctx.textAlign = "center"; fctx.textBaseline = "middle"; fctx.font = `800 ${Math.round(12 * sc)}px Nunito, sans-serif`;
+      const nw = fctx.measureText(P.name).width + 26 * sc; fctx.fillStyle = "rgba(22,30,44,0.72)"; fctx.beginPath(); fctx.roundRect(sx - nw / 2, sy - 9 * sc, nw, 18 * sc, 9 * sc); fctx.fill();
+      fctx.fillStyle = P.color; fctx.beginPath(); fctx.arc(sx - nw / 2 + 9 * sc, sy, 4 * sc, 0, Math.PI * 2); fctx.fill(); fctx.fillStyle = "#fff"; fctx.fillText(P.name, sx + 5 * sc, sy + 0.5);
+      const bw = nw - 10 * sc; fctx.fillStyle = "rgba(22,30,44,0.72)"; fctx.fillRect(sx - bw / 2, sy + 10 * sc, bw, 4 * sc); fctx.fillStyle = P.batt < 0.25 ? "#ff6a5a" : "#5fe08a"; fctx.fillRect(sx - bw / 2, sy + 10 * sc, bw * Math.max(0, Math.min(1, P.batt)), 4 * sc);
+      if (P.say) { fctx.font = `700 ${Math.round(13 * sc)}px Nunito, sans-serif`; const t = P.say.length > 34 ? P.say.slice(0, 33) + "…" : P.say, tw = fctx.measureText(t).width + 18, by = sy - 34 * sc;
+        fctx.fillStyle = P.say === "?!" || P.act === "stuck" ? "#ffe0dc" : "rgba(255,255,255,0.95)"; fctx.beginPath(); fctx.roundRect(sx - tw / 2, by - 12, tw, 24, 12); fctx.fill(); fctx.beginPath(); fctx.moveTo(sx - 5, by + 11); fctx.lineTo(sx + 5, by + 11); fctx.lineTo(sx, by + 18); fctx.fill();
+        fctx.fillStyle = "#1c2433"; fctx.fillText(t, sx, by + 0.5); }
+      for (const p of P.pops || []) { const a = (Date.now() - p.at) / 1400; fctx.globalAlpha = Math.max(0, 1 - a); fctx.font = `900 ${Math.round(15 * sc)}px Nunito, sans-serif`; fctx.lineWidth = 3; fctx.strokeStyle = "rgba(22,30,44,0.8)"; fctx.strokeText(p.text, sx + 26, sy - 20 - a * 30); fctx.fillStyle = "#ffd24a"; fctx.fillText(p.text, sx + 26, sy - 20 - a * 30); fctx.globalAlpha = 1; }
+    }
+    if (r.watch && r.workers[r.watch]) { const P = r.workers[r.watch].P, txt = "👀 Watching " + P.name + "  ·  move to stop"; fctx.font = "800 14px Nunito, sans-serif"; const tw = fctx.measureText(txt).width + 24; fctx.fillStyle = "rgba(22,30,44,0.82)"; fctx.beginPath(); fctx.roundRect(fx.width / 2 - tw / 2, fx.height - 44, tw, 28, 14); fctx.fill(); fctx.fillStyle = "#fff"; fctx.textAlign = "center"; fctx.fillText(txt, fx.width / 2, fx.height - 30); }
+  }
   // ---------- pets: a little friend that follows Bolt round town, into buildings and onto the boat ----------
   function petMesh(id) {
     const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); g.userData.vis = vis;
@@ -1741,6 +1850,7 @@ const Render3D = (() => {
         else { fctx.fillStyle = "#e8d6a8"; fctx.fillRect(sx - 2.5, sy - 2.5, 5, 5); }
       }
       if (r.race) { const R = r.race; for (let i = R.rings.length - 1; i >= R.i; i--) { const g = R.rings[i]; let [sx, sy] = at(g.x, g.z); const cur = i === R.i; if (!inside(sx, sy, 6)) { if (!cur) continue; const a = Math.atan2(sy - cy, sx - cx); sx = cx + Math.cos(a) * (Rm - 7); sy = cy + Math.sin(a) * (Rm - 7); } fctx.fillStyle = cur ? "#ffd24a" : g.last ? "#5fe08a" : "rgba(200,235,255,0.8)"; fctx.beginPath(); fctx.arc(sx, sy, cur ? 5 : 3, 0, Math.PI * 2); fctx.fill(); if (cur) { fctx.strokeStyle = "#7a5200"; fctx.lineWidth = 1.5; fctx.stroke(); } } }
+      if (r.workers) for (const id in r.workers) { const w = r.workers[id], [sx, sy] = at(w.g.position.x, w.g.position.z); if (!inside(sx, sy, 3)) continue; fctx.fillStyle = w.color; fctx.beginPath(); fctx.arc(sx, sy, 3, 0, Math.PI * 2); fctx.fill(); fctx.strokeStyle = "#16202c"; fctx.lineWidth = 1; fctx.stroke(); } // helper bots
       for (const q of r.props) if (q.mark) { const [sx, sy] = at(q.p.x, q.p.z); if (!inside(sx, sy, 6)) continue; fctx.fillStyle = q.mark === "?" ? "#3fbf6a" : "#f4b400"; fctx.beginPath(); fctx.arc(sx, sy - 8, 6, 0, Math.PI * 2); fctx.fill(); fctx.fillStyle = "#fff"; fctx.font = "900 10px Nunito, sans-serif"; fctx.textAlign = "center"; fctx.textBaseline = "middle"; fctx.fillText(q.mark, sx, sy - 7.5); }
       fctx.save(); fctx.translate(cx, cy); fctx.rotate(-r.yaw); fctx.fillStyle = "#fff"; fctx.strokeStyle = "#16202c"; fctx.lineWidth = 2; fctx.beginPath(); fctx.moveTo(8, 0); fctx.lineTo(-5, 5.5); fctx.lineTo(-2.5, 0); fctx.lineTo(-5, -5.5); fctx.closePath(); fctx.stroke(); fctx.fill(); fctx.restore();
       fctx.restore();
@@ -1751,7 +1861,7 @@ const Render3D = (() => {
       if (total) { const found = total - r.gold.length, txt = "⚙ " + found + "/" + total; fctx.font = "800 13px Nunito, sans-serif"; const w = fctx.measureText(txt).width + 16; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(cx - w / 2, cy + Rm + 8, w, 22, 11); fctx.fill(); fctx.fillStyle = found === total ? "#ffd24a" : "#fff"; fctx.fillText(txt, cx, cy + Rm + 19.5); }
       if (r.energy < 0.999 || r.boosting) { const bw = Rm * 1.3, bx = cx - bw / 2, by = cy + Rm + 36; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(bx - 3, by - 3, bw + 6, 12, 6); fctx.fill(); fctx.fillStyle = r.energy < 0.2 && !r.boosting ? "#8a96a8" : "#5fd0ff"; fctx.beginPath(); fctx.roundRect(bx, by, Math.max(2, bw * r.energy), 6, 3); fctx.fill(); }
     }
-    drawFishHud(r); drawSortHud(r);
+    drawWorkerHud(r); drawFishHud(r); drawSortHud(r);
     if (r.race) {
       const R = r.race, t = Math.max(0, R.t), txt = fmtTime(t);
       fctx.textAlign = "center"; fctx.textBaseline = "middle";
@@ -1797,7 +1907,7 @@ const Render3D = (() => {
         case "boat": case "ship": { const m = boatMesh(d.kind === "ship"); m.position.set(d.x, -0.1, d.z); m.rotation.y = ry; world.add(m); m.userData.phase = Math.random() * 6; r.floats.push(m); r.colliders.push({ x: d.x, z: d.z, r: d.kind === "ship" ? 2.6 : 1.3 }); break; }
       }
     }
-    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2, sorter: 1 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35, sorter: 1.1 };
+    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2, sorter: 1, botdock: 1 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35, sorter: 1.1, botdock: 0.9 };
     for (const p of town.props) {
       const m = propMesh(p), s = SCALE[p.kind] || 1;
       if (p.kind === "portal") m.add(archMesh(p.locked ? 0x555a66 : p.color));
@@ -1888,7 +1998,7 @@ const Render3D = (() => {
       if (m.userData.lid) m.userData.lid.rotation.x += (m.userData.lidTo - m.userData.lid.rotation.x) * Math.min(1, dt * 5);
       if (m.userData.flag) { const pa = m.userData.flag.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) + 0.4; pa.setZ(i, Math.sin(clock * 6 - x * 6) * 0.06 * x); } pa.needsUpdate = true; }
     }
-    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); sorterFrame(r, dt); if (r.rain) rainFrame(r, dt);
+    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); sorterFrame(r, dt); workerFrame(r, dt); if (r.rain) rainFrame(r, dt);
     if (window.Audio_) Audio_.engine(Math.min(1.5, sp / BASE));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
     if (!r.indoor) { r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock; }
@@ -1908,15 +2018,17 @@ const Render3D = (() => {
     // chase camera: swings in behind Bolt while he drives, unless the player just dragged it
     cam.introK = Math.min(1, cam.introK + dt / 1.4); const ik = 1 - Math.pow(1 - cam.introK, 3);
     if (sp > 0.5 && clock - r.lastDrag > 1.5 && !r.photo) { const behind = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); let d = behind - cam.az; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; const fwd = Math.max(0, (-Math.sin(cam.az) * r.vel.x - Math.cos(cam.az) * r.vel.z) / sp); cam.az += d * Math.min(1, dt * (0.4 + 1.4 * fwd)); } // swing round faster the more Bolt drives away from the camera, barely when he strafes
-    const sq = r.sortRun && r.sortRun.q.m.position; cam.look.lerp(sq ? new THREE.Vector3(sq.x - 0.2, sq.y + 0.7, sq.z) : new THREE.Vector3(nx, r.gyS + r.air * 0.45 + 0.9, nz), Math.min(1, dt * (sq ? 3 : 7))); // the sorter gets the camera while it runs
+    if (r.watch && (!r.workers || !r.workers[r.watch] || clock - r.watchT > 45)) r.watch = null; // watching a helper bot: until Bolt moves, or 45 s
+    const sq = r.sortRun && r.sortRun.q.m.position, wq = !sq && r.watch ? r.workers[r.watch].g.position : null; cam.look.lerp(sq ? new THREE.Vector3(sq.x - 0.2, sq.y + 0.7, sq.z) : wq ? new THREE.Vector3(wq.x, wq.y + 0.5, wq.z) : new THREE.Vector3(nx, r.gyS + r.air * 0.45 + 0.9, nz), Math.min(1, dt * (sq || wq ? 3 : 7))); // the sorter gets the camera while it runs
     const fovT = r.boosting && sp > 3 ? 46 : 38; if (Math.abs(camera.fov - fovT) > 0.02) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix(); } // speed rush
-    const dist = cam.dist * (1 + (1 - ik) * 1.4) * (r.sail ? 1.5 : 1) * (r.sortRun ? 0.8 : 1), el = cam.el + (1 - ik) * 0.5;
+    const dist = cam.dist * (1 + (1 - ik) * 1.4) * (r.sail ? 1.5 : 1) * (r.sortRun ? 0.8 : 1) * (r.watch ? 0.8 : 1), el = cam.el + (1 - ik) * 0.5 + (r.watch ? Math.max(0, (r.workers[r.watch] && r.workers[r.watch].P.place === "orchard" ? 0.8 : 0.6) - cam.el) : 0);
     camera.position.set(cam.look.x + Math.sin(cam.az) * Math.cos(el) * dist, cam.look.y + Math.sin(el) * dist, cam.look.z + Math.cos(cam.az) * Math.cos(el) * dist);
     const floorY = Math.max(r.height(camera.position.x, camera.position.z), -0.05) + 0.5; if (camera.position.y < floorY) camera.position.y = floorY;
     camera.lookAt(cam.look);
   }
   function roamClick(e) {
     if (roam && roam.angler) { fishTap(); return; } // while fishing a click anywhere is the tap
+    if (roam) roam.watch = null;
     const r = roam, rc = canvas.getBoundingClientRect(); ndc.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1); ray.setFromCamera(ndc, camera);
     const hits = ray.intersectObjects(r.props.map(q => q.m), true);
     if (hits.length) {
@@ -1940,7 +2052,8 @@ const Render3D = (() => {
   const modalHidden = () => { const m = document.getElementById("modal"); return !m || m.hidden; };
   const roamApi = {
     start: startRoam, stop: stopRoam, enter: startInterior, get indoor() { return !!(roam && roam.indoor); },
-    input(x, y) { if (roam) { roam.input.x = x; roam.input.y = y; if (x || y) { roam.target = null; roam.path = null; } } },
+    input(x, y) { if (roam) { roam.input.x = x; roam.input.y = y; if (x || y) { roam.target = null; roam.path = null; roam.watch = null; } } },
+    watch(id) { if (roam) { roam.watch = id || null; roam.watchT = clock; roam.lastDrag = clock; } }, // point the camera at a helper bot
     near() { return roam && roam.near ? roam.near.p : null; },
     goto(x, z, prop) { if (roam) setTarget(roam, x, z, prop); }, // drive there on autopilot (a click on the ground does this)
     talking(id) { if (roam) roam.talking = id || null; },

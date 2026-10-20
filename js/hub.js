@@ -29,6 +29,7 @@ const Hub = (() => {
     // your boat, tied up at the end of the pier (boat: where it floats, land: where you step off)
     { kind: "moor", wx: 1.05, wz: 22.8, label: "⛵ Your boat", boat: { x: 2.9, z: 22.2, ry: -Math.PI / 2 }, land: { x: 0, z: 22, yaw: Math.PI / 2 } },
     { kind: "sorter", wx: 5.3, wz: 15.1, ry: 0, label: "🐟 Fish Sorter" },
+    { kind: "botdock", wx: 11.6, wz: 12.5, ry: 0, label: "🤖 Bot Dock" }, // your helper bots charge here (bots.js)
     // fishing spots: stand by one and cast into the water
     { kind: "fish", wx: -0.95, wz: 19.4, ry: Math.PI, label: "🎣 Fishing spot" },
     { kind: "fish", island: "gull", wx: -0.95, wz: 13.4, ry: Math.PI, label: "🎣 Fishing spot" },
@@ -63,7 +64,7 @@ const Hub = (() => {
   const TOWN = {
     size: 80, radius: 27, start: { x: 0, z: 4 }, plaza: { x: 0, z: 0, r: 8.5 }, bay: { x: 0, z: 27, r: 10 },
     hills: [{ x: -8, z: -16, r: 7, h: 1.8 }, { x: 14, z: -13, r: 6, h: 1.4 }, { x: 21, z: -2, r: 4, h: 1.2 }],
-    flats: [{ x: 0, z: 0, r: 9.5, y: 1.0 }, { x: 5.1, z: 15.1, r: 1.9 }],
+    flats: [{ x: 0, z: 0, r: 9.5, y: 1.0 }, { x: 5.1, z: 15.1, r: 1.9 }, { x: 11.6, z: 12.9, r: 2.2 }],
     decor: [
       { kind: "fountain", x: 0, z: 0 }, { kind: "dock", x: 0, z: 14.5, len: 9 },
       { kind: "boat", x: 3.6, z: 20, ry: 0.5 }, { kind: "boat", x: -3.4, z: 21.5, ry: -0.3 }, { kind: "boat", x: -24.5, z: 8.5, ry: 1.2 }, { kind: "ship", x: 21, z: 16, ry: 2.4 },
@@ -127,19 +128,19 @@ const Hub = (() => {
 
   function props() { return PROPS.map(p => p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
 
-  function init(a) { api = a; window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
+  function init(a) { api = a; Bots.init(a, { FISH, sorterCode }); window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
   function open() {
     active = true; nearProp = null; const s = api.save(); if (window.Audio_) Audio_.ambient("harbor");
     $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false; $("jumpBtn").hidden = false; $("boostBtn").hidden = false;
     const r = api.R.pick();
     if (!r) { renderPanel(); return; } // 3D still loading: render3d-ready calls open() again
     r.setLook(RPG.look()); room = null; island = TOWNS[s.island] ? s.island : "harbor"; r.roam.start(TOWNS[island], hooks, s.hub3 || null);
-    clearInterval(saveT); saveT = setInterval(() => { if (active) remember(); }, 4000);
-    renderPanel();
+    clearInterval(saveT); saveT = setInterval(() => { if (active) { remember(); renderPanel(); } }, 4000);
+    Bots.start(); renderPanel();
   }
   function close() {
     if (!active) return; photo(false); active = false; clearInterval(saveT); keys.clear(); if (window.Audio_) { Audio_.engine(null); Audio_.ambient("level"); }
-    if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
+    Bots.stop(); if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true; $("jumpBtn").hidden = true; $("boostBtn").hidden = true;
   }
   function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.save().island = room ? "harbor" : island; api.persistSave(); } } // inside a room, a reload puts you just outside its door
@@ -152,6 +153,8 @@ const Hub = (() => {
     gearTaken: id => town().gears.includes(id),
     onSail: () => sailAway(),
     onGear: id => gotGear(id),
+    workers: () => room || island !== "harbor" ? [] : Bots.poses(), // helper bots at work (bots.js decides where, render3d draws them)
+    places: Bots.PLACES,
     marks: () => { const m = {}; for (const p of PROPS) if (p.kind === "npc") { const qs = RPG.questsFor(p.id); if (qs.some(q => q.ready)) m[p.id] = "?"; else if (qs.length) m[p.id] = "!"; } return m; }, // over their heads and on the minimap
   };
   // what you have done around town: gears found, rally best time and medals
@@ -239,6 +242,7 @@ const Hub = (() => {
     # return "keep", "sell" or "sea"
     return "sell"
 `;
+  const sorterCode = () => { const t = sorter(), done = SORT_JOBS.filter(j => t.sorter[j.id]); return done.length ? t.sortCode[done[done.length - 1].id] || null : null; }; // what bot.sort() runs
   const sorter = () => { const t = town(); t.sorter = t.sorter || {}; t.sortCode = t.sortCode || {}; return t; };
   const nextJob = () => SORT_JOBS.find(j => !sorter().sorter[j.id]) || SORT_JOBS[SORT_JOBS.length - 1];
   function crate(job) { // twelve fish: the tricky ones first, then random ones, then shuffled
@@ -392,6 +396,7 @@ const Hub = (() => {
     if (p.kind === "moor") return sailToggle();
     if (p.kind === "chest") return openChest(p);
     if (p.kind === "fish") return goFish();
+    if (p.kind === "botdock") return Bots.hq();
     if (p.kind === "sorter") return Render3D.roam.sorting ? null : sorterMenu();
     if (p.kind === "npc") talk(p.id);
     else if (p.kind === "stall") api.openTown(p.tab);
@@ -420,12 +425,14 @@ const Hub = (() => {
       el.innerHTML = `<div class="zonechip">${island === "gull" ? "🏝️ Gull Isle" : "⚓ Harbor Town"}</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. <b>Space</b> jumps, <b>Shift</b> boosts. Dark gates are sealed until you finish the zone before them."}</p>
         <p class="muted">⚙️ ${gearsFound()} of ${TOWNS[island].gears.length} golden gears found here${island === "gull" ? ` · 💰 ${(town().chests || []).length} of ${GULL.chests.length} chests` : town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · ⛵ your boat is at the end of the pier · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
-        <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button><button id="journalBtn" class="small">📖 Fish journal</button></div>
+        <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button><button id="journalBtn" class="small">📖 Fish journal</button><button id="botsBtn" class="small">🤖 Bots</button></div>
+        ${Bots.summary() ? `<p class="muted">🤖 ${Bots.summary()}</p>` : ""}
         <div id="nearby">${p ? `<button class="primary" data-near="1">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + (p.locked ? " Sealed: " : " Enter ") + ZONES[p.zone - 1].name : p.kind === "door" ? "🚪 Go into " + p.label : p.kind === "exit" ? "🚪 Back to town" : p.kind === "fish" ? (Render3D.roam.fish.on ? "🎣 Tap now (or press E)" : "🎣 Go fishing") : (p.kind === "npc" ? "🗣️ Talk to " : "Use: ") + p.label}</button>` : room ? `<span class="muted">You're in ${INTERIORS[room].title}. Drive to the glowing rings to use things, talk to whoever is here, and leave by the door.</span>` : `<span class="muted">Nobody within reach. The quest board and Marisol are down by the harbour, the shops ring the plaza, the portals stand along the shore. Lit doorways lead inside: Wrenna's Workshop and the Time Tower.</span>`}</div>
         <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()} · ${LEVELS.filter(l => api.completed()[l.id]).length}/${LEVELS.length} missions</p>`;
       const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
       const pb = $("photoBtn"); if (pb) pb.onclick = () => photo(true);
       const jb = $("journalBtn"); if (jb) jb.onclick = fishJournal;
+      const bb = $("botsBtn"); if (bb) bb.onclick = () => Bots.hq();
       return;
     }
   }
@@ -468,6 +475,7 @@ const Hub = (() => {
       topics: [
         { q: "What's a function?", a: () => `<code>def step():</code> and indent the moves. Now <code>step()</code> does all of them. Give it a parameter, <code>def walk(n):</code>, and it does n of them. Some of my missions refuse to run without a <code>def</code>: that's the point.` },
         { q: "What do the upgrades do?", a: () => RPG.GEAR.map(g => `${g.icon} <b>${g.name}</b>: ${g.desc} (${RPG.state.gear[g.id] ? "you own it" : "🪙 " + g.cost})`).join("<br>"), tab: "workshop" },
+        { q: "Can I build a robot?", a: () => Bots.crew.length ? `You've got ${Bots.crew.length === 1 ? "one" : Bots.crew.length}. Every shift they work, you get better at Robotics, and I've got upgrades for each of them: bigger baskets, batteries, wheels, rods. Write them a function and they'll work all night.` : `Built one already, just needs a brain. It's at the Bot Dock past Dad's house, east of the pier. You write its program in Python, it does the work: fishing, picking, digging, selling. Even while you're away.`, dock: true },
         { q: "Crafting?", a: () => `Cider from apples. Crates from planks and scrap. A clockstone from fog stone and a time shard. A prism from two gems and a lens, and the prism is what makes the Wide Scanner. Each recipe needs a skill level; crafting trains the skill too.`, tab: "workshop" },
       ],
     },
@@ -534,7 +542,7 @@ const Hub = (() => {
     h += `</div><div class="free"><input id="freeIn" type="text" placeholder="${api.ollama().model ? "Ask " + name.split(",")[0] + " anything (Ollama)" : "Free chat needs Ollama running (see the Oracle)"}" ${api.ollama().model ? "" : "disabled"}></div>
       <div class="row"><button id="closeBtn">Bye</button></div>`;
     api.showModal(h); if (window.Render3D) Render3D.roam.talking(id);
-    $("modalBody").querySelectorAll("button[data-t]").forEach(b => b.onclick = () => { const t = d.topics[b.dataset.t]; api.sfx("click"); const a = t.a(k); talk(id, a + (t.go ? ` <button class="small primary" id="goLvl">Go to ${t.go(k)}</button>` : "") + (t.tab ? ` <button class="small" id="goTab">Open the ${t.tab}</button>` : "")); if ($("goLvl")) $("goLvl").onclick = () => { api.hideModal(); api.openLevel(LEVEL_BY_ID[t.go(k)]); }; if ($("goTab")) $("goTab").onclick = () => { api.hideModal(); api.openTown(t.tab); }; });
+    $("modalBody").querySelectorAll("button[data-t]").forEach(b => b.onclick = () => { const t = d.topics[b.dataset.t]; api.sfx("click"); const a = t.a(k); talk(id, a + (t.go ? ` <button class="small primary" id="goLvl">Go to ${t.go(k)}</button>` : "") + (t.tab ? ` <button class="small" id="goTab">Open the ${t.tab}</button>` : "") + (t.dock ? ` <button class="small primary" id="goDock">🤖 Open the Bot Dock</button>` : "")); if ($("goDock")) $("goDock").onclick = () => Bots.hq(); if ($("goLvl")) $("goLvl").onclick = () => { api.hideModal(); api.openLevel(LEVEL_BY_ID[t.go(k)]); }; if ($("goTab")) $("goTab").onclick = () => { api.hideModal(); api.openTown(t.tab); }; });
     const w = $("modalBody").querySelector("button[data-work]"); if (w) w.onclick = () => work(id);
     $("closeBtn").onclick = () => { api.hideModal(); chat = []; if (window.Render3D) Render3D.roam.talking(null); };
     const fi = $("freeIn"); if (fi && !fi.disabled) fi.onkeydown = async (e) => { if (e.key !== "Enter" || !fi.value.trim()) return; const q = fi.value.trim(); fi.value = ""; fi.disabled = true; fi.placeholder = "…"; const r = await freeTalk(id, q, k); talk(id, `<span class="muted">You: ${q.replace(/</g, "&lt;")}</span><br>${r.replace(/</g, "&lt;")}`); };

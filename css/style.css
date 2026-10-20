@@ -92,7 +92,7 @@ main { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.
 #screen-level.roam main { grid-template-columns: 1fr; }
 #screen-level.roam #mission { order: 2; }
 #screen-level.roam .worldwrap { width: 100%; max-width: 1120px; }
-#screen-level.roam #world3d { width: 100%; }
+#screen-level.roam #world3d, #screen-level.roam #fx { width: 100%; }
 #screen-level.roam .camhint { display: none; }
 .roomfade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.25s; pointer-events: none; border-radius: 10px; }
 .roomfade.on { opacity: 1; }

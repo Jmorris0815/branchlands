@@ -66,6 +66,18 @@ return `"keep"`, `"sell"` or `"sea"`; twelve fish ride the belt into whichever b
 from one `if` to `elif`, `<` and `or`, with the tricky fish (exactly 20 cm, price equal to base) always in the crate.
 Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by changing two numbers. Around town:
 
+East of the pier is the 🤖 **Bot Dock**, where you build helper bots (up to three) and program them in real Python with
+`import bot`. A bot drives round Harbor Town doing what your code says: `bot.go("pier")`, `bot.fish()`, `bot.pick()` in
+Pip's orchard, `bot.dig()` on the west beach, `bot.sell()` at the market, `bot.sort()` through your own Fish Sorter code,
+`bot.unload()` into the dock's crate. Every shift is worked out first (the code runs once against a model of the town,
+with a battery that runs down) and then played back in 3D, so what you watch is exactly what the code did. A bot that
+isn't home when its battery dies gets towed and loses its cargo, so good programs check `bot.battery()` and
+`bot.cost("dock")`. The **Test shift** button shows the whole shift as a timeline without paying anything. Bots keep
+working while you're in a level and while the game is closed (up to four hours, slower after the first twenty minutes),
+and the next visit shows what they earned. Each bot has its own upgrades (basket, battery, wheels, rod), every shift
+trains the new Robotics skill, and Wrenna, Marisol, Pip, Odo and Dad hand out eleven bot contracts that walk through
+loops, `if`, dictionaries, battery maths and functions. The code is in `js/bots.js`.
+
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
 - **Townsfolk with real conversations.** Marisol (harbor master), Old Pip (loops), Odo (decisions and crabs),
   Wrenna (functions and upgrades), the Clockwright (Git), Dad (reviews and pull requests), the Oracle (bots),
