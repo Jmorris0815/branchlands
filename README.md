@@ -58,6 +58,9 @@ stop the clock, pick the time of day, and save a picture.
 Stand at a 🎣 **fishing spot** on either pier and press E to cast. Tap when the bobber plunges, then tap each time
 the needle crosses the green to reel it in. Fish sell at the Market (they can't be bought), Fishing levels up like
 any other skill and lets bigger fish bite (swordfish only off Gull Isle), and the 📖 Fish journal keeps your records.
+Odo, Marisol and Old Gully have fishing quests (Gully's pay out his bucket hat and a koi in a bubble). The 🎨 Style
+shop sells pets: Pinch the crab, Gulliver the gull and Sprocket the mini-bot follow Bolt round town, into buildings
+and onto the boat.
 Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by changing two numbers. Around town:
 
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.

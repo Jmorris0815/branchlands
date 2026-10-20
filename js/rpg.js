@@ -81,6 +81,7 @@ const RPG = (() => {
       { id: "pirate", name: "Captain's Tricorn", icon: "🏴‍☠️", quest: "Bilingual" },
       { id: "wizard", name: "Oracle's Hood", icon: "🧙", quest: "Real Voice" },
       { id: "crown", name: "Keeper's Crown", icon: "👑", quest: "Keeper of the Light" },
+      { id: "bucket", name: "Gully's Bucket Hat", icon: "🎣", quest: "The Big One" },
     ],
     eyes: [
       { id: "cyan", name: "Cyan", icon: "🔵", color: "#5de0ff", cost: 0 },
@@ -99,8 +100,16 @@ const RPG = (() => {
       { id: "embers", name: "Oracle Embers", icon: "🔥", color: "#ff8a3d", quest: "Memory" },
       { id: "stars", name: "Time Stars", icon: "🌟", color: "#c9a7ff", quest: "Time Merchant" },
     ],
+    // pets follow Bolt round town and the islands
+    pet: [
+      { id: "none", name: "No pet", icon: "·", cost: 0 },
+      { id: "crab", name: "Pinch the crab", icon: "🦀", cost: 150 },
+      { id: "gull", name: "Gulliver the gull", icon: "🐦", cost: 220 },
+      { id: "bot", name: "Sprocket the mini-bot", icon: "🤖", cost: 300, req: ["functions", 4] },
+      { id: "koi", name: "Koi in a bubble", icon: "🐡", quest: "Lucky Koi" },
+    ],
   };
-  const COS_NAMES = { hat: "Hats", eyes: "Eyes", trail: "Trails" };
+  const COS_NAMES = { hat: "Hats", eyes: "Eyes", trail: "Trails", pet: "Pets" };
   const NPC = {
     marisol: { name: "Marisol, Harbor Master", icon: "⚓" }, pip: { name: "Old Pip, Orchard Keeper", icon: "🧑‍🌾" }, odo: { name: "Odo the Ferryman", icon: "🛶" },
     wrenna: { name: "Wrenna the Tinker", icon: "🔧" }, clock: { name: "The Clockwright", icon: "🕰️" }, dad: { name: "Dad", icon: "🧔" }, oracle: { name: "The Oracle", icon: "🔮" }, nyx: { name: "Captain Nyx", icon: "🏴‍☠️" },
@@ -121,6 +130,11 @@ const RPG = (() => {
     { id: "mirror", npc: "nyx", title: "Mirror Trade", zone: 8, story: "Same robot, same sea, different language. Ten panes of mirror glass, and prove you can run a shop: five hundred coins earned, lifetime.", steps: [{ type: "gather", good: "glass", n: 10 }, { type: "sell", coins: 500 }], reward: { coins: 500, xp: { js: 300 } } },
     { id: "merchant", npc: "marisol", title: "Merchant of the Harbor", after: "light", story: "A thousand coins through my market and forty levels of skill. Then you're not a castaway, you're a merchant.", steps: [{ type: "sell", coins: 1000 }, { type: "total", level: 40 }], reward: { coins: 400, title: "Merchant" } },
     { id: "builder", npc: "wrenna", title: "Master Builder", after: "prism", story: "Own every upgrade I make and I'll put your name on the workshop door.", steps: [{ type: "gear", id: "longArm" }, { type: "gear", id: "springTreads" }, { type: "gear", id: "wideScanner" }, { type: "gear", id: "crabShell" }, { type: "gear", id: "gemMagnet" }], reward: { coins: 1000, title: "Master Builder", paint: "gold" } },
+    // ---- fishing ----
+    { id: "bait", npc: "odo", title: "Bait for the Ferry", story: "Ferry passengers like a fried sardine, and fish like them raw. Four sardines off the pier and you'll know how to cast. Wait for the splash before you tap.", steps: [{ type: "gather", good: "sardine", n: 4 }], reward: { coins: 60, xp: { fishing: 40 } } },
+    { id: "supper", npc: "marisol", title: "Harbor Supper", after: "bait", story: "When the boats come in late, half the harbor skips supper. Cook one pot of fish stew in the Workshop: three sardines, two mackerel, and Fishing 3 so you know what you're doing.", steps: [{ type: "craft", good: "stew", n: 1 }], reward: { coins: 150, xp: { fishing: 80 } } },
+    { id: "bigone", npc: "gully", title: "The Big One", story: "Forty years on this rock and I never landed a swordfish. Get your Fishing to five, cast off my pier, and bring me one. My old bucket hat is yours.", steps: [{ type: "skill", skill: "fishing", level: 5 }, { type: "gather", good: "swordfish", n: 1 }], reward: { coins: 300, xp: { fishing: 150 }, cos: "hat:bucket" } },
+    { id: "luckykoi", npc: "gully", title: "Lucky Koi", story: "A golden koi is luck you can hold. Bring me one and I'll blow it a bubble to live in. Then it follows you everywhere, and the luck goes with you.", steps: [{ type: "gather", good: "koi", n: 1 }], reward: { coins: 100, xp: { fishing: 100 }, cos: "pet:koi" } },
     // ---- second wave: the long game ----
     { id: "stars5", npc: "marisol", title: "Three Stars Over the Harbor", after: "papers", story: "Anyone can finish a mission. Finishing it in the fewest lines is the craft. Show me five perfect runs.", steps: [{ type: "stars", n: 5 }], reward: { coins: 150, cos: "hat:cap" } },
     { id: "contracts3", npc: "marisol", title: "Contract Worker", after: "papers", story: "The board posts three contracts a day. Do three and I'll know you come back.", steps: [{ type: "contracts", n: 3 }], reward: { coins: 200, xp: { commands: 80 } } },
@@ -151,10 +165,10 @@ const RPG = (() => {
   ];
 
   // ---------- state ----------
-  const fresh = () => ({ coins: 25, inv: {}, xp: {}, gear: {}, paints: { default: true }, paint: "default", cos: { hat: { owned: { none: true }, on: "none" }, eyes: { owned: { cyan: true }, on: "cyan" }, trail: { owned: { none: true }, on: "none" } }, quests: {}, titles: [], runsToday: {},
+  const fresh = () => ({ coins: 25, inv: {}, xp: {}, gear: {}, paints: { default: true }, paint: "default", cos: { hat: { owned: { none: true }, on: "none" }, eyes: { owned: { cyan: true }, on: "cyan" }, trail: { owned: { none: true }, on: "none" }, pet: { owned: { none: true }, on: "none" } }, quests: {}, titles: [], runsToday: {},
     stats: { runs: 0, commits: 0, sold: 0, soldToday: 0, crafted: {} }, market: { flood: {} }, daily: { date: "", tasks: [], done: {}, hot: "" } });
   function init(saveObj, apiObj) {
-    save = saveObj; api = apiObj; if (!save.rpg) save.rpg = fresh(); S = save.rpg; const f = fresh(); for (const k in f) if (S[k] === undefined) S[k] = f[k];
+    save = saveObj; api = apiObj; if (!save.rpg) save.rpg = fresh(); S = save.rpg; const f = fresh(); for (const k in f) if (S[k] === undefined) S[k] = f[k]; for (const c in f.cos) if (!S.cos[c]) S.cos[c] = f.cos[c];
     if (!S.seeded) { // a save from before Harbor Town existed: credit skill XP for missions already finished
       for (const id in save.completed || {}) { const lv = LEVEL_BY_ID[id]; if (lv) addXp(skillOf(lv.zone).id, lv.xp * 2); }
       S.seeded = true; persist();
@@ -179,7 +193,7 @@ const RPG = (() => {
   const have = (g) => S.inv[g] || 0;
   function add(g, n) { const room = Math.max(0, cap() - have(g)); const k = Math.min(room, n); S.inv[g] = have(g) + k; return k; }
   function take(g, n) { if (have(g) < n) return false; S.inv[g] -= n; if (!S.inv[g]) delete S.inv[g]; return true; }
-  const gname = (g, n) => `${GOODS[g].icon} ${n !== undefined ? n + " " : ""}${GOODS[g].name}${n !== undefined && n !== 1 && !GOODS[g].fish ? "s" : ""}`.replace("Mirror glasss", "Mirror glass").replace("Fog stones", "Fog stone");
+  const gname = (g, n) => `${GOODS[g].icon} ${n !== undefined ? n + " " : ""}${GOODS[g].name}${n !== undefined && n !== 1 && (!GOODS[g].fish || g === "sardine") ? "s" : ""}`.replace("Mirror glasss", "Mirror glass").replace("Fog stones", "Fog stone");
 
   // ---------- market ----------
   let extraFlood = null; // the whole family's sales today, from the family server
@@ -217,7 +231,7 @@ const RPG = (() => {
   const paintColor = () => (PAINTS.find(p => p.id === S.paint) || PAINTS[0]).color;
   function cosItem(cat, id) { return COSMETICS[cat].find(c => c.id === id) || COSMETICS[cat][0]; }
   function wearCos(cat, id) { const c = cosItem(cat, id), st = S.cos[cat]; if (st.owned[id]) { st.on = id; persist(); return true; } if (c.quest || !meets(c.req) || S.coins < c.cost) return false; S.coins -= c.cost; st.owned[id] = true; st.on = id; persist(); hud(); return true; }
-  function look() { return { paint: paintColor(), hat: S.cos.hat.on, eyes: cosItem("eyes", S.cos.eyes.on).color, trail: S.cos.trail.on === "none" ? null : cosItem("trail", S.cos.trail.on).color }; }
+  function look() { return { paint: paintColor(), hat: S.cos.hat.on, eyes: cosItem("eyes", S.cos.eyes.on).color, trail: S.cos.trail.on === "none" ? null : cosItem("trail", S.cos.trail.on).color, pet: S.cos.pet.on }; }
   const gear = () => ({ longArm: !!S.gear.longArm, springTreads: !!S.gear.springTreads, wideScanner: !!S.gear.wideScanner, crabShell: !!S.gear.crabShell });
 
   // ---------- quests ----------
@@ -340,10 +354,10 @@ const RPG = (() => {
     return h + "</div>";
   }
   function paint() {
-    let h = `<h3>Style: paint</h3><p class="muted">Bolt's colour, hat, eyes and trail. Quest rewards unlock the rare ones.</p><div class="cards paints">`;
+    let h = `<h3>Style: paint</h3><p class="muted">Bolt's colour, hat, eyes, trail and a pet to follow him round town. Quest rewards unlock the rare ones.</p><div class="cards paints">`;
     for (const p of PAINTS) { const own = !!S.paints[p.id], on = S.paint === p.id; h += `<div class="card ${on ? "done" : ""}"><div class="swatch" style="background:${p.color}"></div><b>${p.name}</b><div class="muted">${own ? (on ? "Wearing" : "Owned") : `🪙 ${p.cost}${p.req ? " · needs " + reqText(p.req) : ""}`}</div><button class="small ${on ? "" : "primary"}" data-act="paint" data-id="${p.id}" ${on || (!own && (!meets(p.req) || S.coins < p.cost)) ? "disabled" : ""}>${own ? "Wear" : "Buy"}</button></div>`; }
     h += "</div>";
-    for (const cat of ["hat", "eyes", "trail"]) {
+    for (const cat of ["hat", "eyes", "trail", "pet"]) {
       h += `<h3>${COS_NAMES[cat]}</h3><div class="cards paints">`;
       for (const c of COSMETICS[cat]) {
         const own = !!S.cos[cat].owned[c.id], on = S.cos[cat].on === c.id, can = own || (!c.quest && meets(c.req) && S.coins >= c.cost);

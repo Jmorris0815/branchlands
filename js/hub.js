@@ -377,6 +377,7 @@ const Hub = (() => {
         { q: "How do I decide without seeing the map?", a: () => `<code>if robot.sees("water"): robot.jump()</code> <code>else: robot.move()</code>. The robot looks one tile ahead and picks. Put that inside a loop and it crosses any bridge. <code>robot.sees()</code> knows: wall, water, apple, gem, key, item, goal, switch, door, gate, teleporter, crab, floor.` },
         { q: "The crabs!", a: () => `A crab walking into Bolt is a pinch and a failed run. <code>if robot.sees("crab"): robot.wait()</code>. Crabs patrol back and forth; wait one beat and it's gone. Wrenna sells a Crab Shell that survives one pinch per run if you'd rather buy your way out.` },
         { q: "Teleporters?", a: () => `Step on a numbered pad and you come out on its twin. Same number, other end. Handy when the straight path is water.` },
+        { q: "How do I fish?", a: () => `There's a rod and a bucket halfway down the pier. Stand there and press E. The bobber twitches a few times before a real bite. Tap when it goes under with a big splash, then tap each time the needle crosses the green. Sell what you catch to Juno, or keep it for a stew.` },
       ],
     },
     wrenna: {
@@ -425,6 +426,7 @@ const Hub = (() => {
         { q: "What is this place?", a: () => `The stone circle is older than the lighthouse. Whoever built it liked patterns: six stones, evenly spaced, one gap facing the sea. A loop in stone, if you ask me.` },
         { q: "Treasure?", a: () => `Five chests from the wreck of the old <i>Maybe</i>, scattered round the island, and ten golden gears that the gulls keep stealing and dropping. A careful robot would check every corner. A clever one would write <code>while chests_left &gt; 0:</code>.` },
         { q: "How do I get home?", a: () => `Board your boat at the post on the pier and sail away from the island, any way you like. Keep going and the current carries you back to Harbor Town.` },
+        { q: "Are there fish out here?", a: () => `The best in the sea. Swordfish come right up to my pier, but they won't look at a hook until you're Fishing level five. Golden koi turn up now and then, and more often out here than in the harbor. Wait for the big splash, then tap in the green. Don't rush it.` },
       ],
     },
     nyx: {

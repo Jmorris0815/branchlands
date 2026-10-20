@@ -25,7 +25,7 @@ const Render3D = (() => {
   let robot, headlight, crabs = {}, items = {}, switches = {}, doors = {}, gates = {}, pads = [], trail, moveN = 0, propsList = [], paint = new THREE.Color(0x3b55c8);
   function setPaint(c) { paint = new THREE.Color(c); }
   let look = { hat: "none", eyes: "#5de0ff", trail: null };
-  function setLook(l) { if (l.paint) setPaint(l.paint); look = Object.assign(look, l); }
+  function setLook(l) { if (l.paint) setPaint(l.paint); const pet = look.pet; look = Object.assign(look, l); if (roam && roam.bolt && look.pet !== pet) spawnPet(roam); }
   const cam = { center: new THREE.Vector3(), dist: 10, el: 0.82, az: 0.35, azV: 0, introK: 0, look: new THREE.Vector3(), follow: new THREE.Vector3() };
   let particles, OCEAN_LEVEL;
   const texCache = {};
@@ -372,6 +372,7 @@ const Render3D = (() => {
       case "pirate": m(new THREE.CylinderGeometry(0.2, 0.22, 0.14, 16), std({ color: 0x1b1b24 }), 0, 0.07, 0); { const b = m(new THREE.CylinderGeometry(0.4, 0.4, 0.03, 3), std({ color: 0x1b1b24 }), 0, 0.02, 0); b.rotation.y = Math.PI / 6; } m(new THREE.SphereGeometry(0.035, 8, 8), std({ color: 0xffffff }), 0.19, 0.08, 0); break;
       case "wizard": m(new THREE.ConeGeometry(0.2, 0.5, 16), std({ color: 0x5a3fa0 }), 0, 0.27, 0); m(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 16), std({ color: 0x4a3390 }), 0, 0.015, 0); m(new THREE.SphereGeometry(0.03, 8, 8), std({ color: 0xffd866, emissive: 0xffd866, emissiveIntensity: 1.5 }), 0.08, 0.3, 0.12); break;
       case "lantern": m(new THREE.BoxGeometry(0.12, 0.16, 0.12), std({ color: 0xffe9a8, emissive: 0xffb347, emissiveIntensity: 2.5, transparent: true, opacity: 0.9 }), 0, 0.3, 0); m(new THREE.CylinderGeometry(0.01, 0.01, 0.24, 6), std({ color: 0x2b2f3a }), 0, 0.12, 0); { const l = new THREE.PointLight(0xffb347, 2, 3, 2); l.position.set(0, 0.32, 0); g.add(l); } break;
+      case "bucket": m(new THREE.CylinderGeometry(0.19, 0.23, 0.16, 16), std({ color: 0x8a8a5a, roughness: 0.9 }), 0, 0.08, 0); m(new THREE.CylinderGeometry(0.34, 0.27, 0.07, 18, 1, true), std({ color: 0x7d7d50, roughness: 0.9, side: THREE.DoubleSide }), 0, 0.02, 0); { const f = m(new THREE.ConeGeometry(0.03, 0.09, 6), std({ color: 0xe8392e }), 0.16, 0.12, 0.12); f.rotation.z = -0.6; } break;
       case "antlers": for (const s of [-1, 1]) { const a = m(new THREE.CylinderGeometry(0.02, 0.03, 0.3, 6), std({ color: 0x7a5436 }), 0, 0.14, s * 0.16); a.rotation.x = s * 0.5; const t = m(new THREE.CylinderGeometry(0.015, 0.02, 0.16, 6), std({ color: 0x7a5436 }), 0.05, 0.22, s * 0.22); t.rotation.z = -0.9; } break;
       case "propeller": m(new THREE.CylinderGeometry(0.2, 0.22, 0.1, 16), std({ color: 0x3b8ad8 }), 0, 0.05, 0); m(new THREE.CylinderGeometry(0.015, 0.015, 0.1, 6), std({ color: 0x2b2f3a }), 0, 0.14, 0); { const p = new THREE.Group(); p.position.y = 0.2; p.add(mesh(new THREE.BoxGeometry(0.36, 0.02, 0.06), std({ color: 0xff5e5e }))); p.add(mesh(new THREE.BoxGeometry(0.06, 0.02, 0.36), std({ color: 0xffd866 }))); g.add(p); g.userData.spin = p; } break;
       case "halo": { const h = m(new THREE.TorusGeometry(0.2, 0.025, 8, 32), std({ color: 0xffe08a, emissive: 0xffd24a, emissiveIntensity: 2.5 }), 0, 0.36, 0); h.rotation.x = Math.PI / 2; g.userData.bob = h; break; }
@@ -962,7 +963,7 @@ const Render3D = (() => {
     }
     for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { o.material = o.material.clone(); o.material.sizeAttenuation = false; const asp = o.scale.x / o.scale.y; o.scale.set(0.055 * asp * H / W / q.s, 0.055 / q.s, 1); } });
     const south = r.walls.find(w => w.n.y < 0); for (const q of r.props) if (q.p.kind === "exit") { q.m.position.z = half.z - 0.14; q.m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; south.mats.push(o.material); } else if (o.isSprite) o.visible = false; }); }
-    robot = robotMesh(); const sx = pose ? pose.x : room.start.x, sz = pose ? pose.z : room.start.z; robot.position.set(sx, 0.01, sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot;
+    robot = robotMesh(); const sx = pose ? pose.x : room.start.x, sz = pose ? pose.z : room.start.z; robot.position.set(sx, 0.01, sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot; spawnPet(r);
     buildWalkGrid(r); initPlay(r); for (const q of r.props) if ((q.p.kind === "exit") && Math.hypot(q.p.x - sx, q.p.z - sz) < 1.6) r.latch = q;
     r.movers = []; r.walkers = []; r.bots = []; r.gulls = []; r.crabs = []; r.tracks = makeTracks(); world.add(r.tracks.mesh); r.prevFwd = 0; r.pitch = 0;
     for (const q of r.props) if (q.p.kind === "npc" && q.vis) bindPerson(q.vis, q.vis.userData.modelName);
@@ -1439,6 +1440,57 @@ const Render3D = (() => {
       if (R.i === R.rings.length) { const t = R.t, done = R.done; stopRace(); if (done) done(t); }
     }
   }
+  // ---------- pets: a little friend that follows Bolt round town, into buildings and onto the boat ----------
+  function petMesh(id) {
+    const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); g.userData.vis = vis;
+    if (id === "crab") { useAsset(vis, "crab", () => crabShape(vis)); vis.scale.setScalar(0.75); }
+    else if (id === "gull") { const b = gullMesh(); b.scale.setScalar(1.3); vis.add(b); g.userData.wings = b.userData.wings; }
+    else if (id === "bot") { const col = new THREE.Color(0xe8702a); vis.userData.onModel = inst => tintModel(inst, col); useAsset(vis, "bolt", () => robotShape(vis)); if (vis.userData.model) tintModel(vis.userData.model, col); vis.scale.setScalar(0.42); }
+    else if (id === "koi") {
+      const k = catchMesh(0xffb020, 0.32); vis.add(k); g.userData.koi = k;
+      vis.add(mesh(new THREE.SphereGeometry(0.24, 20, 14), new THREE.MeshPhysicalMaterial({ color: 0xcfefff, transparent: true, opacity: 0.22, roughness: 0.05, transmission: 0.6, thickness: 0.2, depthWrite: false })));
+    } else return null;
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  }
+  function spawnPet(r) {
+    if (r.pet) { world.remove(r.pet.g); r.pet = null; }
+    const id = look.pet; if (!id || id === "none") return;
+    const g = petMesh(id); if (!g) return;
+    const b = r.bolt.position, a = r.yaw + Math.PI * 0.75, x = b.x + Math.cos(a) * 1.1, z = b.z - Math.sin(a) * 1.1;
+    g.position.set(x, b.y, z); world.add(g);
+    r.pet = { id, g, yaw: r.yaw, fly: id === "gull" || id === "koi", hop: 0, idle: rnd(3, 7), spin: 0, flap: 0 };
+  }
+  function petFrame(r, dt) {
+    const P = r.pet; if (!P) return; const g = P.g, b = r.bolt.position, sp = Math.hypot(r.vel.x, r.vel.z);
+    const gp = (x, z) => { const p = r.platforms.find(p => x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2); return p ? p.y : r.height(x, z); };
+    // where to be: tucked in behind Bolt's left shoulder (riding in the boat when he sails)
+    const a = r.yaw + Math.PI * (P.fly ? 0.42 : 0.78), back = P.fly ? 1.0 : 1.05, // flyers keep to his side, out of the camera's way
+      tx = b.x + Math.cos(a) * back, tz = b.z - Math.sin(a) * back;
+    let dx = tx - g.position.x, dz = tz - g.position.z; const d = Math.hypot(dx, dz);
+    if (d > 9 || (r.sail && !P.fly) || (!P.fly && gp(g.position.x, g.position.z) < -0.04)) { // too far behind (or Bolt is sailing): pop over to him
+      if (r.sail && !P.fly) { const c0 = Math.cos(r.yaw), s0 = -Math.sin(r.yaw); g.position.set(b.x - c0 * 0.55, b.y - 0.38, b.z - s0 * 0.55); g.rotation.y = r.yaw; return; }
+      burst(g.position.x, g.position.z, 0xffffff, 6, 0.8, g.position.y + 0.2); g.position.set(tx, gp(tx, tz), tz); burst(tx, tz, 0xffffff, 6, 0.8, g.position.y + 0.2); return;
+    }
+    const want = Math.min(d * 3, Math.max(sp * 1.15, 2.2) * (d > 2.5 ? 1.6 : 1)), moving = d > 0.25;
+    if (moving) { dx /= d; dz /= d; let nx = g.position.x + dx * want * dt, nz = g.position.z + dz * want * dt;
+      if (!P.fly) { for (const c of r.colliders) { const ex = nx - c.x, ez = nz - c.z, dd = Math.hypot(ex, ez), min = c.r + 0.18; if (dd < min && dd > 1e-4) { nx = c.x + ex / dd * min; nz = c.z + ez / dd * min; } }
+        if (gp(nx, nz) < -0.04) { nx = g.position.x; nz = g.position.z; } } // ground pets don't swim
+      g.position.x = nx; g.position.z = nz; }
+    // face where it's going, or Bolt (or his bobber) when it stops
+    const F = r.angler, lookAt = moving && d > 0.4 ? { x: tx, z: tz } : F ? F.bob.position : b;
+    let ty = Math.atan2(-(lookAt.z - g.position.z), lookAt.x - g.position.x); if (P.id === "crab" && moving) ty += Math.PI / 2; // crabs walk sideways
+    let dy = ty - P.yaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI; P.yaw += dy * Math.min(1, dt * 6);
+    // a little trick every so often while Bolt stands still: a hop, a spin, a heart
+    if (!moving && sp < 0.2) { P.idle -= dt; if (P.idle <= 0) { P.idle = rnd(4, 9); P.hop = 1; P.spin = Math.random() < 0.4 ? Math.PI * 2 : 0; burst(g.position.x, g.position.z, 0xff7bb0, 3, 0.5, g.position.y + 0.5); } }
+    P.hop = Math.max(0, P.hop - dt * 2.2); const hopY = Math.sin(P.hop * Math.PI) * 0.35;
+    if (P.spin > 0) { const s = Math.min(P.spin, dt * 9); P.spin -= s; P.yaw += s; }
+    g.rotation.y = P.yaw;
+    const ground = gp(g.position.x, g.position.z);
+    if (P.id === "gull") { const h = r.indoor ? 1.3 : 1.45; g.position.y += (Math.max(ground, b.y) + h + Math.sin(clock * 2.3) * 0.12 - g.position.y) * Math.min(1, dt * 4); P.flap += dt * (moving ? 14 : 7); for (const w of g.userData.wings || []) w.rotation.x = Math.sin(P.flap) * 0.6 * w.userData.s; g.userData.vis.rotation.z = moving ? -0.15 : 0; }
+    else if (P.id === "koi") { g.position.y += (Math.max(ground, b.y) + 1.05 + Math.sin(clock * 1.7) * 0.1 - g.position.y) * Math.min(1, dt * 4); g.userData.koi.rotation.y = Math.sin(clock * 3) * 0.3; g.userData.koi.position.y = Math.sin(clock * 2.1) * 0.03; }
+    else { g.position.y = ground + hopY + (moving ? Math.abs(Math.sin(clock * (P.id === "crab" ? 22 : 14))) * 0.025 : 0); g.userData.vis.rotation.z = P.id === "bot" && moving ? -0.08 : 0; }
+  }
   // fishing: Bolt casts a line from the pier or the shore. Wait for the bobber to plunge, tap, then tap each time
   // the needle crosses the green to reel the fish in. hub.js says which fish bites (how many pulls, how wide the green).
   function catchMesh(color, size) {
@@ -1707,7 +1759,7 @@ const Render3D = (() => {
     // name tags keep one size on screen however close Bolt gets
     for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { o.material = o.material.clone(); o.material.sizeAttenuation = false; const asp = o.scale.x / o.scale.y; o.scale.set(0.055 * asp * H / W / q.s, 0.055 / q.s, 1); } });
     robot = robotMesh(); const sx = pose ? pose.x : town.start.x, sz = pose ? pose.z : town.start.z;
-    robot.position.set(sx, height(sx, sz), sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot;
+    robot.position.set(sx, height(sx, sz), sz); robot.rotation.y = r.yaw; world.add(robot); r.bolt = robot; spawnPet(r);
     buildWalkGrid(r); addLife(r); initPlay(r); placeGold(r, town); buildMinimap(r); r.rain = makeRain(); world.add(r.rain);
     r.grass = grassField(town, height, r.colliders, flats); world.add(r.grass.mesh);
     r.clouds = cloudLayer(); world.add(r.clouds);
@@ -1782,7 +1834,7 @@ const Render3D = (() => {
       if (m.userData.lid) m.userData.lid.rotation.x += (m.userData.lidTo - m.userData.lid.rotation.x) * Math.min(1, dt * 5);
       if (m.userData.flag) { const pa = m.userData.flag.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) + 0.4; pa.setZ(i, Math.sin(clock * 6 - x * 6) * 0.06 * x); } pa.needsUpdate = true; }
     }
-    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); if (r.rain) rainFrame(r, dt);
+    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); if (r.rain) rainFrame(r, dt);
     if (window.Audio_) Audio_.engine(Math.min(1.5, sp / BASE));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
     if (!r.indoor) { r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock; }
