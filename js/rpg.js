@@ -17,6 +17,7 @@ const RPG = (() => {
     { id: "review", name: "Review", icon: "🤝", zone: 6, how: "Two-Player Gate levels" },
     { id: "ai", name: "AI", icon: "🔮", zone: 7, how: "Oracle levels" },
     { id: "js", name: "JavaScript", icon: "🪞", zone: 8, how: "Mirror Sea levels" },
+    { id: "fishing", name: "Fishing", icon: "🎣", zone: 0, how: "casting a line at a fishing spot in town or on Gull Isle" },
   ];
   const GOODS = {
     apple: { name: "Apple", icon: "🍎", base: 4, from: "picked up in the Orchard" },
@@ -28,18 +29,26 @@ const RPG = (() => {
     shard: { name: "Time shard", icon: "⏳", base: 20, from: "every commit in the Time Tower" },
     ink: { name: "Oracle ink", icon: "🖋️", base: 15, from: "finishing Oracle missions" },
     glass: { name: "Mirror glass", icon: "🪞", base: 18, from: "finishing Mirror Sea missions" },
+    sardine: { name: "Sardine", icon: "🐟", base: 3, from: "caught off the pier", fish: true },
+    mackerel: { name: "Mackerel", icon: "🐟", base: 7, from: "caught off the pier", fish: true },
+    bass: { name: "Sea bass", icon: "🐠", base: 13, from: "caught at Fishing 2", fish: true },
+    salmon: { name: "Salmon", icon: "🍣", base: 20, from: "caught at Fishing 3", fish: true },
+    koi: { name: "Golden koi", icon: "🐡", base: 85, from: "a rare catch from Fishing 4", fish: true },
+    swordfish: { name: "Swordfish", icon: "🗡️", base: 48, from: "caught off Gull Isle at Fishing 5", fish: true },
     cider: { name: "Cider", icon: "🍺", base: 22, from: "crafted in the Workshop from apples", crafted: true },
     prism: { name: "Prism", icon: "🔺", base: 130, from: "crafted from gems and a lens", crafted: true },
     crate: { name: "Crate", icon: "📦", base: 60, from: "crafted from planks and scrap", crafted: true },
     clockstone: { name: "Clockstone", icon: "🕰️", base: 95, from: "crafted from fog stone and a time shard", crafted: true },
+    stew: { name: "Fish stew", icon: "🍲", base: 34, from: "cooked in the Workshop from sardines and mackerel", crafted: true },
   };
-  const BASIC = Object.keys(GOODS).filter(g => !GOODS[g].crafted);
+  const BASIC = Object.keys(GOODS).filter(g => !GOODS[g].crafted && !GOODS[g].fish); // fish come from fishing, not missions
   const ZONE_DROP = { 1: ["scrap", 1, 3], 2: ["apple", 2, 4], 3: ["stone", 2, 5], 4: ["plank", 2, 5], 5: ["shard", 1, 3], 6: ["scrap", 2, 4], 7: ["ink", 2, 4], 8: ["glass", 2, 5] };
   const RECIPES = [
     { id: "cider", out: "cider", inp: { apple: 3 }, req: ["loops", 3] },
     { id: "crate", out: "crate", inp: { plank: 4, scrap: 2 }, req: ["functions", 4] },
     { id: "clockstone", out: "clockstone", inp: { stone: 3, shard: 1 }, req: ["git", 4] },
     { id: "prism", out: "prism", inp: { gem: 2, lens: 1 }, req: ["logic", 8] },
+    { id: "stew", out: "stew", inp: { sardine: 3, mackerel: 2 }, req: ["fishing", 3] },
   ];
   const GEAR = [
     { id: "longArm", name: "Long Arm", icon: "🦾", desc: "robot.pick() also grabs the item on the tile ahead.", cost: 150, req: ["commands", 4] },
@@ -170,7 +179,7 @@ const RPG = (() => {
   const have = (g) => S.inv[g] || 0;
   function add(g, n) { const room = Math.max(0, cap() - have(g)); const k = Math.min(room, n); S.inv[g] = have(g) + k; return k; }
   function take(g, n) { if (have(g) < n) return false; S.inv[g] -= n; if (!S.inv[g]) delete S.inv[g]; return true; }
-  const gname = (g, n) => `${GOODS[g].icon} ${n !== undefined ? n + " " : ""}${GOODS[g].name}${n !== undefined && n !== 1 ? "s" : ""}`.replace("Mirror glasss", "Mirror glass").replace("Fog stones", "Fog stone");
+  const gname = (g, n) => `${GOODS[g].icon} ${n !== undefined ? n + " " : ""}${GOODS[g].name}${n !== undefined && n !== 1 && !GOODS[g].fish ? "s" : ""}`.replace("Mirror glasss", "Mirror glass").replace("Fog stones", "Fog stone");
 
   // ---------- market ----------
   let extraFlood = null; // the whole family's sales today, from the family server
@@ -318,8 +327,8 @@ const RPG = (() => {
       <div class="tablewrap"><table class="goods"><tr><th>Good</th><th>You have</th><th>Sells for</th><th>Buy for</th><th></th></tr>`;
     for (const g in GOODS) {
       const p = price(g), base = GOODS[g].base, trend = p > base * 1.1 ? "▲" : p < base * 0.9 ? "▼" : "•"; const hot = d.hot === g;
-      h += `<tr><td>${GOODS[g].icon} ${GOODS[g].name}${hot ? ' <span class="hot">HOT</span>' : ""}</td><td>${have(g)}</td><td><b>🪙 ${p}</b> <span class="muted">${trend}</span></td><td>${GOODS[g].crafted ? "<span class='muted'>craft only</span>" : "🪙 " + buyPrice(g)}</td>
-        <td class="acts">${have(g) ? `<button class="small" data-act="sell" data-g="${g}" data-n="1">Sell 1</button><button class="small" data-act="sell" data-g="${g}" data-n="10">Sell 10</button><button class="small" data-act="sell" data-g="${g}" data-n="999">All</button>` : ""}${!GOODS[g].crafted ? `<button class="small" data-act="buy" data-g="${g}" ${S.coins < buyPrice(g) || have(g) >= cap() ? "disabled" : ""}>Buy 1</button>` : ""}</td></tr>`;
+      h += `<tr><td>${GOODS[g].icon} ${GOODS[g].name}${hot ? ' <span class="hot">HOT</span>' : ""}</td><td>${have(g)}</td><td><b>🪙 ${p}</b> <span class="muted">${trend}</span></td><td>${GOODS[g].crafted ? "<span class='muted'>craft only</span>" : GOODS[g].fish ? "<span class='muted'>catch only</span>" : "🪙 " + buyPrice(g)}</td>
+        <td class="acts">${have(g) ? `<button class="small" data-act="sell" data-g="${g}" data-n="1">Sell 1</button><button class="small" data-act="sell" data-g="${g}" data-n="10">Sell 10</button><button class="small" data-act="sell" data-g="${g}" data-n="999">All</button>` : ""}${!GOODS[g].crafted && !GOODS[g].fish ? `<button class="small" data-act="buy" data-g="${g}" ${S.coins < buyPrice(g) || have(g) >= cap() ? "disabled" : ""}>Buy 1</button>` : ""}</td></tr>`;
     }
     return h + "</table></div>";
   }

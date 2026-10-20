@@ -28,6 +28,9 @@ const Hub = (() => {
     { kind: "npc", id: "juno", model: "villager6", inside: "shop", wx: 2.35, wz: -1.3, label: "🧺 Juno", color: "#d08a3a" },
     // your boat, tied up at the end of the pier (boat: where it floats, land: where you step off)
     { kind: "moor", wx: 1.05, wz: 22.8, label: "⛵ Your boat", boat: { x: 2.9, z: 22.2, ry: -Math.PI / 2 }, land: { x: 0, z: 22, yaw: Math.PI / 2 } },
+    // fishing spots: stand by one and cast into the water
+    { kind: "fish", wx: -0.95, wz: 19.4, ry: Math.PI, label: "🎣 Fishing spot" },
+    { kind: "fish", island: "gull", wx: -0.95, wz: 13.4, ry: Math.PI, label: "🎣 Fishing spot" },
     { kind: "npc", id: "gully", island: "gull", model: "villager3", wx: -2.6, wz: 5, label: "🦜 Old Gully", color: "#3a7a8a" },
   ];
   // Rooms you can drive into. Each has a size (w × d), what stands in it (things), the people and things you can
@@ -167,6 +170,51 @@ const Hub = (() => {
     RPG.addCoins(coins); api.persistSave(); Render3D.roam.openChest(p.id); api.sfx("gem");
     api.toast(`<b>💰 Treasure!</b> +${coins} 🪙${got ? ` and ${RPG.GOODS[g].icon} ${got} ${RPG.GOODS[g].name}${got > 1 && !/s$/.test(RPG.GOODS[g].name) ? "s" : ""}` : ""} · ${t.chests.length} of ${GULL.chests.length} chests`);
   }
+  // ---------- fishing ----------
+  // What bites: w = how often, cm = size range, lvl = Fishing level needed, gull = only off Gull Isle.
+  // pulls, zone (width of the green) and speed (of the needle) make the reel game harder for bigger fish.
+  const FISH = [
+    { id: "boot", name: "Old boot", w: 8, cm: [26, 31], pulls: 1, zone: 0.4, speed: 0.9, color: 0x4a3626, xp: 4, boot: true },
+    { id: "sardine", w: 30, cm: [12, 21], pulls: 1, zone: 0.34, speed: 1.0, color: 0xc4d2de, xp: 10 },
+    { id: "mackerel", w: 24, cm: [25, 42], pulls: 2, zone: 0.3, speed: 1.2, color: 0x4f8aa0, xp: 18 },
+    { id: "bass", w: 16, cm: [35, 66], pulls: 2, zone: 0.25, speed: 1.45, color: 0x7d8a8f, xp: 30, lvl: 2 },
+    { id: "salmon", w: 11, cm: [50, 86], pulls: 3, zone: 0.22, speed: 1.6, color: 0xe0866a, xp: 45, lvl: 3 },
+    { id: "koi", w: 2, cm: [30, 56], pulls: 4, zone: 0.16, speed: 2.0, color: 0xffb020, xp: 120, lvl: 4 },
+    { id: "swordfish", w: 8, cm: [120, 220], pulls: 4, zone: 0.17, speed: 1.9, color: 0x35506e, xp: 85, lvl: 5, gull: true },
+  ];
+  const fishName = f => f.name || RPG.GOODS[f.id].name, fishIcon = f => f.boot ? "🥾" : RPG.GOODS[f.id].icon;
+  const journal = () => { const t = town(); return t.fish || (t.fish = {}); };
+  function biteFish() { // which fish took the bait: weighted by rarity, better odds and a wider green as Fishing levels up
+    const L = RPG.skillLevel("fishing"), pool = FISH.filter(f => (!f.lvl || L >= f.lvl) && (!f.gull || island === "gull"));
+    const w = f => f.w * (f.id === "koi" ? 1 + L * 0.15 + (island === "gull" ? 1 : 0) : f.boot ? Math.max(0.3, 1 - L * 0.1) : 1);
+    let k = Math.random() * pool.reduce((a, f) => a + w(f), 0), f = pool[0]; for (const x of pool) { k -= w(x); if (k <= 0) { f = x; break; } }
+    const cm = Math.round(f.cm[0] + Math.random() * Math.random() * (f.cm[1] - f.cm[0])); // big ones are rarer
+    return { ...f, cm, scale: f.boot ? 1 : Math.min(1.7, Math.max(0.3, cm / 100 * 0.95)), zone: Math.min(0.5, f.zone + (L - 1) * 0.012), at: 0.3 + Math.random() * 0.4 };
+  }
+  function goFish() {
+    if (!window.Render3D || Render3D.roam.fish.on) return;
+    if (!Render3D.roam.fish.start({ bite: biteFish, window: 1.1, done: fishDone })) { api.toast("🎣 No open water here. Stand at the edge of the pier and try again."); return; }
+    renderPanel();
+  }
+  function fishDone(res) {
+    renderPanel(); if (!res.ok) { if (res.why === "snap") api.toast(`🎣 Snap! The ${fishName(res.fish).toLowerCase()} broke the line. Tap only when the needle is in the green.`); else if (res.why === "slow" || res.why === "tired") api.toast("🎣 The fish got away. Press E (or tap Talk) to cast again."); return; }
+    const f = res.fish, j = journal(), e = j[f.id] || (j[f.id] = { n: 0, best: 0 }), first = !e.n, record = !f.boot && e.n && f.cm > e.best; e.n++; if (!f.boot && f.cm > e.best) e.best = f.cm;
+    const L0 = RPG.skillLevel("fishing"); RPG.addXp("fishing", f.xp); const L1 = RPG.skillLevel("fishing");
+    const got = f.boot ? RPG.add("scrap", 1) : RPG.add(f.id, 1); api.persistSave(); api.sfx(f.id === "koi" || f.id === "swordfish" ? "unlock" : "gem");
+    let msg = f.boot ? `<b>🥾 An old boot!</b> There was a scrap gear inside${got ? "" : ", but your backpack is full"}.` : `<b>${fishIcon(f)} ${fishName(f)}, ${f.cm} cm!</b>${first ? " New in your fish journal." : record ? " A new record!" : ""}${got ? "" : " Your backpack is full, so you let it go."}`;
+    msg += ` +${f.xp} 🎣 XP`; if (L1 > L0) { msg += `<br><b>🎣 Fishing level ${L1}!</b>`; const nu = FISH.filter(x => x.lvl === L1); if (nu.length) msg += ` ${nu.map(x => fishIcon(x) + " " + fishName(x)).join(" and ")} can bite now${nu.some(x => x.gull) ? " off Gull Isle" : ""}.`; }
+    api.toast(msg);
+    const kinds = FISH.filter(x => !x.boot), all = kinds.every(x => j[x.id] && j[x.id].n), t = town();
+    if (all && !t.angler) { t.angler = true; RPG.addCoins(200); const st = RPG.state; if (st.titles && !st.titles.includes("Angler")) st.titles.push("Angler"); api.persistSave(); setTimeout(() => { api.toast(`<b>📖 Every fish in the journal!</b> +200 🪙 and the title Angler.`); api.sfx("unlock"); }, 2600); }
+  }
+  function fishJournal() {
+    const j = journal(), L = RPG.skillLevel("fishing");
+    api.showModal(`<h2>📖 Fish journal</h2><p>Fishing level <b>${L}</b>. Stand at a 🎣 fishing spot and press E (or tap Talk). Wait for the bobber to plunge, tap, then tap each time the needle crosses the green.</p>
+      <div class="cards">${FISH.map(f => { const e = j[f.id], locked = f.lvl && L < f.lvl; return `<div class="card"><div class="ct"><span class="big">${e && e.n ? fishIcon(f) : "❔"}</span> <b>${e && e.n ? fishName(f) : locked ? "???" : fishName(f)}</b></div>
+        <div class="muted">${e && e.n ? `caught ${e.n}${f.boot ? "" : ` · best ${e.best} cm`}` : locked ? `bites at Fishing ${f.lvl}${f.gull ? ", off Gull Isle" : ""}` : f.gull ? "only off Gull Isle" : "not caught yet"}</div></div>`; }).join("")}</div>
+      <div class="row"><button id="closeBtn">Done</button></div>`);
+    $("closeBtn").onclick = api.hideModal;
+  }
   // sail far enough from one island and the current carries you to the other
   function sailAway() {
     const to = island === "harbor" ? "gull" : "harbor", T = TOWNS[to]; api.toast(`⛵ Sailing to ${T.name}…`); api.sfx("teleport");
@@ -216,7 +264,7 @@ const Hub = (() => {
     const y = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
     if (window.Render3D) Render3D.roam.input(x, y);
   }
-  function interactNear() { const p = window.Render3D && Render3D.roam.near(); if (p && $("modal").hidden) interact(p); }
+  function interactNear() { if (window.Render3D && Render3D.roam.fish.on) { Render3D.roam.fish.tap(); return; } const p = window.Render3D && Render3D.roam.near(); if (p && $("modal").hidden) interact(p); }
   function onKeyUp(e) { const k = e.key.toLowerCase(); keys.delete(k); if (k === "shift" && window.Render3D) Render3D.roam.boost(false); sendInput(); }
   // phone: a thumb joystick over the bottom-left of the picture, a Talk button bottom-right
   function initJoy() {
@@ -227,7 +275,7 @@ const Hub = (() => {
     const end = e => { if (e.pointerId !== id) return; id = null; k.style.transform = ""; if (window.Render3D) Render3D.roam.input(0, 0); };
     j.addEventListener("pointerup", end); j.addEventListener("pointercancel", end);
     $("talkBtn").onclick = () => interactNear();
-    $("jumpBtn").addEventListener("pointerdown", e => { e.preventDefault(); if (window.Render3D) Render3D.roam.jump(); });
+    $("jumpBtn").addEventListener("pointerdown", e => { e.preventDefault(); if (window.Render3D) { if (Render3D.roam.fish.on) Render3D.roam.fish.tap(); else Render3D.roam.jump(); } });
     const bb = $("boostBtn"), boost = on => e => { e.preventDefault(); if (on) bb.setPointerCapture(e.pointerId); bb.classList.toggle("on", on); if (window.Render3D) Render3D.roam.boost(on); };
     bb.addEventListener("pointerdown", boost(true)); bb.addEventListener("pointerup", boost(false)); bb.addEventListener("pointercancel", boost(false));
   }
@@ -238,8 +286,9 @@ const Hub = (() => {
     const k = e.key.toLowerCase();
     const m = ["arrowright", "d", "arrowdown", "s", "arrowleft", "a", "arrowup", "w"].includes(k);
     if (m) { e.preventDefault(); keys.add(k); sendInput(); }
-    else if (k === " ") { e.preventDefault(); if (window.Render3D) Render3D.roam.jump(); }
+    else if (k === " ") { e.preventDefault(); if (window.Render3D) { if (Render3D.roam.fish.on) Render3D.roam.fish.tap(); else Render3D.roam.jump(); } }
     else if (k === "shift") { keys.add(k); if (window.Render3D) Render3D.roam.boost(true); }
+    else if (k === "escape" && window.Render3D && Render3D.roam.fish.on) Render3D.roam.fish.stop();
     else if (k === "escape" && window.Render3D && Render3D.roam.race.on) { Render3D.roam.race.stop(); api.toast("🏁 Race stopped."); renderPanel(); }
     else if (k === "e" || k === "enter") { e.preventDefault(); interactNear(); }
     else if (k === "p") photo(true);
@@ -261,6 +310,7 @@ const Hub = (() => {
     if (p.kind === "race") return raceMenu();
     if (p.kind === "moor") return sailToggle();
     if (p.kind === "chest") return openChest(p);
+    if (p.kind === "fish") return goFish();
     if (p.kind === "npc") talk(p.id);
     else if (p.kind === "stall") api.openTown(p.tab);
     else if (p.kind === "sign") api.showScreen("map");
@@ -288,11 +338,12 @@ const Hub = (() => {
       el.innerHTML = `<div class="zonechip">${island === "gull" ? "🏝️ Gull Isle" : "⚓ Harbor Town"}</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. <b>Space</b> jumps, <b>Shift</b> boosts. Dark gates are sealed until you finish the zone before them."}</p>
         <p class="muted">⚙️ ${gearsFound()} of ${TOWNS[island].gears.length} golden gears found here${island === "gull" ? ` · 💰 ${(town().chests || []).length} of ${GULL.chests.length} chests` : town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · ⛵ your boat is at the end of the pier · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
-        <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button></div>
-        <div id="nearby">${p ? `<button class="primary" data-near="1">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + (p.locked ? " Sealed: " : " Enter ") + ZONES[p.zone - 1].name : p.kind === "door" ? "🚪 Go into " + p.label : p.kind === "exit" ? "🚪 Back to town" : (p.kind === "npc" ? "🗣️ Talk to " : "Use: ") + p.label}</button>` : room ? `<span class="muted">You're in ${INTERIORS[room].title}. Drive to the glowing rings to use things, talk to whoever is here, and leave by the door.</span>` : `<span class="muted">Nobody within reach. The quest board and Marisol are down by the harbour, the shops ring the plaza, the portals stand along the shore. Lit doorways lead inside: Wrenna's Workshop and the Time Tower.</span>`}</div>
+        <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button><button id="journalBtn" class="small">📖 Fish journal</button></div>
+        <div id="nearby">${p ? `<button class="primary" data-near="1">${p.kind === "portal" ? ZONES[p.zone - 1].emoji + (p.locked ? " Sealed: " : " Enter ") + ZONES[p.zone - 1].name : p.kind === "door" ? "🚪 Go into " + p.label : p.kind === "exit" ? "🚪 Back to town" : p.kind === "fish" ? (Render3D.roam.fish.on ? "🎣 Tap now (or press E)" : "🎣 Go fishing") : (p.kind === "npc" ? "🗣️ Talk to " : "Use: ") + p.label}</button>` : room ? `<span class="muted">You're in ${INTERIORS[room].title}. Drive to the glowing rings to use things, talk to whoever is here, and leave by the door.</span>` : `<span class="muted">Nobody within reach. The quest board and Marisol are down by the harbour, the shops ring the plaza, the portals stand along the shore. Lit doorways lead inside: Wrenna's Workshop and the Time Tower.</span>`}</div>
         <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()} · ${LEVELS.filter(l => api.completed()[l.id]).length}/${LEVELS.length} missions</p>`;
       const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
       const pb = $("photoBtn"); if (pb) pb.onclick = () => photo(true);
+      const jb = $("journalBtn"); if (jb) jb.onclick = fishJournal;
       return;
     }
   }

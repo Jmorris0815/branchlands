@@ -157,6 +157,13 @@ const Render3D = (() => {
       for (const x of [-0.28, 0.28]) { const band = mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.05, 14, 1, false, 0, Math.PI), gold, x, 0, 0.23); band.rotation.z = Math.PI / 2; lid.add(band); }
       lid.add(mesh(new THREE.BoxGeometry(0.1, 0.12, 0.04), gold, 0, -0.02, 0.47)); g.add(lid); g.userData.lid = lid; lid.rotation.x = p.open ? -1.9 : 0; g.userData.lidTo = lid.rotation.x;
       g.add(label(name, 0, 0, 0.5, 1.05));
+    } else if (p.kind === "fish") {
+      const wood = std({ color: 0x6a4a30, roughness: 0.9 }), tin = std({ color: 0x8a96a3, metalness: 0.7, roughness: 0.4 });
+      g.add(mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.3, 14, 1, true), tin, 0.25, 0.15, 0.1)); g.add(mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 14), tin, 0.25, 0.01, 0.1));
+      g.add(mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.02, 14), std({ color: 0x3a6a8a, roughness: 0.1 }), 0.25, 0.24, 0.1));
+      g.add(mesh(new THREE.BoxGeometry(0.42, 0.2, 0.28), std({ color: 0x2f6a4a, roughness: 0.6 }), -0.2, 0.1, -0.05)); g.add(mesh(new THREE.BoxGeometry(0.12, 0.03, 0.04), wood, -0.2, 0.215, -0.05)); // tackle box
+      for (const z of [-0.14, 0.04]) { const rd = mesh(new THREE.CylinderGeometry(0.01, 0.018, 1.3, 6), std({ color: 0x5a3a22, roughness: 0.7 }), 0.05, 0.24, z); rd.rotation.z = Math.PI / 2 - 0.08; rd.rotation.y = z * 2; g.add(rd); } // rods lying across it
+      g.add(label(name, 0, 0, 0.5, 0.9));
     } else if (p.kind === "race") {
       const pole = std({ color: 0xd8dde4, metalness: 0.8, roughness: 0.3 }); g.add(mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.9, 10), pole, 0, 0.95, 0));
       const ck = document.createElement("canvas"); ck.width = 64; ck.height = 40; const cg = ck.getContext("2d"); for (let y = 0; y < 5; y++) for (let x = 0; x < 8; x++) { cg.fillStyle = (x + y) % 2 ? "#151515" : "#fafafa"; cg.fillRect(x * 8, y * 8, 8, 8); }
@@ -1432,6 +1439,126 @@ const Render3D = (() => {
       if (R.i === R.rings.length) { const t = R.t, done = R.done; stopRace(); if (done) done(t); }
     }
   }
+  // fishing: Bolt casts a line from the pier or the shore. Wait for the bobber to plunge, tap, then tap each time
+  // the needle crosses the green to reel the fish in. hub.js says which fish bites (how many pulls, how wide the green).
+  function catchMesh(color, size) {
+    const g = new THREE.Group(), m = std({ color: new THREE.Color(color), roughness: 0.35, metalness: 0.35 });
+    const body = mesh(new THREE.SphereGeometry(0.5, 16, 10), m); body.scale.set(1, 0.36, 0.22); g.add(body);
+    const tail = mesh(new THREE.ConeGeometry(0.2, 0.3, 4), m, -0.58, 0, 0); tail.rotation.z = Math.PI / 2; tail.scale.set(1, 1, 0.25); g.add(tail);
+    const fin = mesh(new THREE.ConeGeometry(0.1, 0.22, 3), m, 0.02, 0.2, 0); fin.scale.set(1.4, 1, 0.2); g.add(fin);
+    for (const s of [-1, 1]) g.add(mesh(new THREE.SphereGeometry(0.035, 8, 6), std({ color: 0x111111, roughness: 0.2 }), 0.33, 0.05, s * 0.09));
+    g.scale.setScalar(size); return g;
+  }
+  function bootMesh() { // not every bite is a fish
+    const g = new THREE.Group(), m = std({ color: 0x4a3626, roughness: 0.9 });
+    g.add(mesh(new THREE.BoxGeometry(0.14, 0.3, 0.12), m, -0.05, 0.08, 0)); g.add(mesh(new THREE.BoxGeometry(0.3, 0.1, 0.13), m, 0.03, -0.06, 0)); g.add(mesh(new THREE.BoxGeometry(0.31, 0.03, 0.14), std({ color: 0x222222 }), 0.03, -0.11, 0));
+    return g;
+  }
+  function startFish(opts) {
+    const r = roam; if (!r || r.indoor || r.race || r.sail || r.angler) return false;
+    const b = r.bolt.position, gp = (x, z) => { const p = r.platforms.find(p => x > p.x1 && x < p.x2 && z > p.z1 && z < p.z2); return p ? p.y : r.height(x, z); };
+    // face the open water: the direction where water starts close and runs furthest, leaning toward the way Bolt faces
+    let best = null;
+    for (let i = 0; i < 48; i++) {
+      const a = i / 48 * Math.PI * 2; let dd = a - r.yaw; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI;
+      let first = 0, run = 0;
+      for (let d = 1.2; d <= 9; d += 0.3) { const wx = b.x + Math.cos(a) * d, wz = b.z - Math.sin(a) * d, wet = gp(wx, wz) < -0.3 && !r.colliders.some(c => Math.hypot(wx - c.x, wz - c.z) < c.r + 0.4) && !(r.moor && Math.hypot(wx - r.moor.boat.position.x, wz - r.moor.boat.position.z) < 2); if (wet) { if (!first) first = d; run = d - first; } else if (first) break; else if (d > 2.6) break; }
+      if (!first || run < 2.2) continue;
+      const s = Math.min(run, 6) - first * 0.6 - Math.abs(dd) * 0.5; if (!best || s > best.s) { const d = Math.max(3.6, first + Math.min(3, run * 0.6)); best = { s, a, x: b.x + Math.cos(a) * d, z: b.z - Math.sin(a) * d }; }
+    }
+    if (!best) return false;
+    r.target = null; r.path = null; r.vel.set(0, 0, 0); r.input.x = r.input.y = 0; r.yaw = best.a; r.bolt.rotation.y = best.a;
+    cam.az = Math.atan2(-Math.cos(best.a), Math.sin(best.a)) - 0.3; r.camWas = { el: cam.el }; cam.el = Math.max(cam.el, 0.75); // look down over his shoulder at the water
+    for (const q of r.props) if (q.p.kind === "fish") q.m.traverse(o => { if (o.isSprite) o.visible = false; }); // the spot's name tag would sit on the bobber
+    const rod = new THREE.Group(), L = 1.5;
+    const pole = mesh(new THREE.CylinderGeometry(0.012, 0.025, L, 6), std({ color: 0x5a3a22, roughness: 0.7 })); pole.geometry.translate(0, L / 2, 0); rod.add(pole);
+    rod.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.05, 10), std({ color: 0xc0c6cc, metalness: 0.8, roughness: 0.3 }), 0, 0.22, 0.05));
+    const tip = new THREE.Object3D(); tip.position.set(0, L, 0); rod.add(tip); rod.position.set(0.12, 0.42, 0.3); rod.rotation.z = -1.0; r.bolt.add(rod);
+    const bob = new THREE.Group(); bob.add(mesh(new THREE.SphereGeometry(0.07, 12, 8), std({ color: 0xe8392e, emissive: 0x801010, roughness: 0.4 }), 0, 0.02, 0)); bob.scale.setScalar(1.35);
+    bob.add(mesh(new THREE.SphereGeometry(0.071, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), std({ color: 0xf4f4f4, roughness: 0.4 }), 0, 0.02, 0));
+    bob.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.12, 5), std({ color: 0xf4f4f4 }), 0, 0.12, 0)); world.add(bob);
+    const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(17 * 3), 3));
+    const line = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xf0f0f0, transparent: true, opacity: 0.8 })); line.frustumCulled = false; world.add(line);
+    r.angler = { opts, phase: "cast", t: 0, rod, tip, bob, line, to: new THREE.Vector3(best.x, -0.01, best.z), from: null, biteAt: rnd(2.5, 6.5), nib: rnd(0.8, 1.8), dip: 0, pulls: 0, miss: 0, lost: 0, needle: 0, dir: 1, msg: null, msgT: 0, catchM: null };
+    if (window.Audio_) Audio_.play("click");
+    return true;
+  }
+  function endFish(result) {
+    const r = roam, F = r && r.angler; if (!F) return; r.angler = null; if (r.camWas) { cam.el = r.camWas.el; r.camWas = null; } for (const q of r.props) if (q.p.kind === "fish") q.m.traverse(o => { if (o.isSprite) o.visible = !r.photo; });
+    r.bolt.remove(F.rod); world.remove(F.bob); world.remove(F.line); F.line.geometry.dispose();
+    if (F.catchM) r.caught = { m: F.catchM, t: 0, from: F.bob.position.clone() }; // the fish leaps up to Bolt
+    if (F.opts.done) F.opts.done(result);
+  }
+  function fishTap() {
+    const r = roam, F = r && r.angler; if (!F) return false;
+    if (F.phase === "wait") { F.biteAt += 1.2; F.msg = "Not yet! Wait for the splash."; F.msgT = 1.6; if (window.Audio_) Audio_.play("click"); }
+    else if (F.phase === "bite") { F.phase = "reel"; F.t = 0; F.fishI = F.opts.bite(); F.needle = 0; F.dir = 1; F.msg = null; burst(F.bob.position.x, F.bob.position.z, 0xe6f4ff, 10, 1.4, 0); if (window.Audio_) Audio_.play("splash"); }
+    else if (F.phase === "reel") {
+      const f = F.fishI, inGreen = Math.abs(F.needle - f.at) < f.zone / 2;
+      burst(F.bob.position.x, F.bob.position.z, 0xe6f4ff, inGreen ? 12 : 5, inGreen ? 1.6 : 0.8, 0);
+      if (inGreen) {
+        F.pulls++; f.at = rnd(0.15 + f.zone / 2, 0.85 - f.zone / 2); if (window.Audio_) Audio_.play(F.pulls >= f.pulls ? "win" : "ring");
+        if (F.pulls >= f.pulls) { F.catchM = f.boot ? bootMesh() : catchMesh(f.color, f.scale); F.catchM.position.copy(F.bob.position); world.add(F.catchM); endFish({ ok: true, fish: f }); }
+      } else {
+        F.miss++; F.msg = "Too early or too late. Tap in the green!"; F.msgT = 1.4; if (window.Audio_) Audio_.play("bump");
+        if (F.miss >= 3) endFish({ ok: false, why: "snap", fish: f });
+      }
+    }
+    return true;
+  }
+  function fishFrame(r, dt) {
+    const F = r.angler;
+    if (F && (r.input.x || r.input.y || r.target || r.race)) { endFish({ ok: false, why: "moved" }); return; }
+    if (F) {
+      F.t += dt; F.msgT -= dt; const tipW = F.tip.getWorldPosition(new THREE.Vector3()), wave = Math.sin(clock * 2.2) * 0.02, b = r.bolt.position;
+      if (F.phase === "cast") {
+        const k = Math.min(1, F.t / 0.7); if (!F.from) F.from = tipW.clone(); F.rod.rotation.z = -1.0 + Math.sin(k * Math.PI) * 1.4;
+        F.bob.position.lerpVectors(F.from, F.to, k); F.bob.position.y += Math.sin(k * Math.PI) * 1.6;
+        if (k >= 1) { F.phase = "wait"; F.t = 0; burst(F.to.x, F.to.z, 0xe6f4ff, 8, 1.1, 0); if (window.Audio_) Audio_.play("splash"); }
+      } else if (F.phase === "wait") { // little nibbles that are not the real bite
+        F.nib -= dt; if (F.nib <= 0) { F.nib = rnd(0.9, 2.2); F.dip = 0.05; burst(F.to.x, F.to.z, 0xe6f4ff, 2, 0.4, -0.02); }
+        F.dip *= 1 - Math.min(1, dt * 6); F.bob.position.set(F.to.x, F.to.y + wave - F.dip, F.to.z);
+        if (F.t >= F.biteAt) { F.phase = "bite"; F.t = 0; F.win = F.opts.window || 1; for (let k = 0; k < 2; k++) burst(F.to.x, F.to.z, 0xf4fbff, 12, 1.8, 0); if (window.Audio_) Audio_.play("splash"); }
+      } else if (F.phase === "bite") {
+        F.bob.position.set(F.to.x + Math.sin(clock * 40) * 0.02, F.to.y - 0.1, F.to.z); F.rod.rotation.z = -0.75;
+        if (F.t > F.win) { F.phase = "wait"; F.t = 0; F.biteAt = rnd(2, 5); F.msg = "It got away. Tap as soon as it splashes!"; F.msgT = 2.2; F.rod.rotation.z = -1.0; if (++F.lost >= 3) { endFish({ ok: false, why: "slow" }); return; } }
+      } else if (F.phase === "reel") {
+        const f = F.fishI; F.needle += F.dir * dt * f.speed * 0.6; if (F.needle > 1) { F.needle = 1; F.dir = -1; } if (F.needle < 0) { F.needle = 0; F.dir = 1; }
+        F.rod.rotation.z = -0.6 + Math.sin(clock * 9) * 0.06; const k = F.pulls / f.pulls * 0.45; // each good pull drags the fish closer
+        F.bob.position.set(F.to.x + (b.x - F.to.x) * k + Math.sin(clock * 7) * 0.08, F.to.y - 0.03 + wave, F.to.z + (b.z - F.to.z) * k + Math.cos(clock * 6) * 0.08);
+        F.splT = (F.splT || 0) - dt; if (F.splT <= 0) { F.splT = 0.25; burst(F.bob.position.x, F.bob.position.z, 0xe6f4ff, 3, 0.9, -0.02); }
+        if (F.t > 14) { endFish({ ok: false, why: "tired", fish: f }); return; }
+      }
+      // the line sags from the rod tip to the bobber, slack while waiting and tight while reeling
+      const pa = F.line.geometry.attributes.position, bp = F.bob.position, sag = F.phase === "cast" ? 0 : F.phase === "wait" ? 0.35 : 0.06;
+      for (let i = 0; i <= 16; i++) { const k = i / 16; pa.setXYZ(i, tipW.x + (bp.x - tipW.x) * k, tipW.y + (bp.y + 0.1 - tipW.y) * k - Math.sin(k * Math.PI) * sag, tipW.z + (bp.z - tipW.z) * k); }
+      pa.needsUpdate = true;
+    }
+    const C = r.caught; if (C) {
+      C.t += dt; const b = r.bolt.position, top = new THREE.Vector3(b.x, b.y + 1.5, b.z);
+      if (C.t < 0.8) { const k = C.t / 0.8; C.m.position.lerpVectors(C.from, top, k); C.m.position.y += Math.sin(k * Math.PI) * 1.4; C.m.rotation.set(0, 0, -k * Math.PI * 2); if (C.t <= dt) burst(C.from.x, C.from.z, 0xf4fbff, 16, 2, 0); }
+      else { C.m.position.copy(top); C.m.position.y += Math.sin(C.t * 5) * 0.06; C.m.rotation.set(0, C.t * 2, Math.sin(C.t * 9) * 0.25); }
+      if (C.t > 2.6) { world.remove(C.m); r.caught = null; }
+    }
+  }
+  function drawFishHud(r) {
+    const F = r.angler; if (!F) return; const cx = fx.width / 2, tap = phone ? "Tap Talk" : "Press E";
+    fctx.textAlign = "center"; fctx.textBaseline = "middle";
+    const panel = (h) => { fctx.fillStyle = "rgba(22,30,44,0.82)"; fctx.beginPath(); fctx.roundRect(cx - 170, 10, 340, h, 14); fctx.fill(); };
+    if (F.phase === "cast" || F.phase === "wait") {
+      panel(48); fctx.fillStyle = "#fff"; fctx.font = "800 17px Nunito, sans-serif"; fctx.fillText("🎣 Waiting for a bite…", cx, 28);
+      fctx.font = "700 12px Nunito, sans-serif"; fctx.fillStyle = F.msgT > 0 && F.msg ? "#ffd0c0" : "#cfe3ff"; fctx.fillText(F.msgT > 0 && F.msg ? F.msg : tap + " when the bobber plunges · move to stop", cx, 47);
+    } else if (F.phase === "bite") {
+      panel(48); fctx.font = "900 " + Math.round(24 * (1 + Math.sin(clock * 20) * 0.06)) + "px Nunito, sans-serif"; fctx.fillStyle = "#ffd24a"; fctx.fillText("❗ BITE! " + tap + "!", cx, 34);
+    } else if (F.phase === "reel") {
+      const f = F.fishI; panel(80); fctx.fillStyle = "#fff"; fctx.font = "800 15px Nunito, sans-serif"; fctx.fillText("Reel it in! " + tap + " when the needle is in the green", cx, 27);
+      const bw = 280, bx = cx - bw / 2, by = 40; fctx.fillStyle = "#3a4558"; fctx.beginPath(); fctx.roundRect(bx, by, bw, 16, 8); fctx.fill();
+      fctx.fillStyle = "#3fbf6a"; fctx.fillRect(bx + (f.at - f.zone / 2) * bw, by, f.zone * bw, 16);
+      fctx.fillStyle = "#fff"; fctx.fillRect(bx + F.needle * bw - 2, by - 4, 4, 24);
+      let s = ""; for (let i = 0; i < f.pulls; i++) s += i < F.pulls ? "● " : "○ ";
+      fctx.font = "700 12px Nunito, sans-serif"; fctx.fillStyle = F.miss ? "#ffd0c0" : "#cfe3ff"; fctx.fillText(F.msgT > 0 && F.msg ? F.msg : s.trim() + (F.miss ? "  ·  line strained " + "!".repeat(F.miss) : ""), cx, 74);
+    }
+  }
   // quest marks over heads: ! a quest for you, ? a reward waiting
   const markTex = {};
   function markSprite(ch) {
@@ -1503,6 +1630,7 @@ const Render3D = (() => {
         if (p.kind === "portal") { fctx.fillStyle = p.locked ? "#6b7280" : p.color; fctx.beginPath(); fctx.arc(sx, sy, 4.5, 0, Math.PI * 2); fctx.fill(); fctx.strokeStyle = "#fff"; fctx.lineWidth = 1.5; fctx.stroke(); }
         else if (p.kind === "npc") { fctx.fillStyle = p.color || "#fff"; fctx.beginPath(); fctx.arc(sx, sy, 3.2, 0, Math.PI * 2); fctx.fill(); fctx.strokeStyle = "#fff"; fctx.lineWidth = 1; fctx.stroke(); }
         else if (p.kind === "door") { fctx.fillStyle = "#ffb347"; fctx.fillRect(sx - 3, sy - 3, 6, 6); }
+        else if (p.kind === "fish") { fctx.fillStyle = "#5fd0ff"; fctx.beginPath(); fctx.arc(sx, sy, 3.5, 0, Math.PI * 2); fctx.fill(); fctx.strokeStyle = "#fff"; fctx.lineWidth = 1.2; fctx.stroke(); }
         else if (p.kind === "race") { fctx.fillStyle = "#fff"; fctx.fillRect(sx - 3.5, sy - 3.5, 7, 7); fctx.fillStyle = "#222"; fctx.fillRect(sx - 3.5, sy - 3.5, 3.5, 3.5); fctx.fillRect(sx, sy, 3.5, 3.5); }
         else { fctx.fillStyle = "#e8d6a8"; fctx.fillRect(sx - 2.5, sy - 2.5, 5, 5); }
       }
@@ -1517,6 +1645,7 @@ const Render3D = (() => {
       if (total) { const found = total - r.gold.length, txt = "⚙ " + found + "/" + total; fctx.font = "800 13px Nunito, sans-serif"; const w = fctx.measureText(txt).width + 16; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(cx - w / 2, cy + Rm + 8, w, 22, 11); fctx.fill(); fctx.fillStyle = found === total ? "#ffd24a" : "#fff"; fctx.fillText(txt, cx, cy + Rm + 19.5); }
       if (r.energy < 0.999 || r.boosting) { const bw = Rm * 1.3, bx = cx - bw / 2, by = cy + Rm + 36; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(bx - 3, by - 3, bw + 6, 12, 6); fctx.fill(); fctx.fillStyle = r.energy < 0.2 && !r.boosting ? "#8a96a8" : "#5fd0ff"; fctx.beginPath(); fctx.roundRect(bx, by, Math.max(2, bw * r.energy), 6, 3); fctx.fill(); }
     }
+    drawFishHud(r);
     if (r.race) {
       const R = r.race, t = Math.max(0, R.t), txt = fmtTime(t);
       fctx.textAlign = "center"; fctx.textBaseline = "middle";
@@ -1562,13 +1691,14 @@ const Render3D = (() => {
         case "boat": case "ship": { const m = boatMesh(d.kind === "ship"); m.position.set(d.x, -0.1, d.z); m.rotation.y = ry; world.add(m); m.userData.phase = Math.random() * 6; r.floats.push(m); r.colliders.push({ x: d.x, z: d.z, r: d.kind === "ship" ? 2.6 : 1.3 }); break; }
       }
     }
-    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5 };
+    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35 };
     for (const p of town.props) {
       const m = propMesh(p), s = SCALE[p.kind] || 1;
       if (p.kind === "portal") m.add(archMesh(p.locked ? 0x555a66 : p.color));
       put(m, p.x, p.z, p.ry !== undefined ? p.ry : faceCentre(p.x, p.z), s);
       m.userData.baseY = m.position.y; m.userData.home = m.rotation.y;
       r.props.push({ p, m, r: REACH[p.kind] || 0.5, s });
+      if (p.kind === "fish") { const pl = r.platforms.find(f => p.x > f.x1 && p.x < f.x2 && p.z > f.z1 && p.z < f.z2); if (pl) { m.position.y = pl.y; m.userData.baseY = pl.y; } }
       if (p.kind === "moor") { const pl = r.platforms.find(f => p.x > f.x1 && p.x < f.x2 && p.z > f.z1 && p.z < f.z2); if (pl) m.position.y = pl.y; m.userData.baseY = m.position.y; // the post stands on the pier
         const bm = sailboatMesh(); bm.position.set(p.boat.x, -0.1, p.boat.z); bm.rotation.y = p.boat.ry || 0; bm.userData.phase = 1.3; world.add(bm); r.floats.push(bm); r.moor = { p, boat: bm }; continue; }
       if (p.kind !== "portal" && p.kind !== "door") { const c = { x: p.x, z: p.z, r: REACH[p.kind] || 0.5 }; r.colliders.push(c); r.props[r.props.length - 1].col = c; }
@@ -1652,7 +1782,7 @@ const Render3D = (() => {
       if (m.userData.lid) m.userData.lid.rotation.x += (m.userData.lidTo - m.userData.lid.rotation.x) * Math.min(1, dt * 5);
       if (m.userData.flag) { const pa = m.userData.flag.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) + 0.4; pa.setZ(i, Math.sin(clock * 6 - x * 6) * 0.06 * x); } pa.needsUpdate = true; }
     }
-    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); if (r.rain) rainFrame(r, dt);
+    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); if (r.rain) rainFrame(r, dt);
     if (window.Audio_) Audio_.engine(Math.min(1.5, sp / BASE));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
     if (!r.indoor) { r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock; }
@@ -1680,6 +1810,7 @@ const Render3D = (() => {
     camera.lookAt(cam.look);
   }
   function roamClick(e) {
+    if (roam && roam.angler) { fishTap(); return; } // while fishing a click anywhere is the tap
     const r = roam, rc = canvas.getBoundingClientRect(); ndc.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1); ray.setFromCamera(ndc, camera);
     const hits = ray.intersectObjects(r.props.map(q => q.m), true);
     if (hits.length) {
@@ -1689,9 +1820,9 @@ const Render3D = (() => {
     const g = ray.intersectObject(r.terrain); if (g.length && r.height(g[0].point.x, g[0].point.z) > -0.04) setTarget(r, g[0].point.x, g[0].point.z);
   }
   function drawPrompt() {
-    const r = roam; if (!r || !r.near || r.race || r.photo || !modalHidden()) return;
+    const r = roam; if (!r || !r.near || r.race || r.angler || r.photo || !modalHidden()) return;
     const q = r.near, p = q.p, name = p.label.replace(/^\S+\s/, "");
-    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : p.kind === "moor" ? (r.sail ? "tie up and go ashore" : "board your boat") : p.kind === "chest" ? (p.open ? "an empty chest" : "open the chest") : "open the " + name);
+    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : p.kind === "moor" ? (r.sail ? "tie up and go ashore" : "board your boat") : p.kind === "chest" ? (p.open ? "an empty chest" : "open the chest") : p.kind === "fish" ? "go fishing" : "open the " + name);
     const v = new THREE.Vector3(q.m.position.x, q.m.position.y + 1.55 * q.s, q.m.position.z).project(camera);
     if (v.z > 1) return;
     const sx = (v.x + 1) / 2 * fx.width, sy = (1 - v.y) / 2 * fx.height;
@@ -1712,6 +1843,7 @@ const Render3D = (() => {
       else { r.sail = false; bt.position.set(mp.boat.x, -0.1, mp.boat.z); bt.rotation.set(0, mp.boat.ry || 0, 0); r.floats.push(bt); const y = r.platforms.find(f => mp.land.x > f.x1 && mp.land.x < f.x2 && mp.land.z > f.z1 && mp.land.z < f.z2); b.position.set(mp.land.x, y ? y.y : r.height(mp.land.x, mp.land.z), mp.land.z); r.gyS = b.position.y; r.vel.set(0, 0, 0); r.yaw = mp.land.yaw || 0; b.rotation.y = r.yaw; cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); }
       return true; },
     get sailing() { return !!(roam && roam.sail); },
+    fish: { start: (opts) => startFish(opts), tap: () => fishTap(), stop: () => endFish({ ok: false, why: "stopped" }), get on() { return !!(roam && roam.angler); }, get phase() { return roam && roam.angler ? roam.angler.phase : null; } },
     openChest(id) { const q = roam && roam.props.find(q => q.p.kind === "chest" && q.p.id === id); if (!q) return; q.p.open = true; q.m.userData.lidTo = -1.9; for (let k = 0; k < 3; k++) burst(q.p.x, q.p.z, [0xffd24a, 0xfff2b0, 0xffb020][k], 12, 1.6, q.m.position.y + 0.5); },
     photo(on) { const r = roam; if (!r) return; r.photo = !!on; r.input.x = r.input.y = 0; r.target = null; r.boostOn = false; for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { if (on) { o.userData.was = o.visible; o.visible = false; } else if (o.userData.was !== undefined) o.visible = o.userData.was; } }); },
     snapshot() { if (!roam) return null; if (quality === "realistic") composer.render(); else renderer.render(scene, camera); return canvas.toDataURL("image/jpeg", 0.92); },

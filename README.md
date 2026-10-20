@@ -55,6 +55,9 @@ Your ⛵ boat is tied up at the end of the pier: board it, sail out to sea, and 
 island with a stone circle, a beached wreck, a castaway called Old Gully, five treasure chests and ten more gears.
 **Juno's Trading Post** is the third building you can drive into. Press **P** (or 📷 Photo mode) to hide the labels,
 stop the clock, pick the time of day, and save a picture.
+Stand at a 🎣 **fishing spot** on either pier and press E to cast. Tap when the bobber plunges, then tap each time
+the needle crosses the green to reel it in. Fish sell at the Market (they can't be bought), Fishing levels up like
+any other skill and lets bigger fish bite (swordfish only off Gull Isle), and the 📖 Fish journal keeps your records.
 Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by changing two numbers. Around town:
 
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
