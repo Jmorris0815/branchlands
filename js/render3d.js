@@ -1256,23 +1256,53 @@ const Render3D = (() => {
     r.prevFwd = 0; r.pitch = 0;
   }
 
+  // named townsfolk don't stand like statues: every so often one strolls a couple of metres from home, looks around,
+  // and wanders back. They stop where they are when Bolt comes close or someone is talking to them.
+  const POTTER = 0.6;
+  function potter(r, q, dt, calm) {
+    const m = q.m;
+    if (!q.w) q.w = { hx: m.position.x, hz: m.position.z, yaw: m.userData.home, wait: rnd(2, 10), path: [], out: null, home: false };
+    const w = q.w; let moving = false;
+    if (calm && w.path.length) {
+      const wp = w.path[0], dx = wp.x - m.position.x, dz = wp.z - m.position.z, dd = Math.hypot(dx, dz);
+      if (dd < 0.06) w.path.shift();
+      else { const st = Math.min(dd, POTTER * dt); m.position.x += dx / dd * st; m.position.z += dz / dd * st; m.userData.home = Math.atan2(dx, dz); moving = true; }
+      if (!w.path.length) { w.wait = rnd(4, 12); if (w.home) { w.home = false; m.userData.home = w.yaw; } }
+    } else if (calm && r.walk && (w.wait -= dt) <= 0) {
+      if (w.out) { w.path = w.out.slice(0, -1).reverse().concat([{ x: w.hx, z: w.hz }]); w.out = null; w.home = true; } // back the way they came
+      else {
+        // a straight stroll over dry ground that keeps clear of everything else (their own spot is in the walk grid's way)
+        const a = Math.random() * Math.PI * 2, rr = rnd(1.2, 2.4), to = { x: w.hx + Math.sin(a) * rr, z: w.hz + Math.cos(a) * rr };
+        let ok = true; for (let i = 1; i <= 8 && ok; i++) { const x = w.hx + (to.x - w.hx) * i / 8, z = w.hz + (to.z - w.hz) * i / 8;
+          ok = r.height(x, z) > 0.05 && Math.abs(r.height(x, z) - r.height(w.hx, w.hz)) < 0.6 && !r.colliders.some(c => c !== q.col && Math.hypot(x - c.x, z - c.z) < c.r + 0.35); }
+        if (ok) { w.path = [to]; w.out = [to]; }
+      }
+      w.wait = rnd(3, 6);
+    }
+    m.position.y = m.userData.baseY + r.height(m.position.x, m.position.z) - r.height(w.hx, w.hz);
+    if (q.col) { q.col.x = m.position.x; q.col.z = m.position.z; }
+    return moving;
+  }
   function lifeFrame(r, dt, bx, bz) {
     if (r.talking && modalHidden()) r.talking = null; // conversation closed some other way
     const SPOTS = r.town.spots || [];
     // talking townsfolk: breathe, shift weight, and look at Bolt with the head first, then the body
     for (const q of r.props) {
       if (q.p.kind !== "npc") continue; const m = q.m, v = q.vis, rig = v && v.userData.rig;
-      const ex = bx - m.position.x, ez = bz - m.position.z, d = Math.hypot(ex, ez), want = d < 6 ? Math.atan2(ex, ez) : m.userData.home;
-      const anim = v && v.userData.anim, rel = angDiff(want, m.rotation.y), lim = rig || anim ? 1.0 : 0;
-      if (Math.abs(rel) > lim) m.rotation.y += Math.sign(rel) * Math.min(Math.abs(rel) - lim, dt * 2.2);
+      const ex = bx - m.position.x, ez = bz - m.position.z, d = Math.hypot(ex, ez), anim = v && v.userData.anim;
+      const walking = anim && !r.indoor && !q.p.still ? potter(r, q, dt, d > 6 && r.talking !== q.p.id && !r.race && !r.photo) : false;
+      const want = d < 6 && !walking ? Math.atan2(ex, ez) : m.userData.home;
+      const rel = angDiff(want, m.rotation.y), lim = walking ? 0 : rig || anim ? 1.0 : 0;
+      if (Math.abs(rel) > lim) m.rotation.y += Math.sign(rel) * Math.min(Math.abs(rel) - lim, dt * (walking ? 5 : 2.2));
       q.head = (q.head || 0) + (Math.max(-lim, Math.min(lim, angDiff(want, m.rotation.y))) - (q.head || 0)) * Math.min(1, dt * 4);
-      m.position.y = m.userData.baseY;
+      if (!q.w) m.position.y = m.userData.baseY;
       if (anim && !r.photo) {
         const talk = r.talking === q.p.id;
         if (d > 6) q.waved = false;
         if (talk) animPlay(anim, "talk");
         else if (!q.waved && d < 3.4 && !r.race) { q.waved = true; animPlay(anim, "wave", 0.25); }
-        else if (!anim.busy && (!anim.cur || anim.cur === "talk")) animPlay(anim, q.phase > 3 ? "idle2" : "idle", 0.5);
+        else if (walking) { animPlay(anim, "walk", 0.3); anim.acts.walk.timeScale = POTTER / 0.72; }
+        else if (!anim.busy && (!anim.cur || anim.cur === "talk" || anim.cur === "walk")) animPlay(anim, q.phase > 3 ? "idle2" : "idle", 0.5);
         animStep(anim, dt, q.head);
       } else if (anim) animStep(anim, 0, q.head);
       if (rig) { const talk = r.talking === q.p.id; rigSet(rig, "uGesture", talk ? 0.35 + 0.35 * Math.sin(clock * 2.6 + q.phase) : 0); rigSet(rig, "uHead", q.head); rigSet(rig, "uBreath", Math.sin(clock * 1.7 + q.phase)); rigSet(rig, "uNod", talk ? Math.sin(clock * 4.2) * 0.07 : d < 2.2 ? Math.sin(clock * 3 + q.phase) * 0.06 : 0); rigSet(rig, "uPhase", Math.sin(clock * 0.4 + q.phase) * 0.5); rigSet(rig, "uAmp", 0.05); }
@@ -1469,7 +1499,7 @@ const Render3D = (() => {
       const at = (x, z) => [cx + (x - b.x) * k, cy + (z - b.z) * k];
       const inside = (sx, sy, pad = 5) => Math.hypot(sx - cx, sy - cy) < Rm - pad;
       for (const q of r.props) {
-        const p = q.p, [sx, sy] = at(p.x, p.z); if (!inside(sx, sy, 3)) continue;
+        const p = q.p, [sx, sy] = at(q.m.position.x, q.m.position.z); if (!inside(sx, sy, 3)) continue;
         if (p.kind === "portal") { fctx.fillStyle = p.locked ? "#6b7280" : p.color; fctx.beginPath(); fctx.arc(sx, sy, 4.5, 0, Math.PI * 2); fctx.fill(); fctx.strokeStyle = "#fff"; fctx.lineWidth = 1.5; fctx.stroke(); }
         else if (p.kind === "npc") { fctx.fillStyle = p.color || "#fff"; fctx.beginPath(); fctx.arc(sx, sy, 3.2, 0, Math.PI * 2); fctx.fill(); fctx.strokeStyle = "#fff"; fctx.lineWidth = 1; fctx.stroke(); }
         else if (p.kind === "door") { fctx.fillStyle = "#ffb347"; fctx.fillRect(sx - 3, sy - 3, 6, 6); }
@@ -1541,7 +1571,7 @@ const Render3D = (() => {
       r.props.push({ p, m, r: REACH[p.kind] || 0.5, s });
       if (p.kind === "moor") { const pl = r.platforms.find(f => p.x > f.x1 && p.x < f.x2 && p.z > f.z1 && p.z < f.z2); if (pl) m.position.y = pl.y; m.userData.baseY = m.position.y; // the post stands on the pier
         const bm = sailboatMesh(); bm.position.set(p.boat.x, -0.1, p.boat.z); bm.rotation.y = p.boat.ry || 0; bm.userData.phase = 1.3; world.add(bm); r.floats.push(bm); r.moor = { p, boat: bm }; continue; }
-      if (p.kind !== "portal" && p.kind !== "door") r.colliders.push({ x: p.x, z: p.z, r: REACH[p.kind] || 0.5 });
+      if (p.kind !== "portal" && p.kind !== "door") { const c = { x: p.x, z: p.z, r: REACH[p.kind] || 0.5 }; r.colliders.push(c); r.props[r.props.length - 1].col = c; }
       else if (p.kind === "portal") for (const side of [-1, 1]) r.colliders.push({ x: p.x + side * 1.36 * Math.cos(m.rotation.y), z: p.z - side * 1.36 * Math.sin(m.rotation.y), r: 0.22 }); // the gate's two pillars
     }
     // name tags keep one size on screen however close Bolt gets
@@ -1635,7 +1665,7 @@ const Render3D = (() => {
     sun.position.copy(b.position).addScaledVector(r.lightDir, 30); sun.target.position.copy(b.position);
     // who is close enough to talk to? driving into a portal ring opens it
     let best = null, bd = 1e9;
-    for (const q of r.props) { const d = Math.hypot(q.p.x - nx, q.p.z - nz) - q.r; if (d < 1.7 && d < bd) { bd = d; best = q; } }
+    for (const q of r.props) { const d = Math.hypot(q.m.position.x - nx, q.m.position.z - nz) - q.r; if (d < 1.7 && d < bd) { bd = d; best = q; } }
     if (best !== r.near) { r.near = best; if (r.hooks.onNear) r.hooks.onNear(best ? best.p : null); }
     if (best && !r.race && (best.p.kind === "portal" || best.p.kind === "door" || best.p.kind === "exit") && bd < 0.3) { if (r.latch !== best) { r.latch = best; r.vel.set(0, 0, 0); r.target = null; if (r.hooks.onEnter) r.hooks.onEnter(best.p); } }
     else if (!best || best !== r.latch) r.latch = null;
@@ -1654,7 +1684,7 @@ const Render3D = (() => {
     const hits = ray.intersectObjects(r.props.map(q => q.m), true);
     if (hits.length) {
       let o = hits[0].object, q = null; while (o && !q) { q = r.props.find(q => q.m === o); o = o.parent; }
-      if (q) { if (q === r.near) { if (r.hooks.onInteract) r.hooks.onInteract(q.p); } else { const ex = r.bolt.position.x - q.p.x, ez = r.bolt.position.z - q.p.z, d = Math.hypot(ex, ez) || 1, back = q.r + 0.9; setTarget(r, q.p.x + ex / d * back, q.p.z + ez / d * back, q.p); } return; }
+      if (q) { if (q === r.near) { if (r.hooks.onInteract) r.hooks.onInteract(q.p); } else { const qx = q.m.position.x, qz = q.m.position.z, ex = r.bolt.position.x - qx, ez = r.bolt.position.z - qz, d = Math.hypot(ex, ez) || 1, back = q.r + 0.9; setTarget(r, qx + ex / d * back, qz + ez / d * back, q.p); } return; }
     }
     const g = ray.intersectObject(r.terrain); if (g.length && r.height(g[0].point.x, g[0].point.z) > -0.04) setTarget(r, g[0].point.x, g[0].point.z);
   }
