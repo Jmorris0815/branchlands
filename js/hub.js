@@ -28,6 +28,7 @@ const Hub = (() => {
     { kind: "npc", id: "juno", model: "villager6", inside: "shop", wx: 2.35, wz: -1.3, label: "🧺 Juno", color: "#d08a3a" },
     // your boat, tied up at the end of the pier (boat: where it floats, land: where you step off)
     { kind: "moor", wx: 1.05, wz: 22.8, label: "⛵ Your boat", boat: { x: 2.9, z: 22.2, ry: -Math.PI / 2 }, land: { x: 0, z: 22, yaw: Math.PI / 2 } },
+    { kind: "sorter", wx: 5.3, wz: 15.1, ry: 0, label: "🐟 Fish Sorter" },
     // fishing spots: stand by one and cast into the water
     { kind: "fish", wx: -0.95, wz: 19.4, ry: Math.PI, label: "🎣 Fishing spot" },
     { kind: "fish", island: "gull", wx: -0.95, wz: 13.4, ry: Math.PI, label: "🎣 Fishing spot" },
@@ -62,7 +63,7 @@ const Hub = (() => {
   const TOWN = {
     size: 80, radius: 27, start: { x: 0, z: 4 }, plaza: { x: 0, z: 0, r: 8.5 }, bay: { x: 0, z: 27, r: 10 },
     hills: [{ x: -8, z: -16, r: 7, h: 1.8 }, { x: 14, z: -13, r: 6, h: 1.4 }, { x: 21, z: -2, r: 4, h: 1.2 }],
-    flats: [{ x: 0, z: 0, r: 9.5, y: 1.0 }],
+    flats: [{ x: 0, z: 0, r: 9.5, y: 1.0 }, { x: 5.1, z: 15.1, r: 1.9 }],
     decor: [
       { kind: "fountain", x: 0, z: 0 }, { kind: "dock", x: 0, z: 14.5, len: 9 },
       { kind: "boat", x: 3.6, z: 20, ry: 0.5 }, { kind: "boat", x: -3.4, z: 21.5, ry: -0.3 }, { kind: "boat", x: -24.5, z: 8.5, ry: 1.2 }, { kind: "ship", x: 21, z: 16, ry: 2.4 },
@@ -215,6 +216,86 @@ const Hub = (() => {
       <div class="row"><button id="closeBtn">Done</button></div>`);
     $("closeBtn").onclick = api.hideModal;
   }
+  // ---------- Marisol's fish sorter: write sort(fish) in Python and the conveyor does what your code says ----------
+  // Each job is a rule. A crate of fish goes down the belt, your function decides each one, the rule checks it.
+  const SORT_JOBS = [
+    { id: "s1", title: "Sardine Supper", coins: 60, xp: 60, names: ["sardine", "mackerel", "bass", "salmon"],
+      ask: `Odo's ferry wants every sardine for supper. Send each <b>sardine</b> to <b>keep</b> and everything else to <b>sell</b>.`,
+      rule: f => f.name === "sardine" ? "keep" : "sell" },
+    { id: "s2", title: "Too Small to Keep", coins: 90, xp: 90, names: ["sardine", "sardine", "mackerel", "bass"], edge: [["sardine", 19], ["sardine", 20], ["mackerel", 25]],
+      ask: `Little fish go back to grow. Anything <b>shorter than 20 cm</b> goes back to the <b>sea</b>. Everything else is sold.`,
+      rule: f => f.cm < 20 ? "sea" : "sell" },
+    { id: "s3", title: "Three Bins", coins: 120, xp: 120, names: ["sardine", "sardine", "mackerel", "salmon", "koi"], edge: [["koi", 31], ["sardine", 19], ["sardine", 20]],
+      ask: `Golden koi are lucky: <b>keep</b> every koi. Fish shorter than 20 cm go back to the <b>sea</b>. Everything else, <b>sell</b>.`,
+      rule: f => f.name === "koi" ? "keep" : f.cm < 20 ? "sea" : "sell" },
+    { id: "s4", title: "Market Day", coins: 160, xp: 160, names: ["mackerel", "bass", "salmon", "sardine", "boot"], edge: [["boot", 28], ["bass", 40, "same"]],
+      ask: `Every fish now has today's <code>price</code> and its usual <code>base</code> price. <b>Sell</b> it when the price is at least the base. Otherwise <b>keep</b> it for tomorrow. Old boots are always <b>keep</b>: Wrenna wants the scrap.`,
+      rule: f => f.name === "boot" || f.price < f.base ? "keep" : "sell" },
+  ];
+  const STARTER = `def sort(fish):
+    # fish["name"]  "sardine", "mackerel", "bass", "salmon", "koi", "boot"
+    # fish["cm"]    how long it is
+    # fish["price"] today's price, fish["base"] the usual price
+    # return "keep", "sell" or "sea"
+    return "sell"
+`;
+  const sorter = () => { const t = town(); t.sorter = t.sorter || {}; t.sortCode = t.sortCode || {}; return t; };
+  const nextJob = () => SORT_JOBS.find(j => !sorter().sorter[j.id]) || SORT_JOBS[SORT_JOBS.length - 1];
+  function crate(job) { // twelve fish: the tricky ones first, then random ones, then shuffled
+    const look = id => FISH.find(f => f.id === id), mk = (id, cm, same) => { const f = look(id), base = id === "boot" ? 1 : RPG.GOODS[id].base;
+      return { name: id, cm: cm || Math.round(f.cm[0] + Math.random() * (f.cm[1] - f.cm[0])), base, price: same ? base : Math.max(1, Math.round(base * (0.6 + Math.random() * 0.8))) }; };
+    const out = (job.edge || []).map(([id, cm, same]) => mk(id, cm, same));
+    while (out.length < 12) { const id = job.names[Math.floor(Math.random() * job.names.length)], f = look(id); out.push(mk(id, id === "sardine" && Math.random() < 0.5 ? 14 + Math.floor(Math.random() * 10) : 0)); if (f.boot) out[out.length - 1].cm = 28; }
+    for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+    return out;
+  }
+  function sorterMenu(id) {
+    const t = sorter(), job = SORT_JOBS.find(j => j.id === id) || nextJob(), i = SORT_JOBS.indexOf(job), code = t.sortCode[job.id] || (i && t.sortCode[SORT_JOBS[i - 1].id]) || STARTER;
+    api.showModal(`<h2>🐟 Fish Sorter · ${job.title}</h2>
+      <p class="muted">Job ${i + 1} of ${SORT_JOBS.length}${t.sorter[job.id] ? " · done ✓" : ""}. ${SORT_JOBS.map((j, k) => `<button class="small" data-job="${j.id}" ${k && !t.sorter[SORT_JOBS[k - 1].id] && !t.sorter[j.id] ? "disabled" : ""}>${t.sorter[j.id] ? "✓ " : ""}${k + 1}</button>`).join(" ")}</p>
+      <p>${job.ask}</p>
+      <textarea id="sortCode" wrap="off" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" style="width:100%;min-height:190px;resize:vertical;font:14px/1.5 var(--mono);background:var(--term-bg);color:var(--term-ink);border:1px solid var(--line);border-radius:8px;padding:10px;tab-size:4"></textarea>
+      <div id="sortErr"></div>
+      <div class="row"><button id="sortRun" class="primary">▶ Run the sorter</button><button id="closeBtn">Close</button></div>
+      <p class="muted">Your code decides one fish at a time. Twelve fish come down the belt, and every one has to land in the right bin.</p>`);
+    const ta = $("sortCode"); ta.value = code;
+    ta.addEventListener("keydown", e => { if (e.key === "Tab") { e.preventDefault(); const s = ta.selectionStart; ta.value = ta.value.slice(0, s) + "    " + ta.value.slice(ta.selectionEnd); ta.selectionStart = ta.selectionEnd = s + 4; } e.stopPropagation(); });
+    ta.addEventListener("input", () => { sorter().sortCode[job.id] = ta.value; });
+    $("modalBody").querySelectorAll("button[data-job]").forEach(b => b.onclick = () => { sorter().sortCode[job.id] = ta.value; api.persistSave(); sorterMenu(b.dataset.job); });
+    $("sortRun").onclick = () => runSorter(job, ta.value); $("closeBtn").onclick = () => { api.persistSave(); api.hideModal(); };
+  }
+  async function runSorter(job, code) {
+    const t = sorter(); t.sortCode[job.id] = code; api.persistSave();
+    const err = (raw, tip) => { $("sortErr").innerHTML = `<div class="err" style="background:#3a1f22;color:#ffd0c0;border-radius:8px;padding:8px 10px;margin:8px 0;font:13px/1.4 var(--mono)">${raw.replace(/</g, "&lt;")}${tip ? `<div style="font-family:var(--body,inherit);margin-top:4px">💡 ${tip}</div>` : ""}</div>`; api.sfx("bump"); };
+    if (!window.PY || typeof Sk === "undefined") return err("The Python engine hasn't loaded yet.", "Check the internet connection and try again in a moment.");
+    $("sortRun").disabled = true;
+    const res = await PY.run(code, null); $("sortRun").disabled = false;
+    if (res.error) return err(res.error.raw, res.error.tip);
+    if (!res.module.$d.sort) return err("There's no function called sort.", "Start with  def sort(fish):  and give back a bin with return.");
+    const fish = crate(job), rows = [];
+    for (const f of fish) {
+      const r = PY.call(res.module, "sort", [{ ...f }]); if (r.error) return err(r.error, "Your function crashed on a " + f.name + " (" + f.cm + " cm). Check the spelling of the keys, like fish[\"cm\"].");
+      const got = typeof r.value === "string" ? r.value.trim().toLowerCase() : r.value;
+      if (!["keep", "sell", "sea"].includes(got)) return err(`sort() gave back ${JSON.stringify(r.value === undefined ? null : r.value)} for a ${f.name}.`, `It has to return "keep", "sell" or "sea" for every fish. Is there a path through your ifs with no return?`);
+      rows.push({ f, got, want: job.rule(f) });
+    }
+    const right = rows.filter(r => r.got === r.want).length, pass = right === rows.length;
+    api.hideModal();
+    const play = rows.map(r => { const F = FISH.find(x => x.id === r.f.name); return { color: F.color, scale: Math.min(0.55, Math.max(0.2, r.f.cm / 100 * 0.6)), boot: !!F.boot, bin: r.got, ok: r.got === r.want }; });
+    if (!window.Render3D || !Render3D.roam.sorter(play, () => sortResults(job, rows, right, pass))) sortResults(job, rows, right, pass);
+  }
+  function sortResults(job, rows, right, pass) {
+    const t = sorter(), first = pass && !t.sorter[job.id]; if (first) { t.sorter[job.id] = true; RPG.addCoins(job.coins); RPG.addXp("logic", job.xp); }
+    api.persistSave(); api.sfx(pass ? "win" : "bump");
+    const i = SORT_JOBS.indexOf(job), next = SORT_JOBS[i + 1], icon = id => { const F = FISH.find(x => x.id === id); return fishIcon(F); };
+    api.showModal(`<h2>${pass ? "✅ Every fish in the right bin!" : `🐟 ${right} of ${rows.length} right`}</h2>
+      ${first ? `<p>+${job.coins} 🪙 and ${job.xp} 🧭 Logic XP.${next ? ` Next job: <b>${next.title}</b>.` : " That was the last job. The harbor runs on your code now."}</p>` : pass ? "<p>Still works. Code that works every time is the whole point.</p>" : `<p>Look at the red rows: what did those fish have in common?</p>`}
+      <div class="tablewrap"><table class="goods"><tr><th>Fish</th><th>cm</th>${job.id === "s4" ? "<th>price / base</th>" : ""}<th>Your code</th><th>Should be</th></tr>
+      ${rows.map(r => `<tr style="${r.got === r.want ? "" : "background:rgba(220,70,60,0.18)"}"><td>${icon(r.f.name)} ${r.f.name}</td><td>${r.f.cm}</td>${job.id === "s4" ? `<td>${r.f.price} / ${r.f.base}</td>` : ""}<td>${r.got}</td><td>${r.got === r.want ? "✓" : "❌ " + r.want}</td></tr>`).join("")}</table></div>
+      <div class="row">${pass && next ? `<button id="sortNext" class="primary">Next job: ${next.title}</button>` : ""}<button id="sortEdit" class="${pass && next ? "" : "primary"}">${pass ? "Back to the code" : "Fix the code"}</button><button id="closeBtn">Done</button></div>`);
+    $("sortEdit").onclick = () => sorterMenu(job.id); $("closeBtn").onclick = () => { api.hideModal(); renderPanel(); };
+    const nb = $("sortNext"); if (nb) nb.onclick = () => sorterMenu(next.id);
+  }
   // sail far enough from one island and the current carries you to the other
   function sailAway() {
     const to = island === "harbor" ? "gull" : "harbor", T = TOWNS[to]; api.toast(`⛵ Sailing to ${T.name}…`); api.sfx("teleport");
@@ -311,6 +392,7 @@ const Hub = (() => {
     if (p.kind === "moor") return sailToggle();
     if (p.kind === "chest") return openChest(p);
     if (p.kind === "fish") return goFish();
+    if (p.kind === "sorter") return Render3D.roam.sorting ? null : sorterMenu();
     if (p.kind === "npc") talk(p.id);
     else if (p.kind === "stall") api.openTown(p.tab);
     else if (p.kind === "sign") api.showScreen("map");
@@ -360,6 +442,7 @@ const Hub = (() => {
         { q: "What should I do next?", a: k => `Next is <b>${k.next.id} ${k.next.title}</b> in ${ZONES[k.next.zone - 1].name}. ${k.next.story} <i>Clue: ${k.next.hints[0]}</i>`, go: k => k.next.id },
         { q: "How do I make money here?", a: () => `Everything Bolt picks up lands in your backpack: apples, gems, lenses. Finishing a mission drops goods too. Sell them at the 🏪 Market. Prices change every day and fall when you flood the market with one thing, so spread it out. Crafting at the 🔧 Workshop turns cheap goods into dear ones: three apples are twelve coins, one cider is twenty-two.` },
         { q: "What is this place?", a: () => `Branchlands. Eight islands, each broken a different way, each fixed with a different reason to write code. The lighthouse is dark, the orchard's overgrown, the bridge is missing planks, the Time Tower fractured into timelines, and the Oracle hasn't said a word in years. The portals around town open one at a time.` },
+        { q: "What's that machine by the water?", a: () => `The fish sorter. Fish go down the belt and land in a bin: keep, sell or back to the sea. It runs on a Python function called <code>sort(fish)</code>, and nobody here can write one. Four jobs, and I pay for every one you get right. Walk up to it and press E.` },
         { q: "Who's who in town?", a: () => `Pip keeps the orchard and knows loops. Odo ferries across the fog and knows how to decide without looking. Wrenna builds tools and upgrades. The Clockwright runs the Time Tower and speaks fluent Git. Dad reviews code. The Oracle is… the Oracle. Nyx sails the Mirror Sea and swears JavaScript is just Python with braces.` },
       ],
     },

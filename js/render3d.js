@@ -157,6 +157,8 @@ const Render3D = (() => {
       for (const x of [-0.28, 0.28]) { const band = mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.05, 14, 1, false, 0, Math.PI), gold, x, 0, 0.23); band.rotation.z = Math.PI / 2; lid.add(band); }
       lid.add(mesh(new THREE.BoxGeometry(0.1, 0.12, 0.04), gold, 0, -0.02, 0.47)); g.add(lid); g.userData.lid = lid; lid.rotation.x = p.open ? -1.9 : 0; g.userData.lidTo = lid.rotation.x;
       g.add(label(name, 0, 0, 0.5, 1.05));
+    } else if (p.kind === "sorter") {
+      sorterMesh(g); g.add(label(name, -0.35, 0, 0.5, 1.75));
     } else if (p.kind === "fish") {
       const wood = std({ color: 0x6a4a30, roughness: 0.9 }), tin = std({ color: 0x8a96a3, metalness: 0.7, roughness: 0.4 });
       g.add(mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.3, 14, 1, true), tin, 0.25, 0.15, 0.1)); g.add(mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 14), tin, 0.25, 0.01, 0.1));
@@ -1440,6 +1442,58 @@ const Render3D = (() => {
       if (R.i === R.rings.length) { const t = R.t, done = R.done; stopRace(); if (done) done(t); }
     }
   }
+  // ---------- the fish sorter: a conveyor that runs the player's Python, one fish at a time ----------
+  // Built along local +x: the belt runs from x -1.15 to 0.45, the three bins wait across the end (keep, sell, sea).
+  const SORT_BINS = { keep: { z: -0.5, color: 0x3fbf6a, text: "KEEP" }, sell: { z: 0, color: 0xe6b422, text: "SELL" }, sea: { z: 0.5, color: 0x3a8fd8, text: "SEA" } };
+  function sorterMesh(g) {
+    const metal = std({ color: 0x8a96a3, metalness: 0.7, roughness: 0.4 }), dark = std({ color: 0x2b2f3a, roughness: 0.6 });
+    const bc = document.createElement("canvas"); bc.width = 128; bc.height = 16; const bg = bc.getContext("2d"); bg.fillStyle = "#23262c"; bg.fillRect(0, 0, 128, 16); bg.fillStyle = "#3a3f47"; for (let x = 0; x < 128; x += 16) bg.fillRect(x, 0, 5, 16);
+    const bt = new THREE.CanvasTexture(bc); bt.wrapS = THREE.RepeatWrapping; bt.repeat.set(3, 1); bt.colorSpace = THREE.SRGBColorSpace;
+    g.add(mesh(new THREE.BoxGeometry(1.7, 0.08, 0.46), std({ color: 0xffffff, map: bt, roughness: 0.8 }), -0.35, 0.78, 0)); g.userData.belt = bt;
+    for (const z of [-0.26, 0.26]) g.add(mesh(new THREE.BoxGeometry(1.75, 0.12, 0.05), metal, -0.35, 0.8, z));
+    for (const x of [-1.1, 0.4]) for (const z of [-0.22, 0.22]) g.add(mesh(new THREE.BoxGeometry(0.06, 0.74, 0.06), metal, x, 0.37, z));
+    for (const x of [-1.2, 0.5]) { const roll = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.48, 12), metal, x, 0.78, 0); roll.rotation.x = Math.PI / 2; g.add(roll); }
+    // three bins with their names painted on
+    for (const k in SORT_BINS) { const b = SORT_BINS[k], c = new THREE.Color(b.color), m = std({ color: c, roughness: 0.7 });
+      const bin = new THREE.Group(); bin.position.set(0.95, 0, b.z);
+      bin.add(mesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), m, 0, 0.02, 0)); for (const s of [-1, 1]) { bin.add(mesh(new THREE.BoxGeometry(0.42, 0.42, 0.03), m, 0, 0.21, s * 0.2)); bin.add(mesh(new THREE.BoxGeometry(0.03, 0.42, 0.42), m, s * 0.2, 0.21, 0)); }
+      if (k === "sea") bin.add(mesh(new THREE.BoxGeometry(0.38, 0.02, 0.38), std({ color: 0x5fb8e0, roughness: 0.1, emissive: 0x103050 }), 0, 0.3, 0));
+      const lc = document.createElement("canvas"); lc.width = 128; lc.height = 48; const lg = lc.getContext("2d"); lg.fillStyle = "rgba(22,30,44,0.85)"; lg.beginPath(); lg.roundRect(2, 2, 124, 44, 12); lg.fill(); lg.fillStyle = "#" + c.getHexString(); lg.font = "900 32px Nunito, sans-serif"; lg.textAlign = "center"; lg.textBaseline = "middle"; lg.fillText(b.text, 64, 26);
+      const lt = new THREE.CanvasTexture(lc); lt.colorSpace = THREE.SRGBColorSpace; const lab = mesh(new THREE.PlaneGeometry(0.36, 0.13), new THREE.MeshBasicMaterial({ map: lt, transparent: true, side: THREE.DoubleSide }), 0, 0.62, 0); lab.rotation.x = -0.25; lab.castShadow = false; bin.add(lab); // a sign over each bin
+      g.add(bin); }
+    // the little screen where the code runs
+    g.add(mesh(new THREE.BoxGeometry(0.05, 0.9, 0.05), dark, -1.35, 0.45, -0.3));
+    const sc = document.createElement("canvas"); sc.width = 128; sc.height = 80; const sg = sc.getContext("2d"); sg.fillStyle = "#0d1a14"; sg.fillRect(0, 0, 128, 80); sg.fillStyle = "#5fe08a"; sg.font = "bold 13px monospace"; ["def sort(fish):", "  if ...:", "    return", '  return "sell"'].forEach((l, i) => sg.fillText(l, 6, 18 + i * 17));
+    const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace;
+    const scr = new THREE.Group(); scr.position.set(-1.35, 1.0, -0.3); scr.rotation.y = -Math.PI / 2 + 0.5; scr.add(mesh(new THREE.BoxGeometry(0.46, 0.32, 0.04), dark)); const face = mesh(new THREE.PlaneGeometry(0.42, 0.28), new THREE.MeshBasicMaterial({ map: st }), 0, 0, 0.021); face.castShadow = false; scr.add(face); g.add(scr);
+  }
+  function startSorter(items, done) {
+    const r = roam; if (!r || r.indoor || r.sortRun) return false; const q = r.props.find(q => q.p.kind === "sorter"); if (!q) return false;
+    r.sortRun = { q, items: items.map((it, i) => ({ ...it, at: i * 0.6, m: null, done: false })), t: 0, done, n: 0, ok: 0 };
+    // turn the camera to watch the belt from the front
+    cam.az = q.m.rotation.y - 0.35; cam.was = cam.el; cam.el = Math.max(cam.el, 0.45); r.lastDrag = clock; // from the water side: belt runs left to right, bins on the right
+    return true;
+  }
+  function sorterFrame(r, dt) {
+    const S = r.sortRun; if (!S) return; S.t += dt; const g = S.q.m; if (g.userData.belt) g.userData.belt.offset.x -= dt * 0.6;
+    for (const it of S.items) {
+      if (it.done || S.t < it.at) continue; const k = S.t - it.at;
+      if (!it.m) { it.m = it.boot ? bootMesh() : catchMesh(it.color, it.scale); if (it.boot) it.m.scale.setScalar(0.8); g.add(it.m); }
+      const bin = SORT_BINS[it.bin];
+      if (k < 1.6) { it.m.position.set(-1.15 + k, 0.86, Math.sin(k * 7 + it.at) * 0.03); it.m.rotation.set(0, 0, Math.sin(k * 12) * 0.08); }
+      else if (k < 2.05) { const u = (k - 1.6) / 0.45; it.m.position.set(0.45 + u * 0.5, 0.86 + Math.sin(u * Math.PI) * 0.35 - u * 0.55, bin.z * u); it.m.rotation.z = -u * 1.4; }
+      else { it.done = true; g.remove(it.m); S.n++; if (it.ok) S.ok++; const w = g.localToWorld(new THREE.Vector3(0.95, 0.35, bin.z));
+        burst(w.x, w.z, it.ok ? (it.bin === "sea" ? 0x9fdcff : it.bin === "sell" ? 0xffd24a : 0x7fe08a) : 0xff5a4a, it.ok ? 8 : 12, it.ok ? 1 : 1.4, w.y);
+        if (window.Audio_) Audio_.play(it.ok ? (it.bin === "sea" ? "splash" : it.bin === "sell" ? "gem" : "pick") : "bump"); }
+    }
+    if (S.items.every(it => it.done) && S.t > S.items[S.items.length - 1].at + 2.6) { r.sortRun = null; if (cam.was !== undefined) { cam.el = cam.was; cam.was = undefined; } if (S.done) S.done(); }
+  }
+  function drawSortHud(r) {
+    const S = r.sortRun; if (!S) return; const cx = fx.width / 2;
+    fctx.textAlign = "center"; fctx.textBaseline = "middle"; fctx.fillStyle = "rgba(22,30,44,0.82)"; fctx.beginPath(); fctx.roundRect(cx - 150, 10, 300, 48, 14); fctx.fill();
+    fctx.fillStyle = "#fff"; fctx.font = "800 17px Nunito, sans-serif"; fctx.fillText("🐟 Sorting… " + S.n + " of " + S.items.length, cx, 28);
+    fctx.font = "700 13px Nunito, sans-serif"; fctx.fillStyle = "#cfe3ff"; fctx.fillText("✓ " + S.ok + "   ✗ " + (S.n - S.ok), cx, 47);
+  }
   // ---------- pets: a little friend that follows Bolt round town, into buildings and onto the boat ----------
   function petMesh(id) {
     const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); g.userData.vis = vis;
@@ -1697,7 +1751,7 @@ const Render3D = (() => {
       if (total) { const found = total - r.gold.length, txt = "⚙ " + found + "/" + total; fctx.font = "800 13px Nunito, sans-serif"; const w = fctx.measureText(txt).width + 16; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(cx - w / 2, cy + Rm + 8, w, 22, 11); fctx.fill(); fctx.fillStyle = found === total ? "#ffd24a" : "#fff"; fctx.fillText(txt, cx, cy + Rm + 19.5); }
       if (r.energy < 0.999 || r.boosting) { const bw = Rm * 1.3, bx = cx - bw / 2, by = cy + Rm + 36; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(bx - 3, by - 3, bw + 6, 12, 6); fctx.fill(); fctx.fillStyle = r.energy < 0.2 && !r.boosting ? "#8a96a8" : "#5fd0ff"; fctx.beginPath(); fctx.roundRect(bx, by, Math.max(2, bw * r.energy), 6, 3); fctx.fill(); }
     }
-    drawFishHud(r);
+    drawFishHud(r); drawSortHud(r);
     if (r.race) {
       const R = r.race, t = Math.max(0, R.t), txt = fmtTime(t);
       fctx.textAlign = "center"; fctx.textBaseline = "middle";
@@ -1743,7 +1797,7 @@ const Render3D = (() => {
         case "boat": case "ship": { const m = boatMesh(d.kind === "ship"); m.position.set(d.x, -0.1, d.z); m.rotation.y = ry; world.add(m); m.userData.phase = Math.random() * 6; r.floats.push(m); r.colliders.push({ x: d.x, z: d.z, r: d.kind === "ship" ? 2.6 : 1.3 }); break; }
       }
     }
-    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35 };
+    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2, sorter: 1 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35, sorter: 1.1 };
     for (const p of town.props) {
       const m = propMesh(p), s = SCALE[p.kind] || 1;
       if (p.kind === "portal") m.add(archMesh(p.locked ? 0x555a66 : p.color));
@@ -1834,7 +1888,7 @@ const Render3D = (() => {
       if (m.userData.lid) m.userData.lid.rotation.x += (m.userData.lidTo - m.userData.lid.rotation.x) * Math.min(1, dt * 5);
       if (m.userData.flag) { const pa = m.userData.flag.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) + 0.4; pa.setZ(i, Math.sin(clock * 6 - x * 6) * 0.06 * x); } pa.needsUpdate = true; }
     }
-    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); if (r.rain) rainFrame(r, dt);
+    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); sorterFrame(r, dt); if (r.rain) rainFrame(r, dt);
     if (window.Audio_) Audio_.engine(Math.min(1.5, sp / BASE));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
     if (!r.indoor) { r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock; }
@@ -1854,9 +1908,9 @@ const Render3D = (() => {
     // chase camera: swings in behind Bolt while he drives, unless the player just dragged it
     cam.introK = Math.min(1, cam.introK + dt / 1.4); const ik = 1 - Math.pow(1 - cam.introK, 3);
     if (sp > 0.5 && clock - r.lastDrag > 1.5 && !r.photo) { const behind = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); let d = behind - cam.az; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; const fwd = Math.max(0, (-Math.sin(cam.az) * r.vel.x - Math.cos(cam.az) * r.vel.z) / sp); cam.az += d * Math.min(1, dt * (0.4 + 1.4 * fwd)); } // swing round faster the more Bolt drives away from the camera, barely when he strafes
-    cam.look.lerp(new THREE.Vector3(nx, r.gyS + r.air * 0.45 + 0.9, nz), Math.min(1, dt * 7));
+    const sq = r.sortRun && r.sortRun.q.m.position; cam.look.lerp(sq ? new THREE.Vector3(sq.x - 0.2, sq.y + 0.7, sq.z) : new THREE.Vector3(nx, r.gyS + r.air * 0.45 + 0.9, nz), Math.min(1, dt * (sq ? 3 : 7))); // the sorter gets the camera while it runs
     const fovT = r.boosting && sp > 3 ? 46 : 38; if (Math.abs(camera.fov - fovT) > 0.02) { camera.fov += (fovT - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix(); } // speed rush
-    const dist = cam.dist * (1 + (1 - ik) * 1.4) * (r.sail ? 1.5 : 1), el = cam.el + (1 - ik) * 0.5;
+    const dist = cam.dist * (1 + (1 - ik) * 1.4) * (r.sail ? 1.5 : 1) * (r.sortRun ? 0.8 : 1), el = cam.el + (1 - ik) * 0.5;
     camera.position.set(cam.look.x + Math.sin(cam.az) * Math.cos(el) * dist, cam.look.y + Math.sin(el) * dist, cam.look.z + Math.cos(cam.az) * Math.cos(el) * dist);
     const floorY = Math.max(r.height(camera.position.x, camera.position.z), -0.05) + 0.5; if (camera.position.y < floorY) camera.position.y = floorY;
     camera.lookAt(cam.look);
@@ -1872,9 +1926,9 @@ const Render3D = (() => {
     const g = ray.intersectObject(r.terrain); if (g.length && r.height(g[0].point.x, g[0].point.z) > -0.04) setTarget(r, g[0].point.x, g[0].point.z);
   }
   function drawPrompt() {
-    const r = roam; if (!r || !r.near || r.race || r.angler || r.photo || !modalHidden()) return;
+    const r = roam; if (!r || !r.near || r.race || r.angler || r.sortRun || r.photo || !modalHidden()) return;
     const q = r.near, p = q.p, name = p.label.replace(/^\S+\s/, "");
-    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : p.kind === "moor" ? (r.sail ? "tie up and go ashore" : "board your boat") : p.kind === "chest" ? (p.open ? "an empty chest" : "open the chest") : p.kind === "fish" ? "go fishing" : "open the " + name);
+    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : p.kind === "moor" ? (r.sail ? "tie up and go ashore" : "board your boat") : p.kind === "chest" ? (p.open ? "an empty chest" : "open the chest") : p.kind === "fish" ? "go fishing" : p.kind === "sorter" ? "program the fish sorter" : "open the " + name);
     const v = new THREE.Vector3(q.m.position.x, q.m.position.y + 1.55 * q.s, q.m.position.z).project(camera);
     if (v.z > 1) return;
     const sx = (v.x + 1) / 2 * fx.width, sy = (1 - v.y) / 2 * fx.height;
@@ -1895,6 +1949,7 @@ const Render3D = (() => {
       else { r.sail = false; bt.position.set(mp.boat.x, -0.1, mp.boat.z); bt.rotation.set(0, mp.boat.ry || 0, 0); r.floats.push(bt); const y = r.platforms.find(f => mp.land.x > f.x1 && mp.land.x < f.x2 && mp.land.z > f.z1 && mp.land.z < f.z2); b.position.set(mp.land.x, y ? y.y : r.height(mp.land.x, mp.land.z), mp.land.z); r.gyS = b.position.y; r.vel.set(0, 0, 0); r.yaw = mp.land.yaw || 0; b.rotation.y = r.yaw; cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); }
       return true; },
     get sailing() { return !!(roam && roam.sail); },
+    sorter: (items, done) => startSorter(items, done), get sorting() { return !!(roam && roam.sortRun); },
     fish: { start: (opts) => startFish(opts), tap: () => fishTap(), stop: () => endFish({ ok: false, why: "stopped" }), get on() { return !!(roam && roam.angler); }, get phase() { return roam && roam.angler ? roam.angler.phase : null; } },
     openChest(id) { const q = roam && roam.props.find(q => q.p.kind === "chest" && q.p.id === id); if (!q) return; q.p.open = true; q.m.userData.lidTo = -1.9; for (let k = 0; k < 3; k++) burst(q.p.x, q.p.z, [0xffd24a, 0xfff2b0, 0xffb020][k], 12, 1.6, q.m.position.y + 0.5); },
     photo(on) { const r = roam; if (!r) return; r.photo = !!on; r.input.x = r.input.y = 0; r.target = null; r.boostOn = false; for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { if (on) { o.userData.was = o.visible; o.visible = false; } else if (o.userData.was !== undefined) o.visible = o.userData.was; } }); },

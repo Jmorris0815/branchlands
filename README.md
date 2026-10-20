@@ -61,6 +61,9 @@ any other skill and lets bigger fish bite (swordfish only off Gull Isle), and th
 Odo, Marisol and Old Gully have fishing quests (Gully's pay out his bucket hat and a koi in a bubble). The 🎨 Style
 shop sells pets: Pinch the crab, Gulliver the gull and Sprocket the mini-bot follow Bolt round town, into buildings
 and onto the boat.
+Next to Marisol stands the 🐟 **Fish Sorter**, a conveyor that runs your own Python. Write `def sort(fish):` and
+return `"keep"`, `"sell"` or `"sea"`; twelve fish ride the belt into whichever bin your code picks. Four jobs build up
+from one `if` to `elif`, `<` and `or`, with the tricky fish (exactly 20 cm, price equal to base) always in the crate.
 Where everything stands is one list in `js/hub.js` (`TOWN`); move a house by changing two numbers. Around town:
 
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
