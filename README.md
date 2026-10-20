@@ -42,9 +42,9 @@ Lit doorways lead inside: **Wrenna's Workshop** (workbench, paint bay, a robot o
 the **Time Tower** (turning brass gears, a pendulum, Git timeline banners, the Clockwright). Rooms are described in
 `INTERIORS` in `js/hub.js`. Town days last ten minutes: golden sunsets, lamps that come on at dusk, moonlight and
 stars (⚙️ Settings → Time of day can pin it). Townsfolk breathe, look at Bolt, and nod and gesture while you talk;
-strollers and Bolt's robot cousins wander between spots, gulls circle, crabs scuttle, fish jump. Old Pip, Dad, Wrenna and
-most of the strollers have real skeletons (rigged in Mixamo): they walk with real steps, wave when Bolt drives up,
-and talk with their hands.
+strollers and Bolt's robot cousins wander between spots, gulls circle, crabs scuttle, fish jump. Every townsperson has a
+real skeleton (rigged in Mixamo): they walk with real steps, wave when Bolt drives up, and talk with their hands. The
+named ones potter about near their spot when nobody is around and stop to greet Bolt when he comes over.
 **Space** jumps (over crates and small rocks) and **Shift** boosts while the blue bar lasts (phone: Jump and Boost
 buttons). Twenty golden gears are hidden round the island, a few floating high enough to need a jump (15 🪙 each,
 300 more and the title Gear Hunter for all twenty). The 🏁 **Harbor Rally** flag by the pier starts a timed run
