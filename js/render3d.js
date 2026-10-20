@@ -159,6 +159,10 @@ const Render3D = (() => {
       g.add(label(name, 0, 0, 0.5, 1.05));
     } else if (p.kind === "sorter") {
       sorterMesh(g); g.add(label(name, -0.35, 0, 0.5, 1.75));
+    } else if (p.kind === "mill") { millMesh(g); g.add(label(name, 0, 0, 0.5, 4.6));
+    } else if (p.kind === "bakery") { bakeryMesh(g); g.add(label(name, 0, 0, 0.5, 3.6));
+    } else if (p.kind === "blueprint") { tableMesh(g); g.add(label(name, 0, 0, 0.5, 1.6));
+    } else if (p.kind === "shed") { shedMesh(g); g.add(label(name, 0, 0, 0.5, 2.6));
     } else if (p.kind === "botdock") {
       botDockMesh(g); g.add(label(name, 0, 0, 0.5, 2.45));
     } else if (p.kind === "fish") {
@@ -554,7 +558,9 @@ const Render3D = (() => {
       return y;
     };
     const fl = flats.map(f => ({ ...f, y: f.y !== undefined ? f.y : base(f.x, f.z) }));
-    return (x, z) => { let y = base(x, z); for (const f of fl) { const d = Math.hypot(x - f.x, z - f.z); if (d < f.r) y += (f.y - y) * (1 - smoothstep(f.r * 0.55, f.r, d)); } return y; };
+    return (x, z) => { let y = base(x, z); for (const f of fl) {
+      if (f.rect) { const d = Math.max(0, Math.abs(x - f.x) - f.hw, Math.abs(z - f.z) - f.hh); if (d < f.m) y += (f.y - y) * (1 - smoothstep(0, f.m, d)); continue; } // a flat rectangle (your island's building grid) with a soft edge m wide
+      const d = Math.hypot(x - f.x, z - f.z); if (d < f.r) y += (f.y - y) * (1 - smoothstep(f.r * 0.55, f.r, d)); } return y; };
   }
   function terrainMesh(town, height) {
     const S = town.size, seg = phone ? 100 : 140;
@@ -658,6 +664,7 @@ const Render3D = (() => {
       if (Math.hypot(x - town.plaza.x, z - town.plaza.z) < town.plaza.r + 0.3) continue;
       if (flats.some(f => f.r < 3 && Math.hypot(x - f.x, z - f.z) < f.r * 0.6)) continue; // keep paving and doorsteps clear
       if (colliders.some(c => Math.hypot(x - c.x, z - c.z) < c.r * 0.8)) continue;
+      if (town.bare && town.bare(x, z)) continue; // paths, fields and buildings on your island
       const e = 0.3, sl = Math.hypot(height(x + e, z) - height(x - e, z), height(x, z + e) - height(x, z - e)) / (2 * e); if (sl > 0.7) continue;
       // clumps: denser where a slow noise is high
       const clump = 0.5 + 0.5 * Math.sin(x * 0.7 + Math.sin(z * 0.5) * 2) * Math.sin(z * 0.6 + 1.3); if (Math.random() > 0.55 + clump * 0.45) continue;
@@ -1603,6 +1610,215 @@ const Render3D = (() => {
     }
     if (r.watch && r.workers[r.watch]) { const P = r.workers[r.watch].P, txt = "👀 Watching " + P.name + "  ·  move to stop"; fctx.font = "800 14px Nunito, sans-serif"; const tw = fctx.measureText(txt).width + 24; fctx.fillStyle = "rgba(22,30,44,0.82)"; fctx.beginPath(); fctx.roundRect(fx.width / 2 - tw / 2, fx.height - 44, tw, 28, 14); fctx.fill(); fctx.fillStyle = "#fff"; fctx.textAlign = "center"; fctx.fillText(txt, fx.width / 2, fx.height - 30); }
   }
+  // ---------- your own island: what a blueprint builds (home.js decides what goes where) ----------
+  // Every square is 2 m across. Crops grow in front of you: the farm asks town.stage(square) how ripe each one is
+  // and the plants grow, turn gold and fill out; harvesting resets them to sprouts.
+  let homeMats = null;
+  function hmats() {
+    if (homeMats) return homeMats;
+    const pave = paving().clone(); pave.repeat.set(1.6, 1.6); pave.needsUpdate = true;
+    return homeMats = {
+      pave: std({ color: 0xffffff, map: pave, roughness: 0.95 }),
+      soil: std({ color: 0xffffff, map: texture("grain", 0x5b3f29), roughness: 1 }),
+      wood: std({ color: 0xffffff, map: texture("planks", 0x8a5a34), roughness: 0.85 }),
+      post: std({ color: 0x6b4a2f, roughness: 0.9 }),
+      hedge: std({ color: 0xffffff, map: texture("grain", 0x3d7a36), roughness: 0.95 }),
+      stone: std({ color: 0xffffff, map: texture("cobble", 0x9a948a), roughness: 0.95 }),
+      leaf: std({ color: 0x4f8f34, roughness: 0.8, side: THREE.DoubleSide }),
+      stem: std({ color: 0x5f8f3a, roughness: 0.8 }),
+      water: phys({ color: 0x3f8fb8, roughness: 0.05, transparent: true, opacity: 0.8 }),
+      apple: phys({ color: 0xd8322a, roughness: 0.35, clearcoat: 0.8 }),
+    };
+  }
+  // n things scattered over a square in rows: [x, z] pairs inside ±h
+  const rowsOf = (nx, nz, h, j = 0.06) => { const out = []; for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) out.push([-h + (i + 0.5) * 2 * h / nx + rnd(-j, j), -h + (k + 0.5) * 2 * h / nz + rnd(-j, j)]); return out; };
+  function instanced(geo, mat, spots, each) {
+    const m = new THREE.InstancedMesh(geo, mat, spots.length), M = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s = new THREE.Vector3();
+    spots.forEach((xz, i) => { const o = each ? each(xz, i) : {}; p.set(xz[0], o.y || 0, xz[1]); e.set(o.rx || 0, o.ry !== undefined ? o.ry : rnd(0, 6.28), o.rz || 0); q.setFromEuler(e); s.setScalar(o.s || 1); if (o.sy) s.y = o.sy; M.compose(p, q, s); m.setMatrixAt(i, M); });
+    m.castShadow = false; m.receiveShadow = true; return m;
+  }
+  let furrowMat = null;
+  function soilPatch(g) { // one slab with ploughed furrows painted on
+    if (!furrowMat) { const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d"); x.fillStyle = "#5b3f29"; x.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(${Math.random() < 0.5 ? "20,10,0" : "140,105,70"},${0.15 + Math.random() * 0.2})`; x.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+      for (let i = 0; i < 4; i++) { const y = 16 + i * 32, gr = x.createLinearGradient(0, y - 12, 0, y + 12); gr.addColorStop(0, "rgba(0,0,0,0)"); gr.addColorStop(0.35, "rgba(25,12,4,0.55)"); gr.addColorStop(0.65, "rgba(150,110,70,0.35)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(4, y - 12, 120, 24); }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; furrowMat = std({ color: 0xffffff, map: t, roughness: 1 }); }
+    const s = mesh(new THREE.BoxGeometry(1.86, 0.1, 1.86), furrowMat, 0, 0.03, 0); s.castShadow = false; g.add(s);
+  }
+  function pieceMesh(d) {
+    const g = new THREE.Group(), m = hmats(), L = d.links;
+    const crop = new THREE.Group(); // the part that grows
+    switch (d.t) {
+      case "path": { const t = mesh(new THREE.BoxGeometry(1.98, 0.06, 1.98), m.pave, 0, 0.01, 0); t.castShadow = false; g.add(t); break; }
+      case "fence": {
+        g.add(mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), m.post, 0, 0.42, 0));
+        const dirs = [["e", 1, 0], ["w", -1, 0], ["n", 0, -1], ["s", 0, 1]].filter(([k]) => L && L[k]);
+        if (!dirs.length) dirs.push(["e", 1, 0], ["w", -1, 0]); // on its own it still looks like a bit of fence
+        for (const [, dx, dz] of dirs) { for (const y of [0.35, 0.65]) { const rail = mesh(new THREE.BoxGeometry(dx ? 1.0 : 0.06, 0.09, dz ? 1.0 : 0.06), m.wood, dx * 0.5, y, dz * 0.5); g.add(rail); } if (!(L && (L.e || L.w || L.n || L.s))) g.add(mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), m.post, dx * 0.95, 0.4, dz * 0.95)); }
+        break;
+      }
+      case "hedge": {
+        const box = (w, dpt, x, z) => { const h = mesh(new THREE.BoxGeometry(w, 0.95, dpt), m.hedge, x, 0.47, z); g.add(h); };
+        box(0.75, 0.75, 0, 0);
+        for (const [k, dx, dz] of [["e", 1, 0], ["w", -1, 0], ["n", 0, -1], ["s", 0, 1]]) if (L && L[k]) box(dx ? 1.0 : 0.7, dz ? 1.0 : 0.7, dx * 0.5, dz * 0.5);
+        for (let i = 0; i < 4; i++) { const b = mesh(new THREE.IcosahedronGeometry(rnd(0.16, 0.26), 0), m.hedge, rnd(-0.3, 0.3), rnd(0.75, 1.0), rnd(-0.3, 0.3)); b.castShadow = false; g.add(b); }
+        break;
+      }
+      case "flowers": {
+        const s = mesh(new THREE.CylinderGeometry(0.85, 0.9, 0.12, 20), m.soil, 0, 0.04, 0); s.castShadow = false; g.add(s);
+        const cols = [0xf2d24a, 0xe88aa8, 0xb39ddb, 0xffffff, 0xff7a5a], spots = rowsOf(5, 5, 0.6, 0.12).filter(([x, z]) => Math.hypot(x, z) < 0.78);
+        g.add(instanced(new THREE.CylinderGeometry(0.012, 0.014, 0.3, 4).translate(0, 0.15, 0), m.stem, spots, () => ({ y: 0.08 })));
+        const heads = instanced(new THREE.SphereGeometry(0.075, 8, 6), std({ color: 0xffffff, roughness: 0.6 }), spots, () => ({ y: 0.4, sy: 0.6 })), col = new THREE.Color();
+        spots.forEach((_, i) => heads.setColorAt(i, col.setHex(cols[i % cols.length]))); g.add(heads);
+        break;
+      }
+      case "wheat": {
+        soilPatch(g); const spots = rowsOf(7, 7, 0.78), stalk = std({ color: 0x7aa04a, roughness: 0.8 }), head = std({ color: 0x9ab85a, roughness: 0.8 });
+        crop.add(instanced(new THREE.CylinderGeometry(0.012, 0.018, 1, 4).translate(0, 0.5, 0), stalk, spots, () => ({ y: 0.05, rx: rnd(-0.12, 0.12), rz: rnd(-0.12, 0.12) })));
+        const heads = instanced(new THREE.CylinderGeometry(0.03, 0.022, 0.18, 6).translate(0, 1.05, 0), head, spots, () => ({ y: 0.05, rx: rnd(-0.12, 0.12), rz: rnd(-0.12, 0.12) })); crop.add(heads);
+        crop.userData.grow = (s) => { crop.scale.set(1, 0.1 + 0.75 * s, 1); stalk.color.setHex(0x6f9a40).lerp(new THREE.Color(0xd9b44a), Math.max(0, s - 0.5) * 2); head.color.setHex(0x8ab050).lerp(new THREE.Color(0xe8c25a), Math.max(0, s - 0.6) * 2.5); heads.visible = s > 0.35; };
+        break;
+      }
+      case "carrot": {
+        soilPatch(g); const spots = rowsOf(4, 5, 0.7, 0.03), tops = std({ color: 0xe8862a, roughness: 0.6 });
+        const leaves = []; spots.forEach(([x, z]) => { for (let i = 0; i < 3; i++) leaves.push([x + rnd(-0.03, 0.03), z + rnd(-0.03, 0.03)]); });
+        crop.add(instanced(new THREE.ConeGeometry(0.035, 0.42, 4).translate(0, 0.21, 0), m.leaf, leaves, () => ({ y: 0.06, rx: rnd(-0.45, 0.45), rz: rnd(-0.45, 0.45) })));
+        const shoulders = instanced(new THREE.ConeGeometry(0.06, 0.16, 8).rotateX(Math.PI).translate(0, 0.07, 0), tops, spots, () => ({ y: 0.04 })); g.add(shoulders);
+        crop.userData.grow = (s) => { crop.scale.setScalar(0.25 + 0.75 * s); shoulders.visible = s > 0.7; shoulders.scale.setScalar(Math.max(0.01, (s - 0.7) / 0.3)); };
+        break;
+      }
+      case "pumpkin": {
+        soilPatch(g); const leafSpots = rowsOf(3, 3, 0.6, 0.15);
+        crop.add(instanced(new THREE.CircleGeometry(0.22, 7).rotateX(-Math.PI / 2), m.leaf, leafSpots, () => ({ y: 0.12, rx: rnd(-0.3, 0.3), rz: rnd(-0.3, 0.3) })));
+        const pm = std({ color: 0x5f8a2a, roughness: 0.55 }), pk = [], geo = new THREE.SphereGeometry(0.3, 16, 10); const pa = geo.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i), z = pa.getZ(i), a = Math.atan2(z, x), k = 1 - 0.07 * Math.abs(Math.sin(a * 4)); pa.setX(i, x * k); pa.setZ(i, z * k); } geo.computeVertexNormals();
+        for (const [x, z] of [[-0.4, 0.3], [0.38, -0.25], [0.1, 0.5]]) { const p = mesh(geo, pm, x, 0.2, z); p.scale.set(1, 0.72, 1); const stalk = mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.12, 5), m.post, 0, 0.32, 0); p.add(stalk); g.add(p); pk.push(p); }
+        crop.userData.grow = (s) => { const k = 0.2 + 0.8 * s; pk.forEach((p, i) => { const kk = i === 2 ? Math.max(0.01, (s - 0.4) / 0.6) * k : k; p.scale.set(kk, kk * 0.72, kk); p.position.y = 0.06 + 0.2 * kk; }); pm.color.setHex(0x5f8a2a).lerp(new THREE.Color(0xe8741e), Math.max(0, s - 0.45) / 0.55); };
+        break;
+      }
+      case "tree": {
+        const t = leafyTree(2.5, false); g.add(t); g.userData.tree = t;
+        const crownY = t.userData.crown.position.y, apples = instanced(new THREE.SphereGeometry(0.075, 10, 8), m.apple, Array.from({ length: 12 }, () => { const a = rnd(0, 6.28), r = rnd(0.45, 0.8); return [Math.cos(a) * r, Math.sin(a) * r]; }), () => ({ y: crownY + rnd(-0.45, 0.25) }));
+        g.add(apples); crop.userData.grow = (s) => { apples.visible = s > 0.5; apples.scale.setScalar(Math.max(0.01, (s - 0.5) * 2)); };
+        break;
+      }
+      case "well": {
+        const ring = mesh(new THREE.CylinderGeometry(0.62, 0.66, 0.6, 16, 1, true), m.stone, 0, 0.3, 0); ring.material = m.stone.clone(); ring.material.side = THREE.DoubleSide; g.add(ring);
+        g.add(mesh(new THREE.TorusGeometry(0.64, 0.07, 8, 20).rotateX(Math.PI / 2), m.stone, 0, 0.6, 0));
+        const w = mesh(new THREE.CircleGeometry(0.58, 16).rotateX(-Math.PI / 2), m.water, 0, 0.32, 0); w.castShadow = false; g.add(w);
+        for (const x of [-0.6, 0.6]) g.add(mesh(new THREE.BoxGeometry(0.09, 1.2, 0.09), m.post, x, 0.9, 0));
+        g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.3, 6).rotateZ(Math.PI / 2), m.post, 0, 1.25, 0));
+        const roof = mesh(new THREE.ConeGeometry(0.95, 0.5, 4), std({ color: 0xb8553d, roughness: 0.8 }), 0, 1.75, 0); roof.rotation.y = Math.PI / 4; g.add(roof);
+        g.add(mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.16, 8), std({ color: 0x8a6a42 }), 0.18, 0.95, 0)); g.add(mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.3, 3), m.post, 0.18, 1.1, 0));
+        break;
+      }
+      case "scarecrow": {
+        g.add(mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.6, 6), m.post, 0, 0.8, 0)); g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 6).rotateZ(Math.PI / 2), m.post, 0, 1.15, 0));
+        g.add(mesh(new THREE.BoxGeometry(0.42, 0.5, 0.2), std({ color: 0x4a6fa8, roughness: 0.9 }), 0, 1.05, 0));
+        for (const s of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.3, 0.12, 0.14), std({ color: 0x4a6fa8, roughness: 0.9 }), s * 0.36, 1.15, 0));
+        g.add(mesh(new THREE.SphereGeometry(0.16, 12, 10), std({ color: 0xd9c08a, roughness: 1 }), 0, 1.48, 0));
+        g.add(mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 16), std({ color: 0xd9b86a }), 0, 1.6, 0)); g.add(mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.16, 12), std({ color: 0xcfae5c }), 0, 1.68, 0));
+        for (const s of [-1, 1]) g.add(mesh(new THREE.SphereGeometry(0.02, 6, 6), std({ color: 0x1b1b24 }), 0.05 * s, 1.5, 0.15));
+        break;
+      }
+      case "hive": {
+        g.add(mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), m.post, 0, 0.15, 0));
+        for (let i = 0; i < 3; i++) g.add(mesh(new THREE.BoxGeometry(0.62, 0.24, 0.62), std({ color: i % 2 ? 0xf0c75a : 0xe6b84a, roughness: 0.7, map: texture("planks", 0xe6b84a) }), 0, 0.42 + i * 0.25, 0));
+        g.add(mesh(new THREE.BoxGeometry(0.78, 0.07, 0.78), std({ color: 0xffffff, map: texture("planks", 0x8a5a34) }), 0, 1.15, 0));
+        g.add(mesh(new THREE.BoxGeometry(0.2, 0.04, 0.04), std({ color: 0x1b1b24 }), 0, 0.33, 0.31));
+        const bees = new THREE.Group(); for (let i = 0; i < 7; i++) { const b = mesh(new THREE.SphereGeometry(0.035, 6, 5), std({ color: 0xffc81e, roughness: 0.5 }), 0, 0, 0); b.scale.set(1.4, 1, 1); b.castShadow = false; b.userData.ph = rnd(0, 6.28); b.userData.r = rnd(0.5, 1.1); b.userData.h = rnd(0.5, 1.4); bees.add(b); }
+        g.add(bees); g.userData.bees = bees; crop.userData.grow = (s) => { bees.visible = s > 0; };
+        break;
+      }
+      case "statue": {
+        g.add(mesh(new THREE.BoxGeometry(0.9, 0.5, 0.9), m.stone, 0, 0.25, 0)); g.add(mesh(new THREE.BoxGeometry(1.0, 0.08, 1.0), m.stone, 0, 0.5, 0));
+        const vis = new THREE.Group(); vis.position.y = 0.54; vis.scale.setScalar(1.6); g.add(vis);
+        robotShape(vis); const gm = gold(); vis.traverse(o => { if (o.isMesh) o.material = gm; }); // the built-in Bolt, all in gold
+        break;
+      }
+    }
+    g.add(crop); g.userData.crop = crop;
+    return g;
+  }
+  // colliders for a built square: fences and hedges along their joins (low, so Bolt can jump them)
+  function pieceColliders(d, r) {
+    const c = (x, z, rad, low) => r.colliders.push({ x: d.x + x, z: d.z + z, r: rad, low });
+    switch (d.t) {
+      case "fence": case "hedge": { const rad = d.t === "fence" ? 0.2 : 0.4; c(0, 0, rad, true); const L = d.links || {}; for (const [k, dx, dz] of [["e", 1, 0], ["w", -1, 0], ["n", 0, -1], ["s", 0, 1]]) if (L[k]) c(dx * 0.55, dz * 0.55, rad, true); if (d.t === "fence" && !(L.e || L.w || L.n || L.s)) { c(0.6, 0, 0.2, true); c(-0.6, 0, 0.2, true); } break; }
+      case "tree": c(0, 0, 0.35); break;
+      case "well": c(0, 0, 0.7); break;
+      case "scarecrow": c(0, 0, 0.18); break;
+      case "hive": c(0, 0, 0.42); break;
+      case "statue": c(0, 0, 0.6); break;
+    }
+  }
+  // the island's buildings you use: windmill, bakery, the blueprint table and the farm shed
+  function millMesh(g) {
+    const plaster = std({ color: 0xece4d4, roughness: 0.9, map: texture("grain", 0xece4d4) }), wood = std({ color: 0xffffff, map: texture("planks", 0x7a4a2a), roughness: 0.85 });
+    g.add(mesh(new THREE.CylinderGeometry(1.25, 1.35, 0.3, 8), std({ color: 0xffffff, map: texture("cobble", 0x9a948a) }), 0, 0.15, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.85, 1.2, 3.0, 8), plaster, 0, 1.8, 0));
+    const cap = mesh(new THREE.ConeGeometry(1.05, 1.0, 8), std({ color: 0x6b4a2f, roughness: 0.85, map: texture("planks", 0x6b4a2f) }), 0, 3.8, 0); g.add(cap);
+    g.add(mesh(new THREE.BoxGeometry(0.55, 0.9, 0.1), wood, 0, 0.75, 1.17)); g.add(mesh(new THREE.BoxGeometry(0.3, 0.3, 0.06), std({ color: 0xffe9a8, emissive: 0xffb347, emissiveIntensity: 1.5 }), 0, 2.3, 0.98));
+    const hub = new THREE.Group(); hub.position.set(0, 3.15, 1.02); g.add(hub); hub.add(mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.3, 10).rotateX(Math.PI / 2), wood, 0, 0, 0.05));
+    const sail = std({ color: 0xf2ece0, roughness: 0.9, side: THREE.DoubleSide });
+    for (let i = 0; i < 4; i++) { const arm = new THREE.Group(); arm.rotation.z = i * Math.PI / 2; hub.add(arm); arm.add(mesh(new THREE.BoxGeometry(0.08, 2.0, 0.06), wood, 0, 1.05, 0.12)); const cloth = mesh(new THREE.PlaneGeometry(0.42, 1.6), sail, 0.25, 1.15, 0.1); arm.add(cloth); for (let k = 0; k < 4; k++) arm.add(mesh(new THREE.BoxGeometry(0.5, 0.03, 0.03), wood, 0.24, 0.45 + k * 0.45, 0.12)); }
+    g.userData.sails = hub; g.userData.sailSpin = 0;
+  }
+  function bakeryMesh(g) {
+    const brick = std({ color: 0xffffff, map: texture("cobble", 0xb06a4a), roughness: 0.9 }), wood = std({ color: 0xffffff, map: texture("planks", 0x6b4a2f), roughness: 0.85 });
+    g.add(mesh(new THREE.BoxGeometry(2.7, 1.7, 2.2), brick, 0, 0.85, 0));
+    const roof = mesh(new THREE.CylinderGeometry(1.0, 1.0, 2.95, 3), std({ color: 0x8a3a2a, roughness: 0.8, map: texture("planks", 0x8a3a2a) }), 0, 2.0, 0); roof.rotation.z = Math.PI / 2; roof.rotation.y = 0; roof.scale.set(1, 1, 1.35); g.add(roof);
+    g.add(mesh(new THREE.BoxGeometry(0.42, 1.1, 0.42), brick, 0.75, 2.6, -0.45));
+    g.add(mesh(new THREE.BoxGeometry(0.6, 1.0, 0.08), wood, -0.55, 0.5, 1.12));
+    g.add(mesh(new THREE.BoxGeometry(0.7, 0.5, 0.06), std({ color: 0xffe9a8, emissive: 0xffb347, emissiveIntensity: 1.6 }), 0.55, 1.0, 1.11));
+    const awn = mesh(new THREE.BoxGeometry(1.0, 0.05, 0.5), std({ color: 0xd8a24a, roughness: 0.8 }), 0.55, 1.35, 1.3); awn.rotation.x = 0.35; g.add(awn);
+    const sc = document.createElement("canvas"); sc.width = 128; sc.height = 64; const sg = sc.getContext("2d"); sg.fillStyle = "#f4ead6"; sg.fillRect(0, 0, 128, 64); sg.font = "44px sans-serif"; sg.textAlign = "center"; sg.textBaseline = "middle"; sg.fillText("🍞🥧", 64, 34);
+    const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace; const sign = mesh(new THREE.PlaneGeometry(0.8, 0.4), std({ map: st, roughness: 0.8 }), -0.4, 1.4, 1.12); g.add(sign);
+    g.userData.chimney = new THREE.Vector3(0.75, 3.25, -0.45);
+  }
+  function tableMesh(g) {
+    const wood = std({ color: 0xffffff, map: texture("planks", 0x8a5a34), roughness: 0.85 });
+    for (const [x, z] of [[-0.5, -0.3], [0.5, -0.3], [-0.5, 0.3], [0.5, 0.3]]) g.add(mesh(new THREE.BoxGeometry(0.07, 0.85, 0.07), wood, x, 0.42, z));
+    const top = new THREE.Group(); top.position.y = 0.9; top.rotation.x = 0.35; g.add(top); top.add(mesh(new THREE.BoxGeometry(1.2, 0.05, 0.8), wood, 0, 0, 0));
+    const pc = document.createElement("canvas"); pc.width = 256; pc.height = 170; const pg = pc.getContext("2d"); pg.fillStyle = "#2f5f9f"; pg.fillRect(0, 0, 256, 170); pg.strokeStyle = "rgba(255,255,255,0.35)"; pg.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) { pg.beginPath(); pg.moveTo(48 + i * 16, 5); pg.lineTo(48 + i * 16, 165); pg.stroke(); pg.beginPath(); pg.moveTo(48, 5 + i * 16); pg.lineTo(208, 5 + i * 16); pg.stroke(); }
+    pg.strokeStyle = "#fff"; pg.lineWidth = 2; pg.strokeRect(80, 37, 48, 64); pg.strokeRect(144, 85, 32, 32); pg.font = "bold 13px monospace"; pg.fillStyle = "#fff"; pg.fillText("import build", 6, 160);
+    const pt = new THREE.CanvasTexture(pc); pt.colorSpace = THREE.SRGBColorSpace; const paper = mesh(new THREE.PlaneGeometry(1.1, 0.72), std({ map: pt, roughness: 0.9 }), 0, 0.03, 0); paper.rotation.x = -Math.PI / 2; top.add(paper);
+    for (let i = 0; i < 3; i++) { const roll = mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.7, 10).rotateZ(Math.PI / 2), std({ color: i === 1 ? 0xf2ece0 : 0x6f9fd8, roughness: 0.8 }), 0, 0.12 + i * 0.09, -0.36 + i * 0.02); g.add(roll); }
+  }
+  function shedMesh(g) {
+    const red = std({ color: 0xffffff, map: texture("planks", 0xa8443a), roughness: 0.85 }), white = std({ color: 0xf2ece0, roughness: 0.9 });
+    g.add(mesh(new THREE.BoxGeometry(2.0, 1.4, 1.6), red, 0, 0.7, -0.1));
+    const roof = mesh(new THREE.CylinderGeometry(0.78, 0.78, 2.2, 3), std({ color: 0x5a5f66, metalness: 0.4, roughness: 0.5 }), 0, 1.75, -0.1); roof.rotation.z = Math.PI / 2; roof.scale.set(1, 1, 1.35); g.add(roof);
+    g.add(mesh(new THREE.BoxGeometry(0.9, 1.05, 0.06), std({ color: 0x2b1e14 }), 0, 0.53, 0.71));
+    for (const s of [-1, 1]) { const door = mesh(new THREE.BoxGeometry(0.45, 1.05, 0.05), red, s * 0.68, 0.53, 0.86); door.rotation.y = s * 1.2; g.add(door); }
+    g.add(mesh(new THREE.BoxGeometry(0.9, 0.06, 0.06), white, 0, 1.07, 0.72));
+    g.add(mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.5, 10), std({ color: 0xd8c08a, roughness: 1 }), 0.9, 0.25, 0.95)); g.add(mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.45, 10), std({ color: 0xd8c08a, roughness: 1 }), 1.25, 0.22, 0.7));
+    g.add(mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), std({ color: 0xffffff, map: texture("planks", 0x9a6a3a) }), -1.0, 0.2, 0.95));
+  }
+  // live farm: crops grow, machines work, fresh building pops up out of the ground
+  function homeFrame(r, dt) {
+    if (!r.pieces) return; const T = r.town;
+    r.homeT = (r.homeT || 0) - dt;
+    if (r.homeT <= 0 && T.stage) { r.homeT = 0.4; for (const q of r.pieces) { const gr = q.m.userData.crop && q.m.userData.crop.userData.grow; if (gr) { const s = T.stage(q.d.k); if (q.s === undefined || Math.abs(s - q.s) > 0.004) { if (q.s !== undefined && s < q.s - 0.5 && !q.d.fresh) burst(q.d.x, q.d.z, 0xd9c27a, 10, 1.2, q.m.position.y + 0.3); q.s = s; gr(s); } } } }
+    for (const q of r.pieces) {
+      if (q.pop !== undefined && q.pop < 1) { q.pop = Math.min(1, q.pop + dt * 2.2); const k = q.pop < 0 ? 0.001 : 1 - Math.pow(1 - q.pop, 3) * (1 - 0.6 * Math.sin(q.pop * Math.PI)); q.m.scale.setScalar(Math.max(0.001, k)); if (q.pop >= 0 && !q.puffed) { q.puffed = true; burst(q.d.x, q.d.z, 0xd8c8a8, 12, 1.4, q.m.position.y + 0.2); } }
+      const bees = q.m.userData.bees; if (bees && bees.visible) for (const b of bees.children) { const a = clock * 2.2 + b.userData.ph; b.position.set(Math.cos(a) * b.userData.r, b.userData.h + Math.sin(a * 3) * 0.08, Math.sin(a * 1.3) * b.userData.r); }
+    }
+    for (const q of r.props) {
+      const sl = q.m.userData.sails; if (sl) { const want = T.busy && T.busy(q.p.id) ? 1.6 : 0.15; q.m.userData.sailSpin += (want - q.m.userData.sailSpin) * Math.min(1, dt); sl.rotation.z -= q.m.userData.sailSpin * dt; }
+      const ch = q.m.userData.chimney; if (ch && T.busy && T.busy(q.p.id)) { q.smokeT = (q.smokeT || 0) - dt; if (q.smokeT <= 0) { q.smokeT = 0.35; const w = ch.clone().applyMatrix4(q.m.matrixWorld); burst(w.x, w.z, 0xcfcfcf, 2, 0.35, w.y); } }
+    }
+  }
+  // "+3 🌾" floating up from where Bolt harvested
+  function drawPopups(r) {
+    if (!r.popups || !r.popups.length) return; camera.updateMatrixWorld();
+    r.popups = r.popups.filter(p => clock - p.at < 1.6);
+    for (const p of r.popups) {
+      const a = (clock - p.at) / 1.6, v = new THREE.Vector3(p.x, p.y + 0.6 + a * 0.9, p.z).project(camera); if (v.z > 1) continue;
+      const sx = (v.x + 1) / 2 * fx.width, sy = (1 - v.y) / 2 * fx.height;
+      fctx.globalAlpha = Math.max(0, 1 - a * a); fctx.textAlign = "center"; fctx.textBaseline = "middle"; fctx.font = "900 18px Nunito, sans-serif"; fctx.lineWidth = 4; fctx.strokeStyle = "rgba(22,30,44,0.85)"; fctx.strokeText(p.text, sx, sy); fctx.fillStyle = "#ffe27a"; fctx.fillText(p.text, sx, sy); fctx.globalAlpha = 1;
+    }
+  }
   // ---------- pets: a little friend that follows Bolt round town, into buildings and onto the boat ----------
   function petMesh(id) {
     const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); g.userData.vis = vis;
@@ -1825,6 +2041,7 @@ const Render3D = (() => {
       const s = d.s || 1;
       if (d.kind === "house") { g.fillStyle = "#9a5b3c"; g.fillRect(P(d.x) - 1.1 * s * k / 2.6 * 1.6, P(d.z) - 1.1 * s * k / 2.6 * 1.6, 2.2 * s * k / 2.6 * 1.6, 2.2 * s * k / 2.6 * 1.6); }
       else if (d.kind === "tree") { g.fillStyle = "#3f6b34"; g.beginPath(); g.arc(P(d.x), P(d.z), 0.55 * s * k / 2.2 * 1.5, 0, Math.PI * 2); g.fill(); }
+      else if (d.kind === "piece") { g.fillStyle = d.mini; const w = (d.w || 1) * 2 * k; g.fillRect(P(d.x) - w / 2 + 0.5, P(d.z) - w / 2 + 0.5, w - 1, w - 1); }
       else if (d.kind === "dock") { g.fillStyle = "#7a5636"; g.fillRect(P(d.x - 1.3), P(d.z), 2.6 * k, d.len * k); }
       else if (d.kind === "fountain") { g.fillStyle = "#6fc6e6"; g.beginPath(); g.arc(P(d.x), P(d.z), 1.8 * k, 0, Math.PI * 2); g.fill(); }
       else if (d.kind === "tower" || d.kind === "lighthouse") { g.fillStyle = d.kind === "tower" ? "#8a8296" : "#e8e2d6"; g.beginPath(); g.arc(P(d.x), P(d.z), 1.3 * k, 0, Math.PI * 2); g.fill(); }
@@ -1861,7 +2078,7 @@ const Render3D = (() => {
       if (total) { const found = total - r.gold.length, txt = "⚙ " + found + "/" + total; fctx.font = "800 13px Nunito, sans-serif"; const w = fctx.measureText(txt).width + 16; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(cx - w / 2, cy + Rm + 8, w, 22, 11); fctx.fill(); fctx.fillStyle = found === total ? "#ffd24a" : "#fff"; fctx.fillText(txt, cx, cy + Rm + 19.5); }
       if (r.energy < 0.999 || r.boosting) { const bw = Rm * 1.3, bx = cx - bw / 2, by = cy + Rm + 36; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(bx - 3, by - 3, bw + 6, 12, 6); fctx.fill(); fctx.fillStyle = r.energy < 0.2 && !r.boosting ? "#8a96a8" : "#5fd0ff"; fctx.beginPath(); fctx.roundRect(bx, by, Math.max(2, bw * r.energy), 6, 3); fctx.fill(); }
     }
-    drawWorkerHud(r); drawFishHud(r); drawSortHud(r);
+    drawWorkerHud(r); drawPopups(r); drawFishHud(r); drawSortHud(r);
     if (r.race) {
       const R = r.race, t = Math.max(0, R.t), txt = fmtTime(t);
       fctx.textAlign = "center"; fctx.textBaseline = "middle";
@@ -1878,10 +2095,10 @@ const Render3D = (() => {
     stopRoam(); if (!ok) return;
     clearWorld(); state = null; bubble = null; cancelFlag = false; th = HARBOR;
     setSize(phone ? 600 : 960, phone ? 760 : 540); canvas.classList.add("roam");
-    const flats = town.flats.concat(town.decor.filter(d => PAD[d.kind]).map(d => ({ x: d.x, z: d.z, r: PAD[d.kind] * (d.s ? d.s / 2.4 : 1) })), town.props.map(p => ({ x: p.x, z: p.z, r: PAD[p.kind] || 1 })));
+    const flats = town.flats.concat(town.decor.filter(d => PAD[d.kind]).map(d => ({ x: d.x, z: d.z, r: PAD[d.kind] * (d.s ? d.s / 2.4 : 1), y: d.padY })), town.props.map(p => ({ x: p.x, z: p.z, r: PAD[p.kind] || 1, y: p.padY }))); // padY: stand at this height (things on your island's flat grid)
     const pl = town.flats[0]; for (const f of flats) if (f !== pl && Math.hypot(f.x - town.plaza.x, f.z - town.plaza.z) < town.plaza.r + 1) f.y = pl.y; // anything standing on the plaza stands at plaza height
     const height = makeHeight(town, flats);
-    const r = roam = { town, hooks, height, colliders: [], platforms: [], trees: [], lamps: [], houseLights: [], windows: [], props: [], floats: [], beams: [], hands: [], fountains: [], input: { x: 0, y: 0 }, vel: new THREE.Vector3(), yaw: pose ? pose.yaw : Math.PI / 2, lean: 0, near: null, latch: null, target: null, lastDrag: -9, lights: 0, dustT: 0, sprayT: 0 };
+    const r = roam = { town, hooks, height, colliders: [], platforms: [], trees: [], lamps: [], houseLights: [], windows: [], props: [], floats: [], beams: [], hands: [], fountains: [], pieces: [], popups: [], input: { x: 0, y: 0 }, vel: new THREE.Vector3(), yaw: pose ? pose.yaw : Math.PI / 2, lean: 0, near: null, latch: null, target: null, lastDrag: -9, lights: 0, dustT: 0, sprayT: 0 };
     r.terrain = terrainMesh(town, height); world.add(r.terrain);
     const cobbles = paving().clone(); cobbles.repeat.set(town.plaza.r * 0.9, town.plaza.r * 0.9); cobbles.needsUpdate = true;
     const disc = mesh(new THREE.CircleGeometry(town.plaza.r, 48), std({ color: 0xffffff, roughness: 0.95, map: cobbles }), town.plaza.x, height(town.plaza.x, town.plaza.z) + 0.015, town.plaza.z); disc.rotation.x = -Math.PI / 2; disc.castShadow = false; world.add(disc);
@@ -1904,10 +2121,11 @@ const Render3D = (() => {
         case "stone": { const g = new THREE.Group(), geo = new THREE.CylinderGeometry(0.34, 0.52, 2.5, 7, 3); const pa = geo.attributes.position; for (let i = 0; i < pa.count; i++) { const k = 1 + Math.sin(i * 12.9898 + d.x) * 0.09; pa.setX(i, pa.getX(i) * k); pa.setZ(i, pa.getZ(i) * (2 - k)); } geo.computeVertexNormals();
           g.add(mesh(geo, std({ color: 0xffffff, map: texture("cobble", 0x9a9184), roughness: 0.95 }), 0, 1.15, 0)); g.rotation.z = Math.sin(d.x * 3.1) * 0.06; put(g, d.x, d.z, ry, s, -0.05); r.colliders.push({ x: d.x, z: d.z, r: 0.5 * s }); break; } // a standing stone
         case "wreck": { const m = boatMesh(true); m.position.set(d.x, height(d.x, d.z) - 0.45, d.z); m.rotation.set(0.1, ry, 0.34); world.add(m); r.colliders.push({ x: d.x, z: d.z, r: 2.3 }); break; }
+        case "piece": { const m = put(pieceMesh(d), d.x, d.z, ry, 1); const q = { d, m }; if (d.fresh) { q.pop = -r.pieces.filter(x => x.pop !== undefined).length * 0.06; m.scale.setScalar(0.001); } r.pieces.push(q); pieceColliders(d, r); break; } // something your blueprint built
         case "boat": case "ship": { const m = boatMesh(d.kind === "ship"); m.position.set(d.x, -0.1, d.z); m.rotation.y = ry; world.add(m); m.userData.phase = Math.random() * 6; r.floats.push(m); r.colliders.push({ x: d.x, z: d.z, r: d.kind === "ship" ? 2.6 : 1.3 }); break; }
       }
     }
-    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2, sorter: 1, botdock: 1 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35, sorter: 1.1, botdock: 0.9 };
+    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2, sorter: 1, botdock: 1, mill: 1, bakery: 1, blueprint: 1, shed: 1 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35, sorter: 1.1, botdock: 0.9, mill: 1.45, bakery: 1.6, blueprint: 0.75, shed: 1.25 };
     for (const p of town.props) {
       const m = propMesh(p), s = SCALE[p.kind] || 1;
       if (p.kind === "portal") m.add(archMesh(p.locked ? 0x555a66 : p.color));
@@ -1933,6 +2151,7 @@ const Render3D = (() => {
     r.lightDir = applyWeather(HARBOR, new THREE.Vector3(sx, 0, sz), 17);
     r.stars = makeStars(); world.add(r.stars); r.moon = moonMesh(); world.add(r.moon); applyTimeOfDay(r, true);
     if (pose && pose.sail && r.moor) roamApi.sail(true, pose);
+    if (town.doneFresh) town.doneFresh();
     cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); cam.el = 0.3; cam.dist = phone ? 6.2 : 5.4; cam.introK = 0; cam.look.set(sx, height(sx, sz) + 0.9, sz);
   }
   function stopRoam() { restoreOutdoor(); if (camera && camera.fov !== 38) { camera.fov = 38; camera.updateProjectionMatrix(); } if (!roam) return; stopRace(); if (window.Audio_) { Audio_.engine(null); if (Audio_.rain) Audio_.rain(0); } if (roam.ht) roam.ht.tex.dispose(); ocean.material.uniforms.uHas.value = 0; roam = null; canvas.classList.remove("roam"); ocean.geometry = OCEAN_LEVEL; }
@@ -1998,7 +2217,7 @@ const Render3D = (() => {
       if (m.userData.lid) m.userData.lid.rotation.x += (m.userData.lidTo - m.userData.lid.rotation.x) * Math.min(1, dt * 5);
       if (m.userData.flag) { const pa = m.userData.flag.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) + 0.4; pa.setZ(i, Math.sin(clock * 6 - x * 6) * 0.06 * x); } pa.needsUpdate = true; }
     }
-    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); sorterFrame(r, dt); workerFrame(r, dt); if (r.rain) rainFrame(r, dt);
+    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); sorterFrame(r, dt); workerFrame(r, dt); homeFrame(r, dt); if (r.rain) rainFrame(r, dt);
     if (window.Audio_) Audio_.engine(Math.min(1.5, sp / BASE));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
     if (!r.indoor) { r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock; }
@@ -2053,6 +2272,7 @@ const Render3D = (() => {
   const roamApi = {
     start: startRoam, stop: stopRoam, enter: startInterior, get indoor() { return !!(roam && roam.indoor); },
     input(x, y) { if (roam) { roam.input.x = x; roam.input.y = y; if (x || y) { roam.target = null; roam.path = null; roam.watch = null; } } },
+    fx(x, z, text, col) { if (!roam) return; const y = roam.height(x, z); burst(x, z, new THREE.Color(col || "#ffe27a").getHex(), 14, 1.8, y + 0.3); if (text) roam.popups.push({ x, y, z, text, at: clock }); }, // a harvest: a puff and "+3 🌾"
     watch(id) { if (roam) { roam.watch = id || null; roam.watchT = clock; roam.lastDrag = clock; } }, // point the camera at a helper bot
     near() { return roam && roam.near ? roam.near.p : null; },
     goto(x, z, prop) { if (roam) setTarget(roam, x, z, prop); }, // drive there on autopilot (a click on the ground does this)
@@ -2074,7 +2294,7 @@ const Render3D = (() => {
     step(dt = 1 / 60) { if (roam) { clock += dt; roamFrame(dt); stepParticles(dt); } },
     render() { if (roam) { if (quality === "realistic") composer.render(); else renderer.render(scene, camera); drawBubble(); drawPrompt(); drawHud(); } },
     get active() { return !!roam; },
-    get debug() { return roam; }, // for tests in the console
+    get debug() { return roam; }, get cam() { return cam; }, // for tests in the console
   };
 
   // ---------- playback ----------

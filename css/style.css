@@ -262,3 +262,14 @@ footer { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: cen
 .photobar .muted { color: #b9c6d8; }
 .photobar input[type=range] { vertical-align: middle; width: 140px; }
 #screen-level.photo #joy, #screen-level.photo #talkBtn, #screen-level.photo #jumpBtn, #screen-level.photo #boostBtn { display: none; }
+/* your island's blueprint editor: code on the left, the plan on the right (stacked on phones) */
+.bpgrid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+.bpgrid textarea { width: 100%; min-height: 300px; resize: vertical; font: 14px/1.5 var(--mono); background: var(--term-bg); color: var(--term-ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px; tab-size: 4; white-space: pre; overflow: auto; }
+.bpgrid canvas { width: 100%; max-width: 300px; aspect-ratio: 1; border-radius: 8px; display: block; }
+#bpInfo { font-size: 13px; margin-top: 6px; }
+.bpprint { background: var(--term-bg); color: var(--term-ink); padding: 8px; border-radius: 8px; max-height: 120px; overflow: auto; font: 13px/1.4 var(--mono); }
+.bperr { background: #3a1f22; color: #ffd0c0; border-radius: 8px; padding: 8px 10px; margin: 8px 0; font: 13px/1.4 var(--mono); }
+.bperr div { font-family: inherit; margin-top: 4px; }
+.bpname { width: 100%; font-size: 18px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); }
+@media (max-width: 720px) { .bpgrid { grid-template-columns: 1fr; } .bpgrid canvas { margin: 0 auto; } }
+#modalBody:has(.bpgrid) { max-width: 880px; }

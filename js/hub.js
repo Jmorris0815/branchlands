@@ -123,12 +123,12 @@ const Hub = (() => {
         this.chests.map(c => ({ kind: "chest", id: c.id, x: c.x, z: c.z, label: "💰 Treasure chest", open: (t.chests || []).includes(c.id) })), [this.moor]);
     },
   };
-  const TOWNS = { harbor: TOWN, gull: GULL };
+  const TOWNS = { harbor: TOWN, gull: GULL, home: Home.TOWN }; // home: your own island, built from your blueprint (home.js)
   let active = false, nearProp = null, saveT = null, room = null, island = "harbor", photoOn = false; const keys = new Set(); // room: the interior Bolt is in, or null in town
 
   function props() { return PROPS.map(p => p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
 
-  function init(a) { api = a; Bots.init(a, { FISH, sorterCode }); window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
+  function init(a) { api = a; Bots.init(a, { FISH, sorterCode }); Home.init(a); window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
   function open() {
     active = true; nearProp = null; const s = api.save(); if (window.Audio_) Audio_.ambient("harbor");
     $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false; $("jumpBtn").hidden = false; $("boostBtn").hidden = false;
@@ -136,11 +136,12 @@ const Hub = (() => {
     if (!r) { renderPanel(); return; } // 3D still loading: render3d-ready calls open() again
     r.setLook(RPG.look()); room = null; island = TOWNS[s.island] ? s.island : "harbor"; r.roam.start(TOWNS[island], hooks, s.hub3 || null);
     clearInterval(saveT); saveT = setInterval(() => { if (active) { remember(); renderPanel(); } }, 4000);
+    if (island === "home") Home.arrive();
     Bots.start(); renderPanel();
   }
   function close() {
     if (!active) return; photo(false); active = false; clearInterval(saveT); keys.clear(); if (window.Audio_) { Audio_.engine(null); Audio_.ambient("level"); }
-    Bots.stop(); if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
+    Bots.stop(); Home.leave(); if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true; $("jumpBtn").hidden = true; $("boostBtn").hidden = true;
   }
   function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.save().island = room ? "harbor" : island; api.persistSave(); } } // inside a room, a reload puts you just outside its door
@@ -301,13 +302,24 @@ const Hub = (() => {
     const nb = $("sortNext"); if (nb) nb.onclick = () => sorterMenu(next.id);
   }
   // sail far enough from one island and the current carries you to the other
-  function sailAway() {
-    const to = island === "harbor" ? "gull" : "harbor", T = TOWNS[to]; api.toast(`⛵ Sailing to ${T.name}…`); api.sfx("teleport");
-    fade(() => { island = to; nearProp = null; Render3D.roam.start(T, hooks, { x: 0, z: T.radius + 13, yaw: Math.PI / 2, sail: true }); remember(); renderPanel(); });
+  function sailAway(to) {
+    if (!to && Home.unlocked()) return sailMenu();
+    to = to || (island === "harbor" ? "gull" : "harbor"); const T = TOWNS[to]; api.toast(`⛵ Sailing to ${T.name}…`); api.sfx("teleport");
+    fade(() => { if (island === "home") Home.leave(); island = to; nearProp = null; Render3D.roam.start(T, hooks, { x: 0, z: T.radius + 13, yaw: Math.PI / 2, sail: true }); if (to === "home") Home.arrive(); remember(); renderPanel(); });
+  }
+  function sailMenu() {
+    const where = [["harbor", "⚓", "Harbor Town", "the market, the Workshop, everyone you know"], ["gull", "🏝️", "Gull Isle", "Old Gully, treasure chests, swordfish"], ["home", "🏡", Home.islandName(), "your own island"]];
+    api.showModal(`<h2>⛵ Where to?</h2><p>The current will take you anywhere you like.</p><div style="display:grid;gap:8px">${where.map(([id, ic, name, what]) => `<button data-sail="${id}" class="${id === island ? "" : "primary"}" style="text-align:left">${ic} <b>${name}</b> <span class="muted">· ${id === island ? "turn back" : what}</span></button>`).join("")}</div>`);
+    $("modalBody").querySelectorAll("button[data-sail]").forEach(b => b.onclick = () => { api.hideModal(); sailAway(b.dataset.sail); });
+  }
+  // after a blueprint is built: the island is made again around Bolt, standing where he was
+  function rebuildIsland() {
+    if (!active || island !== "home" || !window.Render3D) return; const pose = Render3D.roam.pose();
+    fade(() => { nearProp = null; Render3D.roam.start(TOWNS.home, hooks, pose); renderPanel(); });
   }
   function sailToggle() {
     if (Render3D.roam.race.on) return; const on = !Render3D.roam.sailing; if (!Render3D.roam.sail(on)) return;
-    api.sfx(on ? "splash" : "doors"); if (on) api.toast(island === "harbor" ? "⛵ Steer out to sea and keep going. Gull Isle is past the horizon." : "⛵ Sail away from the island and the current takes you home."); renderPanel();
+    api.sfx(on ? "splash" : "doors"); if (on) api.toast(Home.unlocked() ? "⛵ Steer out to sea and keep going. Past the horizon the current asks where you want to go." : island === "harbor" ? "⛵ Steer out to sea and keep going. Gull Isle is past the horizon." : "⛵ Sail away from the island and the current takes you home."); renderPanel();
   }
   // photo mode: no labels or map, the clock stops, drag to frame the shot
   function photo(on) {
@@ -389,6 +401,7 @@ const Hub = (() => {
   function fade(fn) { const f = document.createElement("div"); f.className = "roomfade"; $("world3d").parentNode.appendChild(f); requestAnimationFrame(() => f.classList.add("on")); setTimeout(() => { fn(); f.classList.remove("on"); setTimeout(() => f.remove(), 400); }, 260); }
   function interact(p) {
     api.sfx("click");
+    if (island === "home" && Home.interact(p)) return; // the blueprint table, the farm shed, the windmill and bakery
     if (p.kind === "door") return enterRoom(p.to);
     if (p.kind === "exit") return leaveRoom();
     if (p.kind === "spot") return p.map ? api.showScreen("map") : api.openTown(p.tab);
@@ -422,6 +435,7 @@ const Hub = (() => {
     const s = api.save();
     {
       const p = nearProp, phone = document.documentElement.dataset.device === "phone";
+      if (island === "home" && !room) return homePanel(el, p, phone);
       el.innerHTML = `<div class="zonechip">${island === "gull" ? "🏝️ Gull Isle" : "⚓ Harbor Town"}</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. <b>Space</b> jumps, <b>Shift</b> boosts. Dark gates are sealed until you finish the zone before them."}</p>
         <p class="muted">⚙️ ${gearsFound()} of ${TOWNS[island].gears.length} golden gears found here${island === "gull" ? ` · 💰 ${(town().chests || []).length} of ${GULL.chests.length} chests` : town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · ⛵ your boat is at the end of the pier · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
@@ -435,6 +449,18 @@ const Hub = (() => {
       const bb = $("botsBtn"); if (bb) bb.onclick = () => Bots.hq();
       return;
     }
+  }
+
+  function homePanel(el, p, phone) {
+    el.innerHTML = `<div class="zonechip">🏡 ${Home.islandName()}</div><h2>Your island</h2>
+      <p>Ten squares by ten, and all of it yours. Write the island in Python at the <b>📐 Blueprint table</b>, then build it. When crops turn ripe, ${phone ? "drive" : "drive Bolt"} straight through them to harvest. Apple trees and beehives: drive up close.</p>
+      <p class="muted">🏡 ${Home.summary()}</p>
+      <p class="muted">🧺 The farm shed keeps what you harvest; ship it to Marisol from there. The windmill and bakery keep working while you're away. ⛵ Your boat is at the end of the pier.</p>
+      <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button><button id="bpBtn" class="small">📐 Blueprint</button></div>
+      <div id="nearby">${p ? `<button class="primary" data-near="1">Use: ${p.label}</button>` : `<span class="muted">Nothing within reach.</span>`}</div>
+      <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()}</p>`;
+    const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
+    $("photoBtn").onclick = () => photo(true); $("bpBtn").onclick = () => Home.blueprint();
   }
 
   // ---------- conversations ----------
@@ -492,6 +518,7 @@ const Hub = (() => {
       topics: [
         { q: "How do I review code?", a: () => `Read it like it's going to run on your own machine, because it is. Find the line, say what's wrong, say why. "Line 4 moves 4 but the gap is 5" beats "doesn't work". And if nothing's wrong, approve it. One of my PRs in 6-x has no bug on purpose.` },
         { q: "How do I write a good PR?", a: () => `Title says what changed. Body says why, and what you tested. "Collect three apples with a loop. Replaced 9 move lines with a for loop. Ran from a fresh Reset world, reached the goal." I reject vague ones. So does every reviewer you'll ever meet.` },
+        { q: "Tell me about my island", a: () => Home.unlocked() ? `${Home.islandName()}: ten squares by ten. You don't build it by hand. You write it. The blueprint is a program, and the island is whatever the program says, so a loop gives you a whole row of fences in one line. Run it, look at the plan, build it. Change the code later and you only pay for what's different. Sail out past the horizon and the current will ask where you're going.` : `Get your harbor papers from Marisol first. Then we'll talk about land.` },
         { q: "The real one?", a: () => `CONTRIBUTING.md in the family repo. Branch, commit, push, open a pull request, I review, you fix, I approve, you merge. The game checks GitHub for your merged PRs on the world map.` },
       ],
     },
@@ -564,6 +591,6 @@ const Hub = (() => {
     catch (e) { return "(The free-talk line is down: " + (e.message || e) + ". Is Ollama running with OLLAMA_ORIGINS set?)"; }
   }
 
-  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, photo, get room() { return room; }, get island() { return island; }, get active() { return active; }, PROPS, TOWN, GULL, TOWNS, INTERIORS };
+  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, photo, rebuildIsland, get room() { return room; }, get island() { return island; }, get active() { return active; }, PROPS, TOWN, GULL, TOWNS, INTERIORS };
 })();
 window.Hub = Hub;

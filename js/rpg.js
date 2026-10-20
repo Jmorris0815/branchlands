@@ -41,8 +41,19 @@ const RPG = (() => {
     crate: { name: "Crate", icon: "📦", base: 60, from: "crafted from planks and scrap", crafted: true },
     clockstone: { name: "Clockstone", icon: "🕰️", base: 95, from: "crafted from fog stone and a time shard", crafted: true },
     stew: { name: "Fish stew", icon: "🍲", base: 34, from: "cooked in the Workshop from sardines and mackerel", crafted: true },
+    // farm goods: grown on your own island and made in its mill and bakery (farm: never a mission drop or a contract)
+    wheat: { name: "Wheat", icon: "🌾", base: 3, from: "grown on your island", farm: true, plural: false },
+    carrot: { name: "Carrot", icon: "🥕", base: 5, from: "grown on your island", farm: true },
+    pumpkin: { name: "Pumpkin", icon: "🎃", base: 14, from: "grown on your island", farm: true },
+    honey: { name: "Honey", icon: "🍯", base: 16, from: "beehives on your island", farm: true, plural: false },
+    flour: { name: "Flour", icon: "🥣", base: 12, from: "the windmill on your island, from wheat", farm: true, crafted: true, plural: false },
+    bread: { name: "Bread", icon: "🍞", base: 30, from: "the bakery on your island", farm: true, crafted: true, plural: false },
+    applepie: { name: "Apple pie", icon: "🥧", base: 50, from: "the bakery on your island", farm: true, crafted: true },
+    carrotcake: { name: "Carrot cake", icon: "🍰", base: 42, from: "the bakery on your island", farm: true, crafted: true },
+    honeycake: { name: "Honey cake", icon: "🧁", base: 48, from: "the bakery on your island", farm: true, crafted: true },
+    pumpkinpie: { name: "Pumpkin pie", icon: "🥧", base: 62, from: "the bakery on your island", farm: true, crafted: true },
   };
-  const BASIC = Object.keys(GOODS).filter(g => !GOODS[g].crafted && !GOODS[g].fish); // fish come from fishing, not missions
+  const BASIC = Object.keys(GOODS).filter(g => !GOODS[g].crafted && !GOODS[g].fish && !GOODS[g].farm); // fish come from fishing, not missions
   const ZONE_DROP = { 1: ["scrap", 1, 3], 2: ["apple", 2, 4], 3: ["stone", 2, 5], 4: ["plank", 2, 5], 5: ["shard", 1, 3], 6: ["scrap", 2, 4], 7: ["ink", 2, 4], 8: ["glass", 2, 5] };
   const RECIPES = [
     { id: "cider", out: "cider", inp: { apple: 3 }, req: ["loops", 3] },
@@ -147,6 +158,16 @@ const RPG = (() => {
     { id: "pickerq", npc: "pip", title: "Pip's Picker", after: "clockin", story: "My knees don't do ladders any more. Send one of your bots up to the orchard and bring ten apples back to the crate in a single shift.", steps: [{ type: "bot", key: "apples10", text: "A bot unloads 10 apples in one shift" }], reward: { coins: 150, xp: { robotics: 100, loops: 60 } } },
     { id: "combq", npc: "odo", title: "Beachcomber", after: "clockin", story: "The west beach coughs up all sorts after a storm: scrap, sea glass, and once in a blue moon a gem. Teach a bot to dig. Mind it: <code>bot.dig()</code> gives back <code>None</code> when it finds nothing.", steps: [{ type: "bot", key: "gem", text: "A bot digs up a gem" }], reward: { coins: 120, xp: { robotics: 80 } } },
     { id: "nightq", npc: "dad", title: "Night Shift", after: "keepgoing", story: "Here's the real trick. Write code good enough that it earns while you sleep. Come back to five hundred coins your crew made without you.", steps: [{ type: "bot", key: "night500", text: "Your crew earns 500 coins while you're away" }], reward: { coins: 300, xp: { robotics: 200 }, title: "Night Owl" } },
+    { id: "deed", npc: "dad", title: "A Place of Your Own", after: "papers", story: "There's a scrap of island past the harbor nobody wanted, so I bought it. It's yours. Sail out in your boat, pick your island when the current asks where, then write a blueprint at the table and build something.", steps: [{ type: "home", key: "visit", text: "Sail to your own island" }, { type: "home", key: "built", text: "Build something there from a blueprint" }], reward: { coins: 100, xp: { loops: 60 } } },
+    { id: "harvest", npc: "pip", title: "First Harvest", after: "deed", story: "Plant wheat on your island, wait for it to go gold, then drive Bolt straight through it. Twenty wheat and I'll call you a farmer.", steps: [{ type: "home", key: "wheat", n: 20, text: "Harvest wheat on your island" }], reward: { coins: 120, xp: { loops: 80 } } },
+    { id: "fenceq", npc: "pip", title: "Good Fences", after: "harvest", story: "Crabs get in the crops. Put fences or hedges all the way round a field, no gaps. One loop for the top and bottom rows, one for the sides.", steps: [{ type: "home", key: "fence", text: "A field with a fence or hedge all the way round it" }], reward: { coins: 150, xp: { loops: 120 }, title: "Farmer" } },
+    { id: "wellq", npc: "pip", title: "Water Works", after: "harvest", story: "A well waters the eight squares round it, so they grow twice as fast. Dig one in the middle of your crops so at least four of them touch it.", steps: [{ type: "home", key: "well", text: "A well with 4+ crops on the squares round it" }], reward: { coins: 120, xp: { logic: 80 } } },
+    { id: "beesq", npc: "gully", title: "Busy Bees", after: "deed", story: "Bees won't stay where there's nothing to eat. Build a hive with three flower beds within two squares of it, and bring in five honey.", steps: [{ type: "home", key: "bees", text: "A beehive with 3 flower beds close by" }, { type: "home", key: "honey", n: 5, text: "Collect honey" }], reward: { coins: 180, xp: { logic: 100 } } },
+    { id: "millq", npc: "wrenna", title: "Grist for the Mill", after: "harvest", story: "Wheat is three coins. Flour is twelve. A windmill's just a machine that turns one into the other. Build one and grind five flour.", steps: [{ type: "home", key: "flour", n: 5, text: "Grind flour in your windmill" }], reward: { coins: 200, xp: { functions: 100 } } },
+    { id: "bakeq", npc: "marisol", title: "The Harbor Bakery", after: "millq", story: "Bread's fine. Pie sells. Bake three loaves and an apple pie, then ship two hundred coins of goods from your farm shed.", steps: [{ type: "home", key: "bread", n: 3, text: "Bake bread" }, { type: "home", key: "applepie", n: 1, text: "Bake an apple pie" }, { type: "home", key: "shipped", n: 200, text: "Ship goods from your farm shed (coins)" }], reward: { coins: 250, xp: { functions: 120 }, title: "Baker" } },
+    { id: "mirrorq", npc: "wrenna", title: "Mirror Image", after: "deed", story: "Good buildings are symmetrical. Make the left half of your island match the right half exactly, at least twenty squares used. Whatever goes on x also goes on 9 - x.", steps: [{ type: "home", key: "mirror", text: "A mirror-image island (20+ squares)" }], reward: { coins: 250, xp: { logic: 150 }, title: "Architect" } },
+    { id: "checkerq", npc: "odo", title: "Checkers on the Shore", after: "deed", story: "Build me a checkerboard, four squares by four, out of two different things. Try what (x + y) % 2 gives you.", steps: [{ type: "home", key: "checker", text: "A 4 x 4 checkerboard of two things" }], reward: { coins: 200, xp: { logic: 150 } } },
+    { id: "estate", npc: "dad", title: "Landowner", after: "bakeq", story: "A house, a farm that pays, and sixty squares built. Then it isn't a scrap of island any more.", steps: [{ type: "home", key: "house", text: "Build a house" }, { type: "home", key: "pieces", n: 60, text: "Squares built on your island" }], reward: { coins: 500, xp: { loops: 200 }, title: "Landowner" } },
     { id: "luckykoi", npc: "gully", title: "Lucky Koi", story: "A golden koi is luck you can hold. Bring me one and I'll blow it a bubble to live in. Then it follows you everywhere, and the luck goes with you.", steps: [{ type: "gather", good: "koi", n: 1 }], reward: { coins: 100, xp: { fishing: 100 }, cos: "pet:koi" } },
     // ---- second wave: the long game ----
     { id: "stars5", npc: "marisol", title: "Three Stars Over the Harbor", after: "papers", story: "Anyone can finish a mission. Finishing it in the fewest lines is the craft. Show me five perfect runs.", steps: [{ type: "stars", n: 5 }], reward: { coins: 150, cos: "hat:cap" } },
@@ -206,7 +227,7 @@ const RPG = (() => {
   const have = (g) => S.inv[g] || 0;
   function add(g, n) { const room = Math.max(0, cap() - have(g)); const k = Math.min(room, n); S.inv[g] = have(g) + k; return k; }
   function take(g, n) { if (have(g) < n) return false; S.inv[g] -= n; if (!S.inv[g]) delete S.inv[g]; return true; }
-  const gname = (g, n) => `${GOODS[g].icon} ${n !== undefined ? n + " " : ""}${GOODS[g].name}${n !== undefined && n !== 1 && (!GOODS[g].fish || g === "sardine") ? "s" : ""}`.replace("Mirror glasss", "Mirror glass").replace("Fog stones", "Fog stone");
+  const gname = (g, n) => `${GOODS[g].icon} ${n !== undefined ? n + " " : ""}${GOODS[g].name}${n !== undefined && n !== 1 && (!GOODS[g].fish || g === "sardine") && GOODS[g].plural !== false ? "s" : ""}`.replace("Mirror glasss", "Mirror glass").replace("Fog stones", "Fog stone");
 
   // ---------- market ----------
   let extraFlood = null; // the whole family's sales today, from the family server
@@ -264,6 +285,7 @@ const RPG = (() => {
       case "zonedone": { const zl = LEVELS.filter(l => l.zone === st.zone && !l.optional); const d = zl.filter(l => api.completed()[l.id]).length; return { done: d === zl.length, text: `Finish every mission in ${ZONES[st.zone - 1].name} (${d}/${zl.length})` }; }
       case "zonestars": { const zl = LEVELS.filter(l => l.zone === st.zone && !l.optional && l.par); const d = zl.filter(l => api.completed()[l.id] && api.completed()[l.id].stars === 3).length; return { done: d === zl.length, text: `Three stars on every ${ZONES[st.zone - 1].name} mission (${d}/${zl.length})` }; }
       case "sorter": { const d = Object.keys((save.town && save.town.sorter) || {}).length; return { done: d >= st.n, text: `Program the fish sorter: finish ${st.n} jobs (${Math.min(d, st.n)}/${st.n})` }; }
+      case "home": { const v = window.Home ? Home.progress(st.key) : 0, n = st.n || 1; return { done: v >= n, text: st.text + (st.n ? ` (${Math.min(v, n)}/${n})` : "") }; }
       case "bot": return { done: !!(save.bots && save.bots.flags && save.bots.flags[st.key]), text: st.text };
       case "coins": return { done: S.coins >= st.n, text: `Hold ${st.n} coins at once (${Math.min(S.coins, st.n)}/${st.n})` };
       case "contracts": return { done: (S.stats.contracts || 0) >= st.n, text: `Complete ${st.n} daily contracts (${Math.min(S.stats.contracts || 0, st.n)}/${st.n})` };

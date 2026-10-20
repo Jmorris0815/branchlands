@@ -78,6 +78,17 @@ and the next visit shows what they earned. Each bot has its own upgrades (basket
 trains the new Robotics skill, and Wrenna, Marisol, Pip, Odo and Dad hand out eleven bot contracts that walk through
 loops, `if`, dictionaries, battery maths and functions. The code is in `js/bots.js`.
 
+Once Marisol has stamped your harbor papers, Dad gives you 🏡 **your own island**: ten squares by ten, past the horizon
+(sail out and the current asks where to). You don't build it by hand. You write it: the blueprint at the 📐 table is a
+Python program (`import build`, `build.place("wheat", x, y)`), and the island is whatever the program says. Run it to
+see a plan of what's new and what comes down, then build it; change the code later and you only pay for the difference.
+Wheat, carrots, pumpkins, apple trees and beehives grow in real time, even with the game closed; drive Bolt through ripe
+crops to harvest them. Wells make the crops around them grow twice as fast, scarecrows add one to every harvest nearby,
+hives need flower beds close by, and fences join up with their neighbours. The windmill grinds wheat into flour and the
+bakery turns flour, apples, carrots, pumpkins and honey into bread, pies and cakes, both working while you're away. Ship
+it all from the farm shed. Ten island quests teach coordinates, nested loops, `9 - x` for a mirror-image island and `(x
++ y) % 2` for a checkerboard.
+
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
 - **Townsfolk with real conversations.** Marisol (harbor master), Old Pip (loops), Odo (decisions and crabs),
   Wrenna (functions and upgrades), the Clockwright (Git), Dad (reviews and pull requests), the Oracle (bots),
