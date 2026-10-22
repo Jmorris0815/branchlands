@@ -34,6 +34,9 @@ const Hub = (() => {
     { kind: "fish", wx: -0.95, wz: 19.4, ry: Math.PI, label: "🎣 Fishing spot" },
     { kind: "fish", island: "gull", wx: -0.95, wz: 13.4, ry: Math.PI, label: "🎣 Fishing spot" },
     { kind: "npc", id: "gully", island: "gull", model: "villager3", wx: -2.6, wz: 5, label: "🦜 Old Gully", color: "#3a7a8a" },
+    // showdowns (bosses.js): the fog bell by the pier calls up Old Knotty; the lever in the stone circle wakes Gearjaw
+    { kind: "boss", boss: "kraken", wx: -2.7, wz: 14.4, ry: 0, label: "🔔 Ring the fog bell" },
+    { kind: "boss", boss: "golem", island: "gull", wx: 3.4, wz: 2.3, ry: -0.6, label: "⚙️ Wake Gearjaw" },
   ];
   // Rooms you can drive into. Each has a size (w × d), what stands in it (things), the people and things you can
   // use (props: npcs come from PROPS with inside: <room>), and where Bolt appears (start, by the way out).
@@ -94,6 +97,7 @@ const Hub = (() => {
       rings: [{ x: 7, z: 12 }, { x: 15, z: 7 }, { x: 12, z: 0 }, { x: 9, z: -9 }, { x: 3, z: -8 }, { x: -3, z: -8.5 }, { x: -11, z: -12 }, { x: -12, z: 0 }, { x: -17, z: 4 }, { x: -6, z: 10 }, { x: 0, z: 15 }, { x: 0, z: 21.5 }] },
     bots: [{ from: 3, color: "#c8553d" }, { from: 7, color: "#3f9a6a", s: 0.7 }, { from: 11, color: "#e6b422", s: 0.75 }],
     get props() { return props().filter(p => !p.inside && !p.island).map(p => ({ ...p, x: p.wx, z: p.wz })); },
+    get friends() { return Bosses.won("kraken") ? ["kraken"] : []; }, // Old Knotty waves from the bay once he's free
     name: "Harbor Town",
   };
   // Gull Isle: a small wild island past the horizon. Sail out of the harbor in your boat and keep going.
@@ -102,33 +106,35 @@ const Hub = (() => {
     name: "Gull Isle", size: 64, radius: 17, seed: 2.4, start: { x: 0, z: 6 }, plaza: { x: 0, z: -1, r: 4.5 }, bay: { x: 0, z: 19, r: 6.5 },
     hills: [{ x: -6, z: -8, r: 5, h: 2.2 }, { x: 7, z: -7, r: 4.5, h: 1.6 }],
     flats: [{ x: 0, z: -1, r: 5.5, y: 1.1 }],
-    decor: [
-      { kind: "dock", x: 0, z: 11, len: 7 }, { kind: "wreck", x: 11, z: 7, ry: 0.9 },
-      P(-4.2, -1), P(-3, -4), P(0, -5.2), P(3, -4), P(4.2, -1), P(-3, 2), // the old stone circle (open to the south)
-      H(6.5, 2.5, 2.2), { kind: "lamp", x: 2.4, z: 5.2 }, { kind: "lamp", x: -2.4, z: 7.2 },
-      T(-10, -4), T(-11, 2, 2.5), T(8, -11), T(4, -12, 2.4), T(-3, -13), T(12, -5), T(10, 1.5, 2.4), T(-8.5, 7), T(-12, -9, 2.4), T(-1, -9.5, 1.9), T(14, 0),
-      RK(-15, -4), RK(-9, -13.5), RK(5.5, -15), RK(13.5, -10), RK(15, 4), RK(-14, 8), RK(-4, 12.5, 1.4),
-      { kind: "crystal", x: -6.5, z: -9.5, s: 1.4 }, { kind: "crystal", x: -4.5, z: -7, s: 1.2 }, { kind: "crate", x: 9, z: 4.5, ry: 0.5 }, { kind: "crate", x: 2.2, z: 9.6, ry: 0.2 },
-    ],
+    get decor() { return GULL_DECOR.concat([{ kind: "golem", x: 0, z: -2.6, ry: Math.PI, calm: Bosses.won("golem") }]); }, // Gearjaw sleeps in the stone circle
     spots: [], strollers: [], bots: [],
     gears: [
-      { id: "g-hill", x: -6, z: -8, lift: 1.9 }, { id: "g-circle", x: 0, z: -1, lift: 1.9 }, { id: "g-pier", x: 0, z: 12.6 }, { id: "g-wreck", x: 8.5, z: 9.5 }, { id: "g-north", x: 0, z: -11.5 },
+      { id: "g-hill", x: -6, z: -8, lift: 1.9 }, { id: "g-circle", x: -2.3, z: 1.4, lift: 1.9 }, { id: "g-pier", x: 0, z: 12.6 }, { id: "g-wreck", x: 8.5, z: 9.5 }, { id: "g-north", x: 0, z: -11.5 },
       { id: "g-east", x: 13, z: -2 }, { id: "g-west", x: -14, z: 1 }, { id: "g-cove", x: -7, z: 8.5 }, { id: "g-hut", x: 9, z: 0, lift: 1.55 }, { id: "g-ridge", x: 7, z: -7, lift: 1.9 },
     ],
     chests: [{ id: "c-circle", x: 2.6, z: -2.8 }, { id: "c-wreck", x: 9.4, z: 3.6 }, { id: "c-hill", x: -7.5, z: -10.5 }, { id: "c-west", x: -12.5, z: 4.5 }, { id: "c-north", x: 3, z: -12.5 }],
     moor: { kind: "moor", x: 1.05, z: 17.3, label: "⛵ Your boat", boat: { x: 2.9, z: 16.8, ry: -Math.PI / 2 }, land: { x: 0, z: 16.6, yaw: Math.PI / 2 } },
     get props() {
       const t = town();
-      return PROPS.filter(p => p.island === "gull").map(p => ({ ...p, x: p.wx, z: p.wz })).concat(
+      return props().filter(p => p.island === "gull").map(p => ({ ...p, x: p.wx, z: p.wz })).concat(
         this.chests.map(c => ({ kind: "chest", id: c.id, x: c.x, z: c.z, label: "💰 Treasure chest", open: (t.chests || []).includes(c.id) })), [this.moor]);
     },
   };
-  const TOWNS = { harbor: TOWN, gull: GULL, home: Home.TOWN }; // home: your own island, built from your blueprint (home.js)
+  const GULL_DECOR = [
+      { kind: "dock", x: 0, z: 11, len: 7 }, { kind: "wreck", x: 11, z: 7, ry: 0.9 },
+      P(-4.2, -1), P(-3, -4), P(0, -5.2), P(3, -4), P(4.2, -1), P(-3, 2), // the old stone circle (open to the south)
+      H(6.5, 2.5, 2.2), { kind: "lamp", x: 2.4, z: 5.2 }, { kind: "lamp", x: -2.4, z: 7.2 },
+      T(-10, -4), T(-11, 2, 2.5), T(8, -11), T(4, -12, 2.4), T(-3, -13), T(12, -5), T(10, 1.5, 2.4), T(-8.5, 7), T(-12, -9, 2.4), T(-1, -9.5, 1.9), T(14, 0),
+      RK(-15, -4), RK(-9, -13.5), RK(5.5, -15), RK(13.5, -10), RK(15, 4), RK(-14, 8), RK(-4, 12.5, 1.4),
+      { kind: "crystal", x: -6.5, z: -9.5, s: 1.4 }, { kind: "crystal", x: -4.5, z: -7, s: 1.2 }, { kind: "crate", x: 9, z: 4.5, ry: 0.5 }, { kind: "crate", x: 2.2, z: 9.6, ry: 0.2 },
+  ];
+  const bossLabel = id => Bosses.won(id) ? { kraken: "🔔 Ring for Old Knotty", golem: "⚙️ Spar with Gearjaw" }[id] : { kraken: "🔔 Ring the fog bell", golem: "⚙️ Wake Gearjaw" }[id];
+  const TOWNS = { harbor: TOWN, gull: GULL, home: Home.TOWN, reef: Bosses.REEF }; // home: your own island, built from your blueprint (home.js)
   let active = false, nearProp = null, saveT = null, room = null, island = "harbor", photoOn = false; const keys = new Set(); // room: the interior Bolt is in, or null in town
 
-  function props() { return PROPS.map(p => p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
+  function props() { return PROPS.map(p => p.kind === "boss" ? { ...p, label: bossLabel(p.boss) } : p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
 
-  function init(a) { api = a; Bots.init(a, { FISH, sorterCode }); Home.init(a); window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
+  function init(a) { api = a; Bots.init(a, { FISH, sorterCode }); Home.init(a); Bosses.init(a); window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
   function open() {
     active = true; nearProp = null; const s = api.save(); if (window.Audio_) Audio_.ambient("harbor");
     $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false; $("jumpBtn").hidden = false; $("boostBtn").hidden = false;
@@ -144,6 +150,7 @@ const Hub = (() => {
     Bots.stop(); Home.leave(); if (window.Render3D && Render3D.roam.active) { remember(); Render3D.roam.stop(); }
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true; $("jumpBtn").hidden = true; $("boostBtn").hidden = true;
   }
+  const refresh = () => renderPanel();
   function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.save().island = room ? "harbor" : island; api.persistSave(); } } // inside a room, a reload puts you just outside its door
 
   // ---------- free roam (3D) ----------
@@ -303,12 +310,12 @@ const Hub = (() => {
   }
   // sail far enough from one island and the current carries you to the other
   function sailAway(to) {
-    if (!to && Home.unlocked()) return sailMenu();
+    if (!to && (Home.unlocked() || Bosses.reefOpen())) return sailMenu();
     to = to || (island === "harbor" ? "gull" : "harbor"); const T = TOWNS[to]; api.toast(`⛵ Sailing to ${T.name}…`); api.sfx("teleport");
     fade(() => { if (island === "home") Home.leave(); island = to; nearProp = null; Render3D.roam.start(T, hooks, { x: 0, z: T.radius + 13, yaw: Math.PI / 2, sail: true }); if (to === "home") Home.arrive(); remember(); renderPanel(); });
   }
   function sailMenu() {
-    const where = [["harbor", "⚓", "Harbor Town", "the market, the Workshop, everyone you know"], ["gull", "🏝️", "Gull Isle", "Old Gully, treasure chests, swordfish"], ["home", "🏡", Home.islandName(), "your own island"]];
+    const where = [["harbor", "⚓", "Harbor Town", "the market, the Workshop, everyone you know"], ["gull", "🏝️", "Gull Isle", "Old Gully, treasure chests, swordfish"], ["home", "🏡", Home.islandName(), "your own island"], ["reef", "🌀", "Storm Reef", Bosses.won("tangle") ? "the heartstone, and calm water at last" : "the Tangle. Bring your best code"]].filter(w => (w[0] !== "home" || Home.unlocked()) && (w[0] !== "reef" || Bosses.reefOpen()));
     api.showModal(`<h2>⛵ Where to?</h2><p>The current will take you anywhere you like.</p><div style="display:grid;gap:8px">${where.map(([id, ic, name, what]) => `<button data-sail="${id}" class="${id === island ? "" : "primary"}" style="text-align:left">${ic} <b>${name}</b> <span class="muted">· ${id === island ? "turn back" : what}</span></button>`).join("")}</div>`);
     $("modalBody").querySelectorAll("button[data-sail]").forEach(b => b.onclick = () => { api.hideModal(); sailAway(b.dataset.sail); });
   }
@@ -361,7 +368,7 @@ const Hub = (() => {
     const y = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
     if (window.Render3D) Render3D.roam.input(x, y);
   }
-  function interactNear() { if (window.Render3D && Render3D.roam.fish.on) { Render3D.roam.fish.tap(); return; } const p = window.Render3D && Render3D.roam.near(); if (p && $("modal").hidden) interact(p); }
+  function interactNear() { if (window.Render3D && Render3D.roam.boss && Render3D.roam.boss.on) { Render3D.roam.boss.skip(); return; } if (window.Render3D && Render3D.roam.fish.on) { Render3D.roam.fish.tap(); return; } const p = window.Render3D && Render3D.roam.near(); if (p && $("modal").hidden) interact(p); }
   function onKeyUp(e) { const k = e.key.toLowerCase(); keys.delete(k); if (k === "shift" && window.Render3D) Render3D.roam.boost(false); sendInput(); }
   // phone: a thumb joystick over the bottom-left of the picture, a Talk button bottom-right
   function initJoy() {
@@ -385,6 +392,7 @@ const Hub = (() => {
     if (m) { e.preventDefault(); keys.add(k); sendInput(); }
     else if (k === " ") { e.preventDefault(); if (window.Render3D) { if (Render3D.roam.fish.on) Render3D.roam.fish.tap(); else Render3D.roam.jump(); } }
     else if (k === "shift") { keys.add(k); if (window.Render3D) Render3D.roam.boost(true); }
+    else if (k === "escape" && window.Render3D && Render3D.roam.boss && Render3D.roam.boss.on) Render3D.roam.boss.skip();
     else if (k === "escape" && window.Render3D && Render3D.roam.fish.on) Render3D.roam.fish.stop();
     else if (k === "escape" && window.Render3D && Render3D.roam.race.on) { Render3D.roam.race.stop(); api.toast("🏁 Race stopped."); renderPanel(); }
     else if (k === "e" || k === "enter") { e.preventDefault(); interactNear(); }
@@ -410,6 +418,7 @@ const Hub = (() => {
     if (p.kind === "chest") return openChest(p);
     if (p.kind === "fish") return goFish();
     if (p.kind === "botdock") return Bots.hq();
+    if (p.kind === "boss") return Bosses.menu(p.boss);
     if (p.kind === "sorter") return Render3D.roam.sorting ? null : sorterMenu();
     if (p.kind === "npc") talk(p.id);
     else if (p.kind === "stall") api.openTown(p.tab);
@@ -436,6 +445,7 @@ const Hub = (() => {
     {
       const p = nearProp, phone = document.documentElement.dataset.device === "phone";
       if (island === "home" && !room) return homePanel(el, p, phone);
+      if (island === "reef" && !room) return reefPanel(el, p, phone);
       el.innerHTML = `<div class="zonechip">${island === "gull" ? "🏝️ Gull Isle" : "⚓ Harbor Town"}</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. <b>Space</b> jumps, <b>Shift</b> boosts. Dark gates are sealed until you finish the zone before them."}</p>
         <p class="muted">⚙️ ${gearsFound()} of ${TOWNS[island].gears.length} golden gears found here${island === "gull" ? ` · 💰 ${(town().chests || []).length} of ${GULL.chests.length} chests` : town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · ⛵ your boat is at the end of the pier · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
@@ -451,6 +461,17 @@ const Hub = (() => {
     }
   }
 
+  function reefPanel(el, p, phone) {
+    const calm = Bosses.won("tangle");
+    el.innerHTML = `<div class="zonechip">🌀 Storm Reef</div><h2>${calm ? "Calm water" : "The heart of the storm"}</h2>
+      <p>${calm ? "The Tangle is gone. Where it turned, the heartstone hums. You can face the Tangle's echo at the rune stone any time." : `The Tangle turns over the middle of the reef. Every knot it throws is a list of numbers. Drive to the 🌀 rune stone ${phone ? "and tap Talk" : "and press E"} to write <code>untie(knot)</code> and face it.`}</p>
+      <p class="muted">Showdowns: ${Bosses.summary()} · ⛵ your boat is at the end of the pier.</p>
+      <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button></div>
+      <div id="nearby">${p ? `<button class="primary" data-near="1">Use: ${p.label}</button>` : `<span class="muted">Nothing within reach.</span>`}</div>
+      <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()}</p>`;
+    const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
+    $("photoBtn").onclick = () => photo(true);
+  }
   function homePanel(el, p, phone) {
     el.innerHTML = `<div class="zonechip">🏡 ${Home.islandName()}</div><h2>Your island</h2>
       <p>Ten squares by ten, and all of it yours. Write the island in Python at the <b>📐 Blueprint table</b>, then build it. When crops turn ripe, ${phone ? "drive" : "drive Bolt"} straight through them to harvest. Apple trees and beehives: drive up close.</p>
@@ -591,6 +612,6 @@ const Hub = (() => {
     catch (e) { return "(The free-talk line is down: " + (e.message || e) + ". Is Ollama running with OLLAMA_ORIGINS set?)"; }
   }
 
-  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, photo, rebuildIsland, get room() { return room; }, get island() { return island; }, get active() { return active; }, PROPS, TOWN, GULL, TOWNS, INTERIORS };
+  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, photo, rebuildIsland, sailTo: sailAway, refresh, get room() { return room; }, get island() { return island; }, get active() { return active; }, PROPS, TOWN, GULL, TOWNS, INTERIORS };
 })();
 window.Hub = Hub;

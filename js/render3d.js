@@ -162,6 +162,7 @@ const Render3D = (() => {
     } else if (p.kind === "mill") { millMesh(g); g.add(label(name, 0, 0, 0.5, 4.6));
     } else if (p.kind === "bakery") { bakeryMesh(g); g.add(label(name, 0, 0, 0.5, 3.6));
     } else if (p.kind === "blueprint") { tableMesh(g); g.add(label(name, 0, 0, 0.5, 1.6));
+    } else if (p.kind === "boss") { bossPropMesh(g, p); g.add(label(name, 0, 0, 0.5, p.boss === "kraken" ? 2.15 : 1.6));
     } else if (p.kind === "shed") { shedMesh(g); g.add(label(name, 0, 0, 0.5, 2.6));
     } else if (p.kind === "botdock") {
       botDockMesh(g); g.add(label(name, 0, 0, 0.5, 2.45));
@@ -1819,6 +1820,354 @@ const Render3D = (() => {
       fctx.globalAlpha = Math.max(0, 1 - a * a); fctx.textAlign = "center"; fctx.textBaseline = "middle"; fctx.font = "900 18px Nunito, sans-serif"; fctx.lineWidth = 4; fctx.strokeStyle = "rgba(22,30,44,0.85)"; fctx.strokeText(p.text, sx, sy); fctx.fillStyle = "#ffe27a"; fctx.fillText(p.text, sx, sy); fctx.globalAlpha = 1;
     }
   }
+  // ---------- showdowns: bosses beaten by code (bosses.js works out every round, this plays them back) ----------
+  // A tentacle: a tapered tube that bends along its length. bendTentacle() curls it (curl > 0 bends toward local +x).
+  function tentacleMesh(blue) {
+    const SEG = 24, RAD = 10, L = 4.4, pos = [], col = [], idx = [], base = [];
+    const c1 = new THREE.Color(blue ? 0x3a5a86 : 0xa8323a), c2 = new THREE.Color(blue ? 0x9fc6e8 : 0xf0a29a);
+    for (let j = 0; j <= SEG; j++) {
+      const u = j / SEG, rr = 0.42 * (1 - 0.88 * u) + 0.025;
+      for (let i = 0; i <= RAD; i++) { const a = i / RAD * Math.PI * 2, ox = Math.cos(a) * rr, oz = Math.sin(a) * rr; pos.push(0, u * L, 0); base.push(j, ox, oz); const k = Math.max(0, ox / rr); col.push(...c1.clone().lerp(c2, k * k * 0.9).toArray()); } // the inside of the curl is pale: suckers
+    }
+    for (let j = 0; j < SEG; j++) for (let i = 0; i < RAD; i++) { const a = j * (RAD + 1) + i, b = a + RAD + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+    const m = mesh(g, blue ? std({ vertexColors: true, roughness: 0.25, metalness: 0.75, emissive: 0x1a3a7a, emissiveIntensity: 0.6 }) : phys({ vertexColors: true, roughness: 0.45, clearcoat: 0.6, emissive: 0xff2a1a, emissiveIntensity: 0 }));
+    m.userData = { SEG, RAD, L, base: new Float32Array(base), blue }; m.frustumCulled = false; bendTentacle(m, 0, 0); return m;
+  }
+  function bendTentacle(m, curl, wave, t = 0) {
+    const { SEG, RAD, L, base } = m.userData, pa = m.geometry.attributes.position, ds = L / SEG; let x = 0, y = 0;
+    const cx = [], cy = [], th = [];
+    for (let j = 0; j <= SEG; j++) { const u = j / SEG, a = curl * u * u * 2.2 + wave * Math.sin(u * 5 - t * 3) * u; cx.push(x); cy.push(y); th.push(a); x += Math.sin(a) * ds; y += Math.cos(a) * ds; }
+    for (let v = 0; v < pa.count; v++) { const j = base[v * 3], ox = base[v * 3 + 1], oz = base[v * 3 + 2], a = th[j]; pa.setXYZ(v, cx[j] + Math.cos(a) * ox, cy[j] - Math.sin(a) * ox, oz); }
+    pa.needsUpdate = true; m.geometry.computeVertexNormals(); m.userData.tip = { x: cx[SEG], y: cy[SEG] };
+  }
+  function krakenHead() {
+    const g = new THREE.Group(), skin = phys({ color: 0x8a2a4a, roughness: 0.4, clearcoat: 0.7 });
+    const mantle = mesh(new THREE.SphereGeometry(1, 32, 24), skin, 0, 0.9, 0); mantle.scale.set(1.7, 2.1, 1.5); g.add(mantle);
+    const eyes = []; for (const s of [-1, 1]) { const e = new THREE.Group(); e.position.set(s * 0.95, 0.35, -1.18); const w = mesh(new THREE.SphereGeometry(0.36, 20, 14), std({ color: 0xfff6d8, roughness: 0.3 })); e.add(w); const p = mesh(new THREE.SphereGeometry(0.2, 16, 12), std({ color: 0x1a1008, roughness: 0.2 }), 0, 0, 0.22); p.scale.set(1, 1.5, 0.6); e.add(p); const iris = mesh(new THREE.TorusGeometry(0.21, 0.05, 8, 20), std({ color: 0xe8b020, emissive: 0xa06010, emissiveIntensity: 0.6 }), 0, 0, 0.24); e.add(iris); g.add(e); eyes.push(e); }
+    const rope = mesh(new THREE.TorusKnotGeometry(1.55, 0.09, 160, 8, 2, 5), std({ color: 0x1a2418, roughness: 0.9, emissive: 0x3a0a5a, emissiveIntensity: 0.5 }), 0, 0.8, 0); rope.scale.set(1.15, 1.25, 1.05); g.add(rope);
+    g.userData = { mantle, eyes, rope }; return g;
+  }
+  function cannonMesh() {
+    const g = new THREE.Group(), wood = std({ color: 0xffffff, map: texture("planks", 0x6a4026), roughness: 0.85 }), iron = std({ color: 0x2a2c30, roughness: 0.4, metalness: 0.8 });
+    g.add(mesh(new THREE.BoxGeometry(0.5, 0.22, 0.42), wood, 0, 0.2, 0)); for (const s of [-1, 1]) for (const f of [-1, 1]) { const w = mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.06, 14), wood, f * 0.16, 0.11, s * 0.23); w.rotation.x = Math.PI / 2; g.add(w); }
+    const pivot = new THREE.Group(); pivot.position.set(0, 0.38, 0); g.add(pivot); const barrel = mesh(new THREE.CylinderGeometry(0.075, 0.11, 0.72, 16), iron, 0.22, 0.06, 0); barrel.rotation.z = -Math.PI / 2 + 0.35; pivot.add(barrel);
+    g.userData.pivot = pivot; g.traverse(o => { if (o.isMesh) o.castShadow = true; }); return g;
+  }
+  // Gearjaw: a rusted stone-circle guardian three metres tall. Parts are named so each move can pose them.
+  function golemMesh() {
+    const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+    const rust = std({ color: 0xffffff, map: texture("grain", 0x8a4e2c), roughness: 0.75, metalness: 0.55, emissive: 0xff3a00, emissiveIntensity: 0 }), iron = std({ color: 0x48423c, roughness: 0.55, metalness: 0.7 });
+    for (const s of [-1, 1]) body.add(mesh(new THREE.BoxGeometry(0.6, 1.0, 0.7), iron, s * 0.55, 0.5, 0));
+    const torso = new THREE.Group(); torso.position.set(0, 1.05, 0); body.add(torso);
+    torso.add(mesh(new THREE.BoxGeometry(1.5, 0.4, 0.9), iron, 0, 0.15, 0)); torso.add(mesh(new THREE.BoxGeometry(2.0, 1.25, 1.15), rust, 0, 0.95, 0));
+    const core = mesh(new THREE.SphereGeometry(0.26, 18, 14), std({ color: 0xffa040, emissive: 0xff6a10, emissiveIntensity: 1.2 }), 0, 0.95, -0.5); torso.add(core);
+    const plate = new THREE.Group(); plate.position.set(0, 1.4, -0.6); torso.add(plate); plate.add(mesh(new THREE.BoxGeometry(0.8, 0.85, 0.08), rust, 0, -0.43, 0));
+    const head = new THREE.Group(); head.position.set(0, 1.65, 0); torso.add(head);
+    head.add(mesh(new THREE.BoxGeometry(0.95, 0.7, 0.85), rust, 0, 0.35, 0));
+    const eyeM = std({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 2.4 }), eye = mesh(new THREE.SphereGeometry(0.15, 16, 12), eyeM, 0, 0.45, -0.43); head.add(eye);
+    const jaw = gearMesh(0.26, 10, 0x6a5a48); jaw.position.set(0, 0.08, -0.44); head.add(jaw);
+    const arms = [];
+    for (const s of [-1, 1]) { // s = -1: the arm on Bolt's left (Gearjaw faces Bolt)
+      const sh = new THREE.Group(); sh.position.set(-s * 1.22, 1.35, 0); torso.add(sh);
+      sh.add(mesh(new THREE.SphereGeometry(0.34, 16, 12), iron)); sh.add(mesh(new THREE.BoxGeometry(0.46, 0.95, 0.46), rust, 0, -0.55, 0));
+      const el = new THREE.Group(); el.position.set(0, -1.05, 0); sh.add(el); el.add(mesh(new THREE.BoxGeometry(0.56, 0.85, 0.56), iron, 0, -0.42, 0)); el.add(mesh(new THREE.BoxGeometry(0.78, 0.62, 0.78), rust, 0, -0.95, 0));
+      arms.push({ sh, el, s });
+    }
+    const steam = []; for (const s of [-1, 1]) { const v = mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.3, 10), iron, s * 0.7, 1.7, 0.2); torso.add(v); steam.push(v); }
+    const moss = std({ color: 0x4f7a2e, roughness: 1 });
+    for (const a of arms) { const pad = mesh(new THREE.SphereGeometry(0.55, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), rust); pad.scale.set(1, 0.7, 1); pad.position.y = 0.12; a.sh.add(pad); for (let k = 0; k < 3; k++) a.sh.add(mesh(new THREE.SphereGeometry(0.12 + k * 0.03, 8, 6), moss, rnd(-0.25, 0.25), 0.42, rnd(-0.25, 0.25)));
+      for (let k = 0; k < 3; k++) { const sp = mesh(new THREE.ConeGeometry(0.08, 0.22, 6), iron, (k - 1) * 0.22, -0.95, -0.42); sp.rotation.x = -Math.PI / 2; a.el.add(sp); } } // knuckle spikes
+    for (const [x, y] of [[-0.85, 1.45], [0.85, 1.45], [-0.85, 0.45], [0.85, 0.45], [-0.3, 1.5], [0.3, 1.5]]) torso.add(mesh(new THREE.SphereGeometry(0.05, 8, 6), iron, x, y, -0.58));
+    const belly = gearMesh(0.3, 9, 0x8a6a40); belly.position.set(0, 0.2, -0.47); torso.add(belly);
+    const rope = mesh(new THREE.TorusKnotGeometry(1.0, 0.06, 140, 6, 2, 3), std({ color: 0x1a2418, roughness: 0.9, emissive: 0x3a0a5a, emissiveIntensity: 0.5 }), 0, 0.95, 0); rope.scale.set(1.15, 0.8, 0.75); torso.add(rope);
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    g.scale.setScalar(1.12); g.userData = { body, torso, head, eye, eyeM, jaw, core, plate, arms, steam, rust, belly, rope }; return g;
+  }
+  function golemPose(g, mode, t) { // mode: "sleep" | "calm" | "fight"; resets every part to that mode's resting pose
+    const U = g.userData; U.body.position.set(0, 0, 0); U.body.rotation.set(0, 0, 0); U.head.rotation.set(0, 0, 0); U.plate.rotation.x = 0; U.rope.visible = mode !== "calm" && !U.free; U.belly.rotation.z = t * (mode === "sleep" ? 0.05 : 0.6);
+    for (const a of U.arms) { a.sh.rotation.set(0, 0, 0); a.el.rotation.set(0, 0, 0); }
+    if (mode === "sleep") { U.body.position.y = -0.55; U.torso.rotation.x = -0.55; U.head.rotation.x = -0.4; for (const a of U.arms) { a.sh.rotation.x = -0.5; a.sh.rotation.z = -a.s * 0.15; } U.eyeM.emissiveIntensity = 0.15 + Math.max(0, Math.sin(t * 0.7)) * 0.25; U.eyeM.emissive.set(0xff2010); U.core.material.emissiveIntensity = 0.2; }
+    else { U.torso.rotation.x = Math.sin(t * 1.3) * 0.03; U.body.position.y = Math.sin(t * 1.3) * 0.03; for (const a of U.arms) { a.sh.rotation.z = -a.s * (0.12 + Math.sin(t * 1.3 + a.s) * 0.03); a.el.rotation.x = -0.25; }
+      if (mode === "calm") { U.eyeM.emissive.set(0x40c8ff); U.eyeM.emissiveIntensity = 2.2; U.core.material.emissive.set(0x40c8ff); U.core.material.emissiveIntensity = 1; U.jaw.rotation.z = t * 0.4; }
+      else { U.eyeM.emissive.set(0xff2010); U.eyeM.emissiveIntensity = 2.4; U.jaw.rotation.z = t * 2.2; } }
+  }
+  // the Tangle: a knot of storm turning over the reef; untied, a heartstone crystal
+  function tangleMesh(calm) {
+    const g = new THREE.Group(), stone = std({ color: 0xffffff, map: texture("cobble", 0x5f5a66), roughness: 0.95 });
+    const ring = mesh(new THREE.CylinderGeometry(1.9, 2.2, 0.35, 28), stone, 0, 0.17, 0); g.add(ring);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, p = mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), stone, Math.cos(a) * 1.85, 0.6, Math.sin(a) * 1.85); p.rotation.y = -a; g.add(p); }
+    const knot = new THREE.Group(); knot.position.y = 3.4; g.add(knot);
+    const k1 = mesh(new THREE.TorusKnotGeometry(1.5, 0.36, 220, 18, 2, 5), std({ color: 0x2a1840, roughness: 0.5, metalness: 0.3, emissive: 0x6a1ab8, emissiveIntensity: 0.6 })); knot.add(k1);
+    const k2 = mesh(new THREE.TorusKnotGeometry(1.05, 0.08, 180, 8, 3, 7), std({ color: 0xc8a0ff, emissive: 0xb070ff, emissiveIntensity: 2.2 })); knot.add(k2);
+    const heart = new THREE.Group(); heart.position.y = 1.9; g.add(heart);
+    const gem = mesh(new THREE.OctahedronGeometry(0.75, 0), phys({ color: 0x9ff4ff, emissive: 0x30c8e8, emissiveIntensity: 1.4, roughness: 0.05, transmission: 0.3, thickness: 0.5 })); gem.scale.y = 1.5; heart.add(gem);
+    for (let i = 0; i < 3; i++) { const h = mesh(new THREE.TorusGeometry(1.0 + i * 0.25, 0.025, 6, 48), std({ color: 0xbff8ff, emissive: 0x7fe8ff, emissiveIntensity: 1.5 })); h.rotation.x = Math.PI / 2 + i * 0.5; heart.add(h); }
+    const light = new THREE.PointLight(0xb070ff, 4, 14, 2); light.position.y = 3.4; g.add(light);
+    knot.visible = !calm; heart.visible = !!calm; light.color.set(calm ? 0x7fe8ff : 0xb070ff);
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    g.userData = { knot, k1, k2, heart, light, calm: !!calm }; return g;
+  }
+  function bossPropMesh(g, p) { // what you use to start each fight: the harbor's fog bell, Gearjaw's lever, the Tangle's rune stone
+    const wood = std({ color: 0x5a4330, roughness: 0.9 }), brass = std({ color: 0xc8962e, metalness: 0.9, roughness: 0.3 });
+    if (p.boss === "kraken") {
+      g.add(mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.6, 10), wood, -0.35, 0.8, 0)); g.add(mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.6, 10), wood, 0.35, 0.8, 0)); g.add(mesh(new THREE.BoxGeometry(0.9, 0.1, 0.12), wood, 0, 1.6, 0));
+      const pts = []; for (let i = 0; i <= 10; i++) { const u = i / 10; pts.push(new THREE.Vector2(0.06 + 0.2 * Math.pow(u, 1.6) + (u > 0.9 ? 0.03 : 0), -u * 0.42)); }
+      const bell = mesh(new THREE.LatheGeometry(pts, 24), brass, 0, 1.52, 0); bell.material.side = THREE.DoubleSide; g.add(bell); g.userData.bell = bell;
+    } else if (p.boss === "golem") {
+      const iron = std({ color: 0x5a4a3c, metalness: 0.7, roughness: 0.6, map: texture("grain", 0x7a4a2a) });
+      g.add(mesh(new THREE.BoxGeometry(0.6, 0.5, 0.4), iron, 0, 0.25, 0)); const arm = mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 8), iron, 0, 0.75, 0); arm.rotation.z = 0.5; g.add(arm);
+      g.add(mesh(new THREE.SphereGeometry(0.09, 12, 10), std({ color: 0xc83020, roughness: 0.4 }), -0.19, 1.1, 0));
+    } else {
+      const stone = std({ color: 0xffffff, map: texture("cobble", 0x5f5a66), roughness: 0.95 }); g.add(mesh(new THREE.BoxGeometry(0.7, 1.1, 0.3), stone, 0, 0.55, 0));
+      const rune = mesh(new THREE.TorusGeometry(0.18, 0.03, 6, 24), std({ color: 0xc8a0ff, emissive: 0xb070ff, emissiveIntensity: 2 }), 0, 0.7, -0.16); g.add(rune); g.userData.rune = rune;
+    }
+  }
+  // a small kraken pet: Old Knotty's grandchild
+  function kraklingMesh(vis) {
+    const skin = phys({ color: 0xa83a62, roughness: 0.4, clearcoat: 0.7 });
+    const m = mesh(new THREE.SphereGeometry(0.17, 20, 14), skin, 0, 0.27, 0); m.scale.set(1, 1.25, 1); vis.add(m);
+    for (const s of [-1, 1]) { vis.add(mesh(new THREE.SphereGeometry(0.055, 12, 10), std({ color: 0xffffff, roughness: 0.3 }), 0.13, 0.27, s * 0.07)); vis.add(mesh(new THREE.SphereGeometry(0.03, 10, 8), std({ color: 0x111111 }), 0.175, 0.27, s * 0.07)); }
+    const legs = new THREE.Group(); legs.position.y = 0.16; vis.add(legs);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, c = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * 0.1, -0.08, Math.sin(a) * 0.1), new THREE.Vector3(Math.cos(a) * 0.2, -0.13, Math.sin(a) * 0.2), new THREE.Vector3(Math.cos(a) * 0.27, -0.09, Math.sin(a) * 0.27)]);
+      legs.add(mesh(new THREE.TubeGeometry(c, 8, 0.028, 6), skin)); }
+    vis.userData.legs = legs;
+  }
+
+  // ---------- the fight itself ----------
+  // A fight is a list of segments (intro, a banner for each new phase, each round, the ending). bossFrame plays them
+  // one after another; every round's animation reads the round bosses.js worked out (the input, what the code said, why).
+  const BOSS_ROUND = { kraken: (R) => 1.3 + 0.42 * Math.max(1, (Array.isArray(R.value) ? R.value.length : 0)) + (R.up && R.up.length ? 1.1 : 0.2) + 0.9, golem: () => 2.7, tangle: () => 2.8 };
+  function startBoss(spec, done) {
+    const r = roam; if (!r || r.indoor || r.boss || r.sail) return false;
+    const A = spec.arena, b = r.bolt, segs = [{ k: "intro", d: spec.kind === "kraken" ? 3 : 2.4 }];
+    for (const R of spec.rounds) { if (R.first) segs.push({ k: "phase", d: 2.8, R }); segs.push({ k: "round", d: R.crash ? 2.2 : BOSS_ROUND[spec.kind](R), R }); }
+    segs.push({ k: "end", d: spec.won ? 4.2 : 3 });
+    let t0 = 0; for (const s of segs) { s.t0 = t0; t0 += s.d; }
+    const F = r.boss = { spec, done, segs, si: 0, t: 0, total: t0, hp: spec.hp0, hearts: spec.hearts0, shake: 0, kind: spec.kind, objs: [] };
+    r.frozen = true; r.target = null; r.path = null; r.watch = null; r.vel.set(0, 0, 0); if (r.angler) endFish({ ok: false, why: "stopped" });
+    F.bp = new THREE.Vector3(A.bolt.x, gyAt(r, A.bolt.x, A.bolt.z), A.bolt.z); b.position.copy(F.bp); r.yaw = A.bolt.yaw; b.rotation.set(0, r.yaw, 0); r.gyS = F.bp.y; r.air = 0;
+    const fwd = new THREE.Vector3(Math.cos(r.yaw), 0, -Math.sin(r.yaw)), right = new THREE.Vector3(Math.sin(r.yaw), 0, Math.cos(r.yaw)); F.fwd = fwd; F.right = right;
+    const add = (m) => { world.add(m); F.objs.push(m); return m; };
+    if (spec.kind === "kraken") {
+      F.head = add(krakenHead()); F.head.position.set(A.head.x, -3.5, A.head.z);
+      F.cannon = add(cannonMesh()); F.cannon.position.copy(F.bp).addScaledVector(right, 0.75).addScaledVector(fwd, 0.15); F.cannon.rotation.y = r.yaw;
+      F.tents = A.lanes.map((x) => { const red = tentacleMesh(false), blue = tentacleMesh(true); for (const m of [red, blue]) { m.position.set(x, -5, A.laneZ); m.rotation.y = Math.PI / 2; m.visible = false; add(m); } return { x, red, blue }; });
+      F.ball = add(mesh(new THREE.SphereGeometry(0.11, 14, 10), std({ color: 0x1a1a1e, metalness: 0.6, roughness: 0.4 }))); F.ball.visible = false;
+      F.cam = { pos: new THREE.Vector3(A.bolt.x - 1.4, F.bp.y + 3.6, A.bolt.z - 4.2), look: new THREE.Vector3(0, 0.9, A.laneZ + 1.2) };
+      if (r.moor) { r.moor.boat.visible = false; F.hid = r.moor.boat; } // the sailboat would block the shot
+    } else if (spec.kind === "golem") {
+      F.g = r.golem && r.golem.m; if (!F.g) { F.g = add(golemMesh()); F.g.position.set(A.boss.x, gyAt(r, A.boss.x, A.boss.z), A.boss.z); F.g.rotation.y = Math.atan2(-(A.bolt.x - A.boss.x), -(A.bolt.z - A.boss.z)); }
+      if (r.golem) r.golem.fight = true;
+      F.cam = { pos: new THREE.Vector3(A.bolt.x + 3.0, F.bp.y + 3.4, A.bolt.z + 6.4), look: new THREE.Vector3(A.boss.x, F.bp.y + 2.1, A.boss.z + 1.2) };
+    } else {
+      F.tg = r.tangle; if (r.tangle) r.tangle.fight = true;
+      F.knot = add(new THREE.Mesh(new THREE.TorusKnotGeometry(0.32, 0.1, 96, 10, 2, 3), std({ color: 0x3a2050, emissive: 0xb070ff, emissiveIntensity: 1.2, roughness: 0.4 }))); F.knot.visible = false;
+      F.beam = add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 8), new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0.9 }))); F.beam.visible = false;
+      F.cam = { pos: new THREE.Vector3(A.bolt.x + 3.6, F.bp.y + 3.0, A.bolt.z + 7.4), look: new THREE.Vector3(A.boss.x, F.bp.y + 3.0, (A.bolt.z + A.boss.z) / 2 - 0.5) };
+    }
+    if (spec.kind !== "kraken") { F.shield = add(new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 16), new THREE.MeshStandardMaterial({ color: 0x9fdcff, emissive: 0x5fb8ff, emissiveIntensity: 1.2, transparent: true, opacity: 0.35, depthWrite: false }))); F.shield.visible = false; }
+    if (spec.kind === "golem") { F.beam = add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1, 8), new THREE.MeshBasicMaterial({ color: 0xff4a30, transparent: true, opacity: 0.9 }))); F.beam.visible = false; F.ring = add(new THREE.Mesh(new THREE.RingGeometry(0.8, 1.0, 40), new THREE.MeshBasicMaterial({ color: 0xffe0b0, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }))); F.ring.rotation.x = -Math.PI / 2; F.ring.visible = false; }
+    for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { o.userData.was = o.visible; o.visible = false; } });
+    cam.was = cam.el; if (window.Audio_) Audio_.play(spec.kind === "golem" ? "clang" : "roar");
+    return true;
+  }
+  function endBoss(skip) {
+    const r = roam, F = r && r.boss; if (!F) return;
+    for (const m of F.objs) world.remove(m); if (F.hid) F.hid.visible = true;
+    for (const q of r.props) q.m.traverse(o => { if (o.isSprite && o.userData.was !== undefined) { o.visible = o.userData.was; delete o.userData.was; } });
+    if (r.golem) { r.golem.fight = false; } if (r.tangle) r.tangle.fight = false;
+    r.boss = null; r.frozen = false; r.bolt.position.copy(F.bp); r.bolt.scale.setScalar(1); r.bolt.rotation.set(0, r.yaw, 0); r.gyS = F.bp.y; r.lastDrag = -9;
+    cam.az = Math.atan2(-Math.cos(r.yaw), Math.sin(r.yaw)); if (cam.was !== undefined) { cam.el = cam.was; cam.was = undefined; } cam.look.set(F.bp.x, F.bp.y + 0.9, F.bp.z);
+    if (F.done) F.done(skip);
+  }
+  // the fight's time line: which segment we're in and how far through it
+  function bossFrame(r, dt) {
+    if (!r.boss) { idleBosses(r, dt); return; }
+    const F = r.boss; F.t += dt; F.shake = Math.max(0, F.shake - dt * 2.5);
+    while (F.si < F.segs.length - 1 && F.t >= F.segs[F.si].t0 + F.segs[F.si].d) { const s = F.segs[F.si]; if (s.k === "round") settleRound(F, s); F.si++; }
+    const s = F.segs[F.si], u = F.t - s.t0;
+    const b = r.bolt; b.position.copy(F.bp); b.rotation.set(0, r.yaw, 0); b.scale.setScalar(1); if (F.shield) F.shield.visible = false; if (F.beam) F.beam.visible = false;
+    if (F.kind === "kraken") krakenFrame(r, F, s, u, dt); else if (F.kind === "golem") golemFrame(r, F, s, u, dt); else tangleFrame(r, F, s, u, dt);
+    if (F.t >= F.total) endBoss(false);
+  }
+  function settleRound(F, s) { if (s.settled) return; s.settled = true; const R = s.R; if (R.crash) return; F.hp = R.hp; F.hearts = R.hearts; }
+  const once = (s, key) => { s.done = s.done || {}; if (s.done[key]) return false; s.done[key] = true; return true; };
+  const sfx = (n) => { if (window.Audio_) Audio_.play(n); };
+  function boltHit(r, F, s, key) { if (!once(s, key)) return; F.shake = 1; settleRound(F, s); const b = r.bolt.position; burst(b.x, b.z, 0xff5a4a, 18, 2, b.y + 0.5); sfx("bump"); }
+  function boltLurch(r, u, k) { const b = r.bolt; b.rotation.z = Math.sin(u * 30) * 0.25 * k; b.rotation.y = r.yaw + Math.sin(u * 22) * 0.4 * k; }
+  // --- Old Knotty ---
+  function krakenFrame(r, F, s, u, dt) {
+    const A = F.spec.arena, head = F.head, H = head.userData, t = clock;
+    // the head: up out of the water for the whole fight, bobbing; at the end it sinks
+    const up = s.k === "intro" ? Math.min(1, u / 2.2) : s.k === "end" ? (F.spec.won ? Math.max(0, 1 - Math.max(0, u - 1.6) / 2.2) : 1) : 1;
+    head.position.y = -3.6 + up * 3.5 + Math.sin(t * 1.2) * 0.12; head.rotation.z = Math.sin(t * 0.7) * 0.06;
+    for (const e of H.eyes) e.lookAt(r.bolt.position.x, r.bolt.position.y + 0.6, r.bolt.position.z);
+    H.rope.rotation.y += dt * 0.15;
+    if (s.k === "intro" && once(s, "splash")) { for (let k = 0; k < 4; k++) burst(A.head.x + rnd(-1.5, 1.5), A.head.z + rnd(-1, 1), 0xe6f4ff, 16, 2.4, 0); sfx("splash"); }
+    const R = s.R, T = R ? R.input : [];
+    for (const L of F.tents) { L.red.visible = L.blue.visible = false; }
+    if (s.k === "round" && !R.crash) {
+      const shots = R.shots || [], n = Math.max(1, (R.value || []).length), tShot = (k) => 1.3 + 0.42 * k, tEnd = tShot(n) + 0.15, slam = R.up && R.up.length ? 1.1 : 0.2;
+      // which shots have landed by now: hits and sinks per lane
+      const got = {}; shots.forEach((sh, k) => { if (u >= tShot(k) + 0.32 && (sh.res === "hit" || sh.res === "sink")) got[sh.lane] = (got[sh.lane] || 0) + 1; });
+      for (const tt of T) {
+        const L = F.tents[tt.lane], m = tt.color === "red" ? L.red : L.blue; m.visible = true;
+        let tDead = 0; for (let k = 0, n2 = 0; k < shots.length; k++) if (shots[k].lane === tt.lane && (shots[k].res === "hit" || shots[k].res === "sink") && ++n2 === tt.hp) tDead = tShot(k) + 0.32;
+        const rise = Math.min(1, u / 0.9), dead = tt.color === "red" && (got[tt.lane] || 0) >= tt.hp;
+        let y = -4.6 + rise * 4.2, curl = -0.3 + Math.sin(t * 2 + tt.lane) * 0.18, wave = 0.6;
+        if (dead) { const k = Math.min(1, (u - tDead) / 0.7); y -= k * 4.6; curl = -0.6 * k; }
+        const isUp = R.up && R.up.includes(tt.lane);
+        if (isUp && u > tEnd) { const k = Math.min(1, (u - tEnd) / 0.45), back = Math.max(0, (u - tEnd - 0.65) / 0.4); curl = -0.4 + k * 1.15 - back * 1.0; wave = 0.1; if (k >= 1 && once(s, "slam" + tt.lane)) { const sx = A.bolt.x + (L.x - A.bolt.x) * 0.3; burst(sx, A.bolt.z + 0.8, 0xe6f4ff, 26, 2.6, F.bp.y); boltHit(r, F, s, "slamhit"); sfx("splash"); } }
+        if (u > tEnd + slam) y -= Math.min(1, (u - tEnd - slam) / 0.7) * 4.6;
+        const hitK = shots.some((sh, k) => sh.lane === tt.lane && u >= tShot(k) + 0.32 && u < tShot(k) + 0.55) ? 1 : 0;
+        if (hitK && tt.color === "red") curl -= 0.35;
+        m.position.y = y; bendTentacle(m, curl, wave, t + tt.lane);
+        if (!m.userData.blue) m.material.emissiveIntensity = hitK ? 0.8 : 0;
+      }
+      // the cannon: aim, fire, the ball flies; armour sends it back
+      const k = shots.findIndex((_, i) => u >= tShot(i) && u < tShot(i) + 0.75), ball = F.ball; ball.visible = false;
+      const aimAt = (lane) => { const x = A.lanes[lane], dx = x - F.cannon.position.x, dz = A.laneZ - F.cannon.position.z; F.cannon.rotation.y = Math.atan2(-dz, dx); };
+      if (k >= 0) {
+        const sh = shots[k], w = u - tShot(k); aimAt(sh.lane);
+        if (sh.res !== "none") {
+          const from = F.cannon.userData.pivot.localToWorld(new THREE.Vector3(0.6, 0.25, 0)), to = new THREE.Vector3(A.lanes[sh.lane], 1.3, A.laneZ);
+          if (once(s, "fire" + k)) { burst(from.x, from.z, 0xffd27a, 10, 1.6, from.y); burst(from.x, from.z, 0x9a9a9a, 8, 0.8, from.y); sfx("boom"); }
+          if (w < 0.32) { const q = w / 0.32; ball.visible = true; ball.position.lerpVectors(from, to, q); ball.position.y += Math.sin(q * Math.PI) * 1.1; }
+          else if (sh.res === "bounce" && w < 0.62) { const q = (w - 0.32) / 0.3; ball.visible = true; ball.position.lerpVectors(to, new THREE.Vector3(F.bp.x, F.bp.y + 0.5, F.bp.z), q); ball.position.y += Math.sin(q * Math.PI) * 0.8; if (once(s, "clang" + k)) { burst(to.x, to.z, 0xbfe0ff, 14, 1.8, to.y); sfx("clang"); } }
+          else if (once(s, "land" + k)) { if (sh.res === "bounce") boltHit(r, F, s, "bounce"); else if (sh.res === "empty" || sh.res === "wasted") { burst(to.x, to.z, 0xe6f4ff, 14, 1.8, 0); sfx("splash"); } else { burst(to.x, to.z, 0xff6a5a, 16, 2, to.y); sfx("gem"); } }
+        } else if (once(s, "dry" + k)) { sfx("beep"); }
+      }
+      if ((s.done && (s.done.bounce || s.done.slamhit)) && u > tEnd - 0.3) boltLurch(r, Math.max(0, u - tEnd), Math.max(0, 1 - (u - tEnd) / 0.8));
+      if (u > tEnd + slam + 0.2 && !(R.up && R.up.length) && !(s.done && s.done.bounce) && once(s, "ok")) { head.userData.mantle.scale.y = 1.9; burst(A.head.x, A.head.z - 1, 0xffd24a, 16, 1.8, 1.4); sfx("pick"); settleRound(F, s); }
+      head.userData.mantle.scale.y += (2.1 - head.userData.mantle.scale.y) * Math.min(1, dt * 4);
+    }
+    if (s.k === "end") {
+      if (F.spec.won) { if (u > 0.4 && once(s, "snap")) { H.rope.visible = false; for (let k = 0; k < 5; k++) burst(A.head.x + rnd(-1.6, 1.6), A.head.z + rnd(-1, 1), 0x2a1a3a, 20, 2.6, rnd(0.5, 2.5)); burst(A.head.x, A.head.z, 0xffd24a, 30, 3, 2); sfx("unlock"); } for (const e of H.eyes) e.scale.y = u > 0.6 ? 0.45 : 1; }
+      else if (once(s, "lost")) { burst(F.bp.x, F.bp.z + 1, 0xe6f4ff, 40, 3, F.bp.y); sfx("splash"); F.shake = 1; }
+      if (!F.spec.won) boltLurch(r, u, Math.max(0, 1 - u / 1.5));
+    }
+  }
+  // --- Gearjaw ---
+  function golemFrame(r, F, s, u, dt) {
+    const g = F.g, U = g.userData, t = clock, A = F.spec.arena;
+    golemPose(g, "fight", t);
+    if (s.k === "intro") { const k = Math.min(1, u / 1.8); U.body.position.y = -0.55 * (1 - k); U.torso.rotation.x = -0.55 * (1 - k); U.head.rotation.x = -0.4 * (1 - k); if (u > 0.3 && once(s, "steam")) { for (const v of U.steam) { const w = v.getWorldPosition(new THREE.Vector3()); burst(w.x, w.z, 0xf0f0f0, 14, 1.2, w.y); } sfx("clang"); } }
+    const R = s.R, m = R && R.input; U.rust.emissiveIntensity = 0; U.core.material.emissiveIntensity = 1.2; U.plate.rotation.x = 0;
+    if (s.k === "round" && !R.crash) {
+      const heat = m.heat, hot = heat >= 100, dir = R.did, wind = Math.min(1, u / 0.8), strike = u > 0.8 ? Math.min(1, (u - 0.8) / 0.25) : 0, back = u > 1.6 ? Math.min(1, (u - 1.6) / 0.6) : 0;
+      U.core.material.emissiveIntensity = 0.6 + heat / 50; if (hot) { U.rust.emissiveIntensity = 0.25 + Math.sin(t * 9) * 0.1; if (Math.random() < dt * 6) { const w = U.steam[Math.random() < 0.5 ? 0 : 1].getWorldPosition(new THREE.Vector3()); burst(w.x, w.z, 0xffffff, 3, 0.8, w.y); } }
+      const fake = m.fake, stop = fake ? Math.min(wind, 0.7) : wind, sw = fake ? 0 : strike * (1 - back);
+      if (fake && u > 0.6 && u < 1.2) U.eyeM.emissiveIntensity = Math.random() < 0.5 ? 0.3 : 3; // the flicker that gives a feint away
+      if (m.name === "swipe") { const a = U.arms[m.side === "left" ? 0 : 1], sd = m.side === "left" ? 1 : -1; a.sh.rotation.z = -a.s * (0.12 + stop * 1.3); a.sh.rotation.y = sd * (-0.6 * stop + sw * 1.5); a.el.rotation.x = -0.25 - stop * 0.5; }
+      else if (m.name === "slam") { for (const a of U.arms) { a.sh.rotation.x = -stop * 2.6 + sw * 2.9; a.el.rotation.x = -0.25 - stop * 0.4; } if (!fake && u > 1.02 && once(s, "slam")) { const w = new THREE.Vector3(0, 0, -1.3).applyMatrix4(g.matrixWorld); F.ring.position.set(w.x, gyAt(r, w.x, w.z) + 0.05, w.z); F.ring.userData.t0 = u; burst(w.x, w.z, 0xd8c8a0, 24, 2.4, w.y + 0.1); F.shake = Math.max(F.shake, 0.7); sfx("land"); } }
+      else if (m.name === "laser") { U.eyeM.emissiveIntensity = 2.4 + stop * 4; U.head.rotation.x = -0.1 * stop; }
+      else if (m.name === "vent") { U.plate.rotation.x = -wind * 1.6 * (1 - back); if (u > 0.2 && u < 1.6 && Math.random() < dt * 14) for (const v of U.steam) { const w = v.getWorldPosition(new THREE.Vector3()); burst(w.x, w.z, 0xf4f4f4, 3, 1.2, w.y + 0.2); } U.core.material.emissiveIntensity = 2.5; }
+      if (F.ring.userData.t0 !== undefined) { const q = (u - F.ring.userData.t0) / 0.6; F.ring.visible = q < 1; F.ring.scale.setScalar(0.5 + q * 4); F.ring.material.opacity = 0.8 * (1 - q); if (q >= 1) F.ring.userData.t0 = undefined; }
+      // Bolt's answer, from 0.75 s: dodge, jump, shield or attack
+      const k = u < 0.75 ? 0 : u < 1.05 ? (u - 0.75) / 0.3 : u < 1.55 ? 1 : Math.max(0, 1 - (u - 1.55) / 0.35), b = r.bolt;
+      if (dir === "left" || dir === "right") b.position.addScaledVector(F.right, (dir === "right" ? 1 : -1) * 1.3 * k);
+      else if (dir === "jump") { const q = Math.max(0, Math.min(1, (u - 0.75) / 0.6)); b.position.y += Math.sin(q * Math.PI) * 1.3; if (u > 0.75 && once(s, "jump")) sfx("jump"); }
+      else if (dir === "shield") { F.shield.visible = u > 0.65 && u < 1.6; F.shield.position.set(F.bp.x, F.bp.y + 0.4, F.bp.z); }
+      else if (dir === "attack") { const toG = new THREE.Vector3(A.boss.x, 0, A.boss.z).sub(new THREE.Vector3(F.bp.x, 0, F.bp.z)), d = toG.length() - 1.6; b.position.addScaledVector(toG.normalize(), d * (u < 0.8 ? 0 : u < 1.05 ? (u - 0.8) / 0.25 : u < 1.3 ? 1 : Math.max(0, 1 - (u - 1.3) / 0.35))); if (R.ok && u > 1.05 && once(s, "smash")) { const c = U.core.getWorldPosition(new THREE.Vector3()); burst(c.x, c.z, 0xffd24a, 26, 2.6, c.y); sfx("clang"); F.shake = 0.6; } }
+      if (m.name === "laser" && !fake && u > 0.85 && u < 1.35) { const e = U.eye.getWorldPosition(new THREE.Vector3()), to = r.bolt.position.clone(); to.y += 0.5; beamBetween(F.beam, e, to); F.beam.visible = true; if (once(s, "zap")) sfx("zap"); }
+      if (R.ok && u > 1.3 && once(s, "chip")) { const h = U.head.getWorldPosition(new THREE.Vector3()); burst(h.x, h.z, 0xffb050, 12, 1.6, h.y + 0.3); settleRound(F, s); if (dir !== "attack") sfx("pick"); }
+      if (!R.ok && u > 1.1) { boltHit(r, F, s, "hit"); boltLurch(r, u - 1.1, Math.max(0, 1 - (u - 1.1) / 0.8)); }
+      if (R.ok && u > 1.3 && u < 1.8) U.body.rotation.x = -Math.sin((u - 1.3) / 0.5 * Math.PI) * 0.08; // a stagger
+    }
+    if (s.k === "end") {
+      if (F.spec.won) { const k = Math.min(1, u / 1.4); U.body.position.y = -0.55 * k; U.torso.rotation.x = -0.4 * k; U.head.rotation.x = -0.3 * k; U.eyeM.emissiveIntensity = u < 1.6 ? Math.max(0, 2.4 - u * 2) : 2.2; if (u > 1.6) { U.eyeM.emissive.set(0x40c8ff); } if (u > 0.2 && once(s, "steam")) for (let q = 0; q < 3; q++) { const w = U.steam[q % 2].getWorldPosition(new THREE.Vector3()); burst(w.x, w.z, 0xffffff, 20, 1.6, w.y); } if (u > 1.6 && once(s, "blue")) sfx("unlock"); if (u > 0.3 && once(s, "rope")) { U.free = true; const c = U.core.getWorldPosition(new THREE.Vector3()); burst(c.x, c.z, 0x2a1a3a, 30, 2.6, c.y); } }
+      else { boltLurch(r, u, Math.max(0, 1 - u / 1.5)); if (once(s, "lost")) { F.shake = 1; sfx("bump"); } }
+    }
+  }
+  function beamBetween(m, a, b) { const d = a.distanceTo(b); m.position.copy(a).lerp(b, 0.5); m.scale.set(1, d, 1); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); }
+  // --- the Tangle ---
+  function tangleFrame(r, F, s, u, dt) {
+    const T = F.tg, t = clock, A = F.spec.arena;
+    const kp = T ? T.m.userData.knot.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(A.boss.x, F.bp.y + 3.4, A.boss.z);
+    const hover = new THREE.Vector3(F.bp.x, F.bp.y + 1.5, F.bp.z).addScaledVector(F.fwd, 1.7), knot = F.knot; knot.visible = false;
+    if (T) { const K = T.m.userData; K.k1.material.emissiveIntensity = 0.6 + Math.sin(t * 3) * 0.2 + (F.hp / F.spec.hpMax) * 0.6; K.knot.scale.setScalar(0.55 + 0.45 * F.hp / F.spec.hpMax); }
+    if (s.k === "intro" && once(s, "boom")) { r.flash = 1; sfx("thunder"); }
+    const R = s.R;
+    if (s.k === "round" && !R.crash) {
+      const sz = Math.min(1.6, 0.7 + JSON.stringify(R.input).length / 40);
+      knot.visible = true; knot.material.emissive.set(R.ok ? 0xb070ff : 0xff5a8a);
+      if (u < 1.0) { const q = u / 1.0; knot.position.lerpVectors(kp, hover, q); knot.position.y += Math.sin(q * Math.PI) * 0.8; knot.scale.setScalar(sz * (0.3 + q * 0.7)); }
+      else knot.position.copy(hover).add(new THREE.Vector3(0, Math.sin(t * 3) * 0.06, 0));
+      knot.rotation.x += dt * 2; knot.rotation.y += dt * 3;
+      if (u >= 1.0) knot.scale.setScalar(sz);
+      if (R.ok) {
+        if (u > 1.35 && u < 1.85) { const e = new THREE.Vector3(F.bp.x, F.bp.y + 0.52, F.bp.z).addScaledVector(F.fwd, 0.3); beamBetween(F.beam, e, knot.position); F.beam.visible = true; if (once(s, "zap")) sfx("zap"); }
+        if (u > 1.85) { const q = Math.min(1, (u - 1.85) / 0.35); knot.scale.setScalar(sz * (1 - q)); knot.rotation.z += dt * 20; if (once(s, "untie")) { burst(knot.position.x, knot.position.z, 0xc8a0ff, 26, 2.4, knot.position.y); burst(kp.x, kp.z, 0xffffff, 10, 1.6, kp.y); r.flash = 0.5; sfx("gem"); settleRound(F, s); } }
+      } else {
+        if (u > 1.35) { const q = Math.min(1, (u - 1.35) / 0.3), back = Math.max(0, Math.min(1, (u - 1.9) / 0.6)); knot.position.lerpVectors(hover, new THREE.Vector3(F.bp.x, F.bp.y + 0.5, F.bp.z), q * (1 - back)); if (back > 0) knot.position.lerp(kp, back); }
+        if (u > 1.65) { boltHit(r, F, s, "lash"); boltLurch(r, u - 1.65, Math.max(0, 1 - (u - 1.65) / 0.8)); }
+      }
+      if (T && Math.random() < dt * 1.5) zapArc(kp, new THREE.Vector3(kp.x + rnd(-4, 4), gyAt(r, kp.x, kp.z), kp.z + rnd(-4, 4)));
+    }
+    if (s.k === "end" && T) {
+      const K = T.m.userData;
+      if (F.spec.won) { const q = Math.min(1, u / 2.2); K.knot.scale.setScalar(0.55 * (1 - q) + 0.001); K.knot.rotation.y += dt * (2 + q * 14); if (u > 0.1 && once(s, "flash")) { r.flash = 1.2; sfx("thunder"); } if (u > 2.0 && once(s, "heart")) { K.heart.visible = true; K.heart.scale.setScalar(0.01); burst(kp.x, kp.z, 0x9ff4ff, 40, 3, kp.y - 1); sfx("unlock"); } if (K.heart.visible) K.heart.scale.setScalar(Math.min(1, (u - 2.0) / 0.8) + 0.01); }
+      else { boltLurch(r, u, Math.max(0, 1 - u / 1.5)); if (once(s, "lost")) { F.shake = 1; r.flash = 0.8; sfx("thunder"); } }
+    }
+  }
+  function zapArc(a, b) { // a jagged flash of lightning, gone in a blink
+    const pts = []; for (let i = 0; i <= 8; i++) { const q = i / 8, p = a.clone().lerp(b, q); if (i && i < 8) p.add(new THREE.Vector3(rnd(-0.4, 0.4), rnd(-0.3, 0.3), rnd(-0.4, 0.4))); pts.push(p); }
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xe0c8ff, transparent: true, opacity: 1 })); world.add(l); let k = 0;
+    const fade = () => { k++; l.material.opacity = 1 - k / 8; if (k < 8 && roam) requestAnimationFrame(fade); else { world.remove(l); l.geometry.dispose(); } }; requestAnimationFrame(fade);
+  }
+  // the camera during a fight: a fixed shot of the arena with a bit of shake
+  function bossCam(r) {
+    const F = r.boss; if (!F) return; const sh = F.shake * 0.12;
+    camera.position.copy(F.cam.pos).add(new THREE.Vector3(rnd(-sh, sh), rnd(-sh, sh), rnd(-sh, sh))); camera.lookAt(F.cam.look);
+  }
+  // bosses at rest: Gearjaw asleep (or standing guard once fixed), the Tangle turning, Old Knotty waving now and then
+  function idleBosses(r, dt) {
+    const t = clock;
+    if (r.golem && !r.golem.fight) golemPose(r.golem.m, r.golem.calm ? "calm" : "sleep", t);
+    if (r.tangle && !r.tangle.fight) { const K = r.tangle.m.userData; K.knot.rotation.y += dt * 0.35; K.knot.rotation.x = Math.sin(t * 0.3) * 0.3; K.k2.rotation.z -= dt * 0.8; K.knot.position.y = 3.4 + Math.sin(t * 0.8) * 0.15; K.heart.rotation.y += dt * 0.6; K.heart.position.y = 1.9 + Math.sin(t * 1.1) * 0.12;
+      K.light.intensity = K.heart.visible ? 3 : 3 + Math.sin(t * 4) * 1.2; if (!K.heart.visible && Math.random() < dt * 0.6) zapArc(K.knot.getWorldPosition(new THREE.Vector3()), new THREE.Vector3(r.tangle.m.position.x + rnd(-5, 5), r.tangle.m.position.y, r.tangle.m.position.z + rnd(-5, 5))); }
+    if (r.town.friends && r.town.friends.includes("kraken")) { // Old Knotty, free again, says hello from the bay
+      const W = r.wave = r.wave || { next: 25 + Math.random() * 30, t: -1, m: null };
+      if (W.t < 0) { W.next -= dt; if (W.next <= 0) { W.t = 0; W.m = tentacleMesh(false); const a = rnd(-0.9, 0.9); W.m.position.set(Math.sin(a) * 6, -4, 30 + Math.cos(a) * 2); W.m.rotation.y = Math.PI / 2 + rnd(-0.4, 0.4); world.add(W.m); burst(W.m.position.x, W.m.position.z, 0xe6f4ff, 14, 2, 0); } }
+      else { W.t += dt; const up = Math.min(1, W.t / 1.2) * (1 - Math.max(0, (W.t - 4.5) / 1.2)); W.m.position.y = -4.4 + up * 4.0; bendTentacle(W.m, -0.1 + Math.sin(W.t * 4) * 0.35 * Math.min(1, W.t), 0.25, clock); if (W.t > 5.8) { world.remove(W.m); W.m.geometry.dispose(); W.m = null; W.t = -1; W.next = 40 + Math.random() * 50; } }
+    }
+  }
+  function calmBoss(id) { // after a first win: Gearjaw stands guard, the Tangle is a heartstone, the storm clears
+    const r = roam; if (!r) return;
+    if (id === "golem" && r.golem) r.golem.calm = true;
+    if (id === "tangle" && r.tangle) { const K = r.tangle.m.userData; K.knot.visible = false; K.heart.visible = true; K.heart.scale.setScalar(1); K.light.color.set(0x7fe8ff); rainTarget = 0; }
+  }
+  // the fight's HUD: boss health along the top, Bolt's hearts, the phase banner, and what happened this round
+  function drawBossHud(r) {
+    const F = r.boss; if (!F) return; const cx = fx.width / 2, sp = F.spec, s = F.segs[F.si], u = F.t - s.t0;
+    fctx.textAlign = "center"; fctx.textBaseline = "middle";
+    const bw = Math.min(420, fx.width - 40), bx = cx - bw / 2;
+    fctx.fillStyle = "rgba(22,30,44,0.85)"; fctx.beginPath(); fctx.roundRect(bx - 12, 8, bw + 24, 52, 14); fctx.fill();
+    fctx.fillStyle = "#fff"; fctx.font = "900 16px Nunito, sans-serif"; fctx.fillText(sp.icon + " " + sp.name, cx, 24);
+    fctx.fillStyle = "#3a4558"; fctx.beginPath(); fctx.roundRect(bx, 36, bw, 14, 7); fctx.fill();
+    const k = Math.max(0, F.hp / sp.hpMax); fctx.fillStyle = sp.kind === "tangle" ? "#b070ff" : sp.kind === "golem" ? "#e8803a" : "#e0485a"; if (k > 0) { fctx.beginPath(); fctx.roundRect(bx, 36, bw * k, 14, 7); fctx.fill(); }
+    fctx.strokeStyle = "rgba(255,255,255,0.35)"; fctx.lineWidth = 1; for (let i = 1; i < sp.hpMax; i++) { const x = bx + bw * i / sp.hpMax; fctx.beginPath(); fctx.moveTo(x, 37); fctx.lineTo(x, 49); fctx.stroke(); }
+    fctx.textAlign = "left"; fctx.font = "900 24px Nunito, sans-serif"; let hs = ""; for (let i = 0; i < sp.hearts0; i++) hs += i < F.hearts ? "❤️" : "🖤"; fctx.fillText(hs, 14, 80);
+    fctx.textAlign = "center";
+    const panel = (y, h) => { const w = Math.min(560, fx.width - 24); fctx.fillStyle = "rgba(22,30,44,0.86)"; fctx.beginPath(); fctx.roundRect(cx - w / 2, y, w, h, 14); fctx.fill(); return w; };
+    const wrap = (text, maxW) => { const words = text.split(" "), lines = []; let cur = ""; for (const w of words) { const t = cur ? cur + " " + w : w; if (fctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines; };
+    if (s.k === "intro") { panel(68, 50); fctx.fillStyle = "#ffd24a"; fctx.font = "900 22px Nunito, sans-serif"; fctx.fillText("⚔️ " + sp.name + " rises!", cx, 93); }
+    else if (s.k === "phase") {
+      fctx.font = "700 14px Nunito, sans-serif"; const w = Math.min(560, fx.width - 24), lines = wrap(s.R.rule || "", w - 40), h = 44 + lines.length * 19, y = fx.height / 2 - h / 2;
+      const a = Math.min(1, u * 4, (s.d - u) * 4); fctx.globalAlpha = Math.max(0, a); panel(y, h); fctx.fillStyle = "#ffd24a"; fctx.font = "900 20px Nunito, sans-serif"; fctx.fillText(`Phase ${s.R.phaseNo}: ${s.R.phase}`, cx, y + 22);
+      fctx.fillStyle = "#e8eef8"; fctx.font = "700 14px Nunito, sans-serif"; lines.forEach((l, i) => fctx.fillText(l, cx, y + 46 + i * 19)); fctx.globalAlpha = 1;
+    } else if (s.k === "round") {
+      const R = s.R, w = Math.min(560, fx.width - 24); fctx.font = "700 13px Nunito, sans-serif"; const res = R.line && u > Math.min(s.d - 0.9, 1.5) ? wrap(R.line, w - 30) : [], h = 58 + res.length * 18, y = 68;
+      panel(y, h); fctx.font = "800 15px Nunito, sans-serif"; fctx.fillStyle = "#cfe3ff"; fctx.fillText(R.tell, cx, y + 18);
+      fctx.font = "800 15px ui-monospace, Menlo, Consolas, monospace"; fctx.fillStyle = u > 0.9 ? "#fff" : "rgba(255,255,255,0.25)"; fctx.fillText(R.said, cx, y + 40);
+      fctx.font = "700 13px Nunito, sans-serif"; fctx.fillStyle = "#ffc0b0"; res.forEach((l, i) => fctx.fillText(l, cx, y + 62 + i * 18));
+      if (R.ok && u > s.d - 0.9) { fctx.font = "900 26px Nunito, sans-serif"; fctx.fillStyle = "#7fe08a"; fctx.fillText("✓", cx + w / 2 - 26, y + 28); }
+    } else if (s.k === "end") {
+      panel(fx.height / 2 - 34, 68); fctx.font = "900 28px Nunito, sans-serif"; fctx.fillStyle = sp.won ? "#ffd24a" : "#ff8a7a"; fctx.fillText(sp.won ? "🏆 Victory!" : sp.crash ? "💥 The code crashed" : "💔 Out of hearts", cx, fx.height / 2);
+    }
+    fctx.font = "700 12px Nunito, sans-serif"; fctx.fillStyle = "rgba(255,255,255,0.75)"; fctx.textAlign = "left"; fctx.fillText(phone ? "Tap Talk to skip ⏭" : "Esc to skip ⏭", 16, 104);
+  }
   // ---------- pets: a little friend that follows Bolt round town, into buildings and onto the boat ----------
   function petMesh(id) {
     const g = new THREE.Group(), vis = new THREE.Group(); g.add(vis); g.userData.vis = vis;
@@ -1828,7 +2177,8 @@ const Render3D = (() => {
     else if (id === "koi") {
       const k = catchMesh(0xffb020, 0.32); vis.add(k); g.userData.koi = k;
       vis.add(mesh(new THREE.SphereGeometry(0.24, 20, 14), new THREE.MeshPhysicalMaterial({ color: 0xcfefff, transparent: true, opacity: 0.22, roughness: 0.05, transmission: 0.6, thickness: 0.2, depthWrite: false })));
-    } else return null;
+    } else if (id === "krakling") kraklingMesh(vis);
+    else return null;
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     return g;
   }
@@ -2010,7 +2360,8 @@ const Render3D = (() => {
     const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xc4d8ea, transparent: true, opacity: 0, depthWrite: false })); m.frustumCulled = false; return m;
   }
   function rainFrame(r, dt) {
-    if (weatherMode === "auto") { rainT -= dt; if (rainT <= 0) { rainTarget = Math.random() < 0.3 ? 0.6 + Math.random() * 0.4 : 0; rainT = rainTarget ? rnd(70, 140) : rnd(110, 260); } }
+    if (r.town.storm) rainTarget = 1; // Storm Reef: it rains until the Tangle is untied
+    else if (weatherMode === "auto") { rainT -= dt; if (rainT <= 0) { rainTarget = Math.random() < 0.3 ? 0.6 + Math.random() * 0.4 : 0; rainT = rainTarget ? rnd(70, 140) : rnd(110, 260); } }
     rainNow += (rainTarget - rainNow) * Math.min(1, dt * 0.12); if (Math.abs(rainTarget - rainNow) < 0.002) rainNow = rainTarget;
     const m = r.rain; m.visible = rainNow > 0.01; m.material.opacity = rainNow * 0.55;
     if (m.visible) {
@@ -2078,7 +2429,7 @@ const Render3D = (() => {
       if (total) { const found = total - r.gold.length, txt = "⚙ " + found + "/" + total; fctx.font = "800 13px Nunito, sans-serif"; const w = fctx.measureText(txt).width + 16; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(cx - w / 2, cy + Rm + 8, w, 22, 11); fctx.fill(); fctx.fillStyle = found === total ? "#ffd24a" : "#fff"; fctx.fillText(txt, cx, cy + Rm + 19.5); }
       if (r.energy < 0.999 || r.boosting) { const bw = Rm * 1.3, bx = cx - bw / 2, by = cy + Rm + 36; fctx.fillStyle = "rgba(22,30,44,0.78)"; fctx.beginPath(); fctx.roundRect(bx - 3, by - 3, bw + 6, 12, 6); fctx.fill(); fctx.fillStyle = r.energy < 0.2 && !r.boosting ? "#8a96a8" : "#5fd0ff"; fctx.beginPath(); fctx.roundRect(bx, by, Math.max(2, bw * r.energy), 6, 3); fctx.fill(); }
     }
-    drawWorkerHud(r); drawPopups(r); drawFishHud(r); drawSortHud(r);
+    drawWorkerHud(r); drawPopups(r); drawFishHud(r); drawSortHud(r); drawBossHud(r);
     if (r.race) {
       const R = r.race, t = Math.max(0, R.t), txt = fmtTime(t);
       fctx.textAlign = "center"; fctx.textBaseline = "middle";
@@ -2121,11 +2472,13 @@ const Render3D = (() => {
         case "stone": { const g = new THREE.Group(), geo = new THREE.CylinderGeometry(0.34, 0.52, 2.5, 7, 3); const pa = geo.attributes.position; for (let i = 0; i < pa.count; i++) { const k = 1 + Math.sin(i * 12.9898 + d.x) * 0.09; pa.setX(i, pa.getX(i) * k); pa.setZ(i, pa.getZ(i) * (2 - k)); } geo.computeVertexNormals();
           g.add(mesh(geo, std({ color: 0xffffff, map: texture("cobble", 0x9a9184), roughness: 0.95 }), 0, 1.15, 0)); g.rotation.z = Math.sin(d.x * 3.1) * 0.06; put(g, d.x, d.z, ry, s, -0.05); r.colliders.push({ x: d.x, z: d.z, r: 0.5 * s }); break; } // a standing stone
         case "wreck": { const m = boatMesh(true); m.position.set(d.x, height(d.x, d.z) - 0.45, d.z); m.rotation.set(0.1, ry, 0.34); world.add(m); r.colliders.push({ x: d.x, z: d.z, r: 2.3 }); break; }
+        case "golem": { const m = put(golemMesh(), d.x, d.z, d.ry || 0, 1); r.golem = { m, calm: !!d.calm, fight: false }; golemPose(m, d.calm ? "calm" : "sleep", 0); r.colliders.push({ x: d.x, z: d.z, r: 1.35 }); break; } // Gearjaw (bosses.js)
+        case "tangle": { const m = put(tangleMesh(d.calm), d.x, d.z, 0, 1); r.tangle = { m, fight: false }; r.colliders.push({ x: d.x, z: d.z, r: 2.3 }); break; } // the Tangle on Storm Reef
         case "piece": { const m = put(pieceMesh(d), d.x, d.z, ry, 1); const q = { d, m }; if (d.fresh) { q.pop = -r.pieces.filter(x => x.pop !== undefined).length * 0.06; m.scale.setScalar(0.001); } r.pieces.push(q); pieceColliders(d, r); break; } // something your blueprint built
         case "boat": case "ship": { const m = boatMesh(d.kind === "ship"); m.position.set(d.x, -0.1, d.z); m.rotation.y = ry; world.add(m); m.userData.phase = Math.random() * 6; r.floats.push(m); r.colliders.push({ x: d.x, z: d.z, r: d.kind === "ship" ? 2.6 : 1.3 }); break; }
       }
     }
-    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2, sorter: 1, botdock: 1, mill: 1, bakery: 1, blueprint: 1, shed: 1 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35, sorter: 1.1, botdock: 0.9, mill: 1.45, bakery: 1.6, blueprint: 0.75, shed: 1.25 };
+    const SCALE = { portal: 2.0, stall: 1.35, sign: 1.3, npc: 1.0, race: 1.15, chest: 1.25, fish: 1.2, sorter: 1, botdock: 1, boss: 1, mill: 1, bakery: 1, blueprint: 1, shed: 1 }, REACH = { portal: 0.6, stall: 0.9, sign: 0.5, npc: 0.45, race: 0.45, moor: 2.6, chest: 0.5, fish: 0.35, sorter: 1.1, botdock: 0.9, boss: 0.7, mill: 1.45, bakery: 1.6, blueprint: 0.75, shed: 1.25 };
     for (const p of town.props) {
       const m = propMesh(p), s = SCALE[p.kind] || 1;
       if (p.kind === "portal") m.add(archMesh(p.locked ? 0x555a66 : p.color));
@@ -2217,7 +2570,7 @@ const Render3D = (() => {
       if (m.userData.lid) m.userData.lid.rotation.x += (m.userData.lidTo - m.userData.lid.rotation.x) * Math.min(1, dt * 5);
       if (m.userData.flag) { const pa = m.userData.flag.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i) + 0.4; pa.setZ(i, Math.sin(clock * 6 - x * 6) * 0.06 * x); } pa.needsUpdate = true; }
     }
-    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); sorterFrame(r, dt); workerFrame(r, dt); homeFrame(r, dt); if (r.rain) rainFrame(r, dt);
+    lifeFrame(r, dt, nx, nz); goldFrame(r, dt, b); marksFrame(r, dt); if (r.race) raceFrame(r, dt, b); fishFrame(r, dt); petFrame(r, dt); sorterFrame(r, dt); workerFrame(r, dt); homeFrame(r, dt); bossFrame(r, dt); if (r.rain) rainFrame(r, dt);
     if (window.Audio_) Audio_.engine(Math.min(1.5, sp / BASE));
     for (const t of r.trees) { const c = t.userData.crown; c.rotation.z = Math.sin(clock * 1.1 + t.userData.phase) * 0.025; c.rotation.x = Math.sin(clock * 0.8 + t.userData.phase * 1.7) * 0.02; }
     if (!r.indoor) { r.grass.uni.uTime.value = clock; r.grass.uni.uBolt.value.set(nx, b.position.y, nz); r.clouds.material.uniforms.uTime.value = clock; }
@@ -2244,9 +2597,11 @@ const Render3D = (() => {
     camera.position.set(cam.look.x + Math.sin(cam.az) * Math.cos(el) * dist, cam.look.y + Math.sin(el) * dist, cam.look.z + Math.cos(cam.az) * Math.cos(el) * dist);
     const floorY = Math.max(r.height(camera.position.x, camera.position.z), -0.05) + 0.5; if (camera.position.y < floorY) camera.position.y = floorY;
     camera.lookAt(cam.look);
+    if (r.boss) bossCam(r); // a fight has its own camera
   }
   function roamClick(e) {
     if (roam && roam.angler) { fishTap(); return; } // while fishing a click anywhere is the tap
+    if (roam && roam.boss) return;
     if (roam) roam.watch = null;
     const r = roam, rc = canvas.getBoundingClientRect(); ndc.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1); ray.setFromCamera(ndc, camera);
     const hits = ray.intersectObjects(r.props.map(q => q.m), true);
@@ -2257,9 +2612,9 @@ const Render3D = (() => {
     const g = ray.intersectObject(r.terrain); if (g.length && r.height(g[0].point.x, g[0].point.z) > -0.04) setTarget(r, g[0].point.x, g[0].point.z);
   }
   function drawPrompt() {
-    const r = roam; if (!r || !r.near || r.race || r.angler || r.sortRun || r.photo || !modalHidden()) return;
+    const r = roam; if (!r || !r.near || r.race || r.angler || r.sortRun || r.boss || r.photo || !modalHidden()) return;
     const q = r.near, p = q.p, name = p.label.replace(/^\S+\s/, "");
-    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : p.kind === "moor" ? (r.sail ? "tie up and go ashore" : "board your boat") : p.kind === "chest" ? (p.open ? "an empty chest" : "open the chest") : p.kind === "fish" ? "go fishing" : p.kind === "sorter" ? "program the fish sorter" : "open the " + name);
+    const text = (phone ? "Tap Talk" : "E") + "  ·  " + (p.kind === "portal" ? (p.locked ? "sealed: " : "enter ") + name : p.kind === "npc" ? "talk to " + name : p.kind === "door" ? "go into " + name : p.kind === "exit" ? "back to town" : p.kind === "spot" ? name.split(":")[0] : p.kind === "moor" ? (r.sail ? "tie up and go ashore" : "board your boat") : p.kind === "chest" ? (p.open ? "an empty chest" : "open the chest") : p.kind === "fish" ? "go fishing" : p.kind === "sorter" ? "program the fish sorter" : p.kind === "boss" ? name.toLowerCase() : "open the " + name);
     const v = new THREE.Vector3(q.m.position.x, q.m.position.y + 1.55 * q.s, q.m.position.z).project(camera);
     if (v.z > 1) return;
     const sx = (v.x + 1) / 2 * fx.width, sy = (1 - v.y) / 2 * fx.height;
@@ -2283,6 +2638,7 @@ const Render3D = (() => {
       return true; },
     get sailing() { return !!(roam && roam.sail); },
     sorter: (items, done) => startSorter(items, done), get sorting() { return !!(roam && roam.sortRun); },
+    boss: { start: (spec, done) => startBoss(spec, done), skip: () => endBoss(true), calm: (id) => calmBoss(id), get on() { return !!(roam && roam.boss); } }, // showdowns (bosses.js)
     fish: { start: (opts) => startFish(opts), tap: () => fishTap(), stop: () => endFish({ ok: false, why: "stopped" }), get on() { return !!(roam && roam.angler); }, get phase() { return roam && roam.angler ? roam.angler.phase : null; } },
     openChest(id) { const q = roam && roam.props.find(q => q.p.kind === "chest" && q.p.id === id); if (!q) return; q.p.open = true; q.m.userData.lidTo = -1.9; for (let k = 0; k < 3; k++) burst(q.p.x, q.p.z, [0xffd24a, 0xfff2b0, 0xffb020][k], 12, 1.6, q.m.position.y + 0.5); },
     photo(on) { const r = roam; if (!r) return; r.photo = !!on; r.input.x = r.input.y = 0; r.target = null; r.boostOn = false; for (const q of r.props) q.m.traverse(o => { if (o.isSprite) { if (on) { o.userData.was = o.visible; o.visible = false; } else if (o.userData.was !== undefined) o.visible = o.userData.was; } }); },

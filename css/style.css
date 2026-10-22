@@ -273,3 +273,14 @@ footer { color: var(--muted); font-size: 12px; margin-top: 16px; text-align: cen
 .bpname { width: 100%; font-size: 18px; padding: 8px; border-radius: 8px; border: 1px solid var(--line); }
 @media (max-width: 720px) { .bpgrid { grid-template-columns: 1fr; } .bpgrid canvas { margin: 0 auto; } }
 #modalBody:has(.bpgrid) { max-width: 880px; }
+/* showdowns: the boss menu (story and rules on the left, code on the right) and story scenes */
+.bossgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
+.bossgrid textarea { width: 100%; min-height: 260px; resize: vertical; font: 14px/1.5 var(--mono); background: var(--term-bg); color: var(--term-ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px; tab-size: 4; white-space: pre; overflow: auto; box-sizing: border-box; }
+.bossrules { padding-left: 1.2em; display: grid; gap: 6px; margin: 6px 0 10px; }
+.bossrules li { line-height: 1.45; }
+.bosswon { background: rgba(80, 180, 110, 0.15); border-radius: 8px; padding: 6px 10px; }
+#modalBody:has(.bossgrid) { max-width: 960px; }
+@media (max-width: 760px) { .bossgrid { grid-template-columns: 1fr; } }
+.scene { display: flex; gap: 14px; align-items: flex-start; }
+.scenewho { font-size: 48px; line-height: 1; flex: none; }
+.sceneline p { font-size: 1.08em; line-height: 1.5; margin: 4px 0 0; }

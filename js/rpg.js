@@ -79,6 +79,7 @@ const RPG = (() => {
     { id: "midnight", name: "Midnight", color: "#1c2240", cost: 150, req: ["logic", 8] },
     { id: "ghost", name: "Ghost White", color: "#e8ecf4", cost: 250, req: ["review", 3] },
     { id: "gold", name: "Gold Plate", color: "#d8a520", cost: 600, req: ["total", 50] },
+    { id: "copper", name: "Gearjaw Copper", color: "#b8642e", quest: "The Rusted Guardian" },
   ];
   const COSMETICS = {
     hat: [
@@ -102,6 +103,7 @@ const RPG = (() => {
       { id: "gold", name: "Lighthouse Gold", icon: "🟡", color: "#ffd24a", quest: "Island Hopper" },
       { id: "violet", name: "Timeline Violet", icon: "🟣", color: "#c57bff", quest: "Fifty Commits" },
       { id: "red", name: "Mirror Red", icon: "🔴", color: "#ff5a5a", quest: "Glass Trader" },
+      { id: "storm", name: "Heartstone Teal", icon: "💎", color: "#7fffe0", quest: "Untangle the Sea" },
     ],
     trail: [
       { id: "none", name: "No trail", icon: "·", cost: 0 },
@@ -111,6 +113,7 @@ const RPG = (() => {
       { id: "leaves", name: "Orchard Leaves", icon: "🍃", color: "#7fd36a", quest: "Apple Baron" },
       { id: "embers", name: "Oracle Embers", icon: "🔥", color: "#ff8a3d", quest: "Memory" },
       { id: "stars", name: "Time Stars", icon: "🌟", color: "#c9a7ff", quest: "Time Merchant" },
+      { id: "storm", name: "Storm Sparks", icon: "⚡", color: "#b8a0ff", quest: "Untangle the Sea" },
     ],
     // pets follow Bolt round town and the islands
     pet: [
@@ -119,6 +122,7 @@ const RPG = (() => {
       { id: "gull", name: "Gulliver the gull", icon: "🐦", cost: 220 },
       { id: "bot", name: "Sprocket the mini-bot", icon: "🤖", cost: 300, req: ["functions", 4] },
       { id: "koi", name: "Koi in a bubble", icon: "🐡", quest: "Lucky Koi" },
+      { id: "krakling", name: "Knotlet the krakling", icon: "🐙", quest: "Knots in the Nets" },
     ],
   };
   const COS_NAMES = { hat: "Hats", eyes: "Eyes", trail: "Trails", pet: "Pets" };
@@ -167,6 +171,9 @@ const RPG = (() => {
     { id: "bakeq", npc: "marisol", title: "The Harbor Bakery", after: "millq", story: "Bread's fine. Pie sells. Bake three loaves and an apple pie, then ship two hundred coins of goods from your farm shed.", steps: [{ type: "home", key: "bread", n: 3, text: "Bake bread" }, { type: "home", key: "applepie", n: 1, text: "Bake an apple pie" }, { type: "home", key: "shipped", n: 200, text: "Ship goods from your farm shed (coins)" }], reward: { coins: 250, xp: { functions: 120 }, title: "Baker" } },
     { id: "mirrorq", npc: "wrenna", title: "Mirror Image", after: "deed", story: "Good buildings are symmetrical. Make the left half of your island match the right half exactly, at least twenty squares used. Whatever goes on x also goes on 9 - x.", steps: [{ type: "home", key: "mirror", text: "A mirror-image island (20+ squares)" }], reward: { coins: 250, xp: { logic: 150 }, title: "Architect" } },
     { id: "checkerq", npc: "odo", title: "Checkers on the Shore", after: "deed", story: "Build me a checkerboard, four squares by four, out of two different things. Try what (x + y) % 2 gives you.", steps: [{ type: "home", key: "checker", text: "A 4 x 4 checkerboard of two things" }], reward: { coins: 200, xp: { logic: 150 } } },
+    { id: "knots", npc: "odo", title: "Knots in the Nets", after: "papers", zone: 3, story: "Every net I pull up is tied in knots, and something big rolls under the pier at night. Ring the fog bell by the pier and see what comes up. The harbor cannon fires wherever your code says.", steps: [{ type: "boss", key: "kraken", text: "Beat Old Knotty: ring the fog bell by the pier" }], reward: { coins: 300, xp: { logic: 200, loops: 150 }, cos: "pet:krakling", title: "Kraken Tamer" } },
+    { id: "guardian", npc: "gully", title: "The Rusted Guardian", after: "knots", story: "Gearjaw has guarded my stone circle since before I washed up. The knots got into it and now it swings at anything that moves. Pull the lever, read every move it makes, and put it right.", steps: [{ type: "boss", key: "golem", text: "Beat Gearjaw in the stone circle on Gull Isle" }], reward: { coins: 400, xp: { logic: 300 }, paint: "copper", title: "Gearbreaker" } },
+    { id: "untangle", npc: "dad", title: "Untangle the Sea", after: "guardian", zone: 4, story: "That compass points at Storm Reef, where all this is coming from. Sail through the storm and untie the thing. It throws knots made of lists. A function that can untie any knot can untie the whole Tangle.", steps: [{ type: "boss", key: "compass", text: "Get the storm compass from Gearjaw" }, { type: "boss", key: "tangle", text: "Untie the Tangle on Storm Reef" }], reward: { coins: 1000, xp: { functions: 400 }, cos: ["eyes:storm", "trail:storm"], title: "Untangler" } },
     { id: "estate", npc: "dad", title: "Landowner", after: "bakeq", story: "A house, a farm that pays, and sixty squares built. Then it isn't a scrap of island any more.", steps: [{ type: "home", key: "house", text: "Build a house" }, { type: "home", key: "pieces", n: 60, text: "Squares built on your island" }], reward: { coins: 500, xp: { loops: 200 }, title: "Landowner" } },
     { id: "luckykoi", npc: "gully", title: "Lucky Koi", story: "A golden koi is luck you can hold. Bring me one and I'll blow it a bubble to live in. Then it follows you everywhere, and the luck goes with you.", steps: [{ type: "gather", good: "koi", n: 1 }], reward: { coins: 100, xp: { fishing: 100 }, cos: "pet:koi" } },
     // ---- second wave: the long game ----
@@ -286,6 +293,7 @@ const RPG = (() => {
       case "zonestars": { const zl = LEVELS.filter(l => l.zone === st.zone && !l.optional && l.par); const d = zl.filter(l => api.completed()[l.id] && api.completed()[l.id].stars === 3).length; return { done: d === zl.length, text: `Three stars on every ${ZONES[st.zone - 1].name} mission (${d}/${zl.length})` }; }
       case "sorter": { const d = Object.keys((save.town && save.town.sorter) || {}).length; return { done: d >= st.n, text: `Program the fish sorter: finish ${st.n} jobs (${Math.min(d, st.n)}/${st.n})` }; }
       case "home": { const v = window.Home ? Home.progress(st.key) : 0, n = st.n || 1; return { done: v >= n, text: st.text + (st.n ? ` (${Math.min(v, n)}/${n})` : "") }; }
+      case "boss": return { done: !!(window.Bosses && Bosses.progress(st.key) >= 1), text: st.text };
       case "bot": return { done: !!(save.bots && save.bots.flags && save.bots.flags[st.key]), text: st.text };
       case "coins": return { done: S.coins >= st.n, text: `Hold ${st.n} coins at once (${Math.min(S.coins, st.n)}/${st.n})` };
       case "contracts": return { done: (S.stats.contracts || 0) >= st.n, text: `Complete ${st.n} daily contracts (${Math.min(S.stats.contracts || 0, st.n)}/${st.n})` };
@@ -300,10 +308,10 @@ const RPG = (() => {
     for (const s of q.steps) if (s.type === "gather") take(s.good, s.n);
     const r = q.reward; S.coins += r.coins || 0; for (const k in r.xp || {}) addXp(k, r.xp[k]);
     if (r.paint) S.paints[r.paint] = true; if (r.title && !S.titles.includes(r.title)) S.titles.push(r.title);
-    if (r.cos) { const [cat, id] = r.cos.split(":"); S.cos[cat].owned[id] = true; }
+    for (const c of [].concat(r.cos || [])) { const [cat, id] = c.split(":"); S.cos[cat].owned[id] = true; }
     S.quests[q.id] = today(); persist(); hud(); return true;
   }
-  function rewardText(r) { const out = []; if (r.coins) out.push(`🪙 ${r.coins}`); for (const k in r.xp || {}) out.push(`${SKILLS.find(s => s.id === k).icon} ${r.xp[k]} ${SKILLS.find(s => s.id === k).name} XP`); if (r.paint) out.push(`🎨 ${PAINTS.find(p => p.id === r.paint).name} paint`); if (r.cos) { const [cat, id] = r.cos.split(":"); const c = cosItem(cat, id); out.push(`${c.icon} ${c.name}`); } if (r.title) out.push(`🏷️ title “${r.title}”`); return out.join(" · "); }
+  function rewardText(r) { const out = []; if (r.coins) out.push(`🪙 ${r.coins}`); for (const k in r.xp || {}) out.push(`${SKILLS.find(s => s.id === k).icon} ${r.xp[k]} ${SKILLS.find(s => s.id === k).name} XP`); if (r.paint) out.push(`🎨 ${PAINTS.find(p => p.id === r.paint).name} paint`); for (const x of [].concat(r.cos || [])) { const [cat, id] = x.split(":"); const c = cosItem(cat, id); out.push(`${c.icon} ${c.name}`); } if (r.title) out.push(`🏷️ title “${r.title}”`); return out.join(" · "); }
   function contractState(t) {
     if (t.type === "gather") return { done: have(t.good) >= t.n, text: `Deliver ${gname(t.good, t.n)} (${Math.min(have(t.good), t.n)}/${t.n})` };
     if (t.type === "run") { const lv = LEVEL_BY_ID[t.level]; return { done: (S.runsToday[t.level] || 0) > 0, text: `Finish ${t.level} ${lv ? lv.title : ""} today`, go: t.level }; }
@@ -392,7 +400,7 @@ const RPG = (() => {
   }
   function paint() {
     let h = `<h3>Style: paint</h3><p class="muted">Bolt's colour, hat, eyes, trail and a pet to follow him round town. Quest rewards unlock the rare ones.</p><div class="cards paints">`;
-    for (const p of PAINTS) { const own = !!S.paints[p.id], on = S.paint === p.id; h += `<div class="card ${on ? "done" : ""}"><div class="swatch" style="background:${p.color}"></div><b>${p.name}</b><div class="muted">${own ? (on ? "Wearing" : "Owned") : `🪙 ${p.cost}${p.req ? " · needs " + reqText(p.req) : ""}`}</div><button class="small ${on ? "" : "primary"}" data-act="paint" data-id="${p.id}" ${on || (!own && (!meets(p.req) || S.coins < p.cost)) ? "disabled" : ""}>${own ? "Wear" : "Buy"}</button></div>`; }
+    for (const p of PAINTS) { const own = !!S.paints[p.id], on = S.paint === p.id; h += `<div class="card ${on ? "done" : ""}"><div class="swatch" style="background:${p.color}"></div><b>${p.name}</b><div class="muted">${own ? (on ? "Wearing" : "Owned") : p.quest ? "Reward from the quest “" + p.quest + "”" : `🪙 ${p.cost}${p.req ? " · needs " + reqText(p.req) : ""}`}</div><button class="small ${on ? "" : "primary"}" data-act="paint" data-id="${p.id}" ${on || (!own && (p.quest || !meets(p.req) || S.coins < p.cost)) ? "disabled" : ""}>${own ? "Wear" : "Buy"}</button></div>`; }
     h += "</div>";
     for (const cat of ["hat", "eyes", "trail", "pet"]) {
       h += `<h3>${COS_NAMES[cat]}</h3><div class="cards paints">`;

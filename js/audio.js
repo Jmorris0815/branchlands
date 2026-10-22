@@ -38,6 +38,10 @@ const Audio_ = (() => {
     ring: () => { tone(880, 0.1, "sine", 0.08); tone(1320, 0.16, "sine", 0.07, 0.06); },
     beep: () => tone(660, 0.16, "square", 0.05),
     go: () => tone(1320, 0.4, "square", 0.06),
+    boom: () => { noise(0.4, 0.16); tone(70, 0.35, "sine", 0.14, 0, -30); },
+    roar: () => { tone(90, 0.9, "sawtooth", 0.07, 0, -40); tone(60, 1.1, "sawtooth", 0.06, 0.1, -20); noise(0.8, 0.05); },
+    clang: () => { tone(520, 0.25, "square", 0.05, 0, -200); tone(780, 0.18, "triangle", 0.06); noise(0.08, 0.08); },
+    zap: () => { tone(1400, 0.25, "sawtooth", 0.05, 0, -1100); tone(900, 0.2, "square", 0.03, 0.05, -600); },
     land: () => { noise(0.1, 0.05); tone(95, 0.12, "sine", 0.09, 0, -40); },
     thunder: () => { if (!enabled) return; const c = ac(); if (!c) return; const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), t = c.currentTime; s.buffer = noiseBuf(c, 3, true); f.type = "lowpass"; f.frequency.value = 240; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.6, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.9); s.connect(f); f.connect(g); g.connect(c.destination); s.start(); s.stop(t + 3); },
   };
