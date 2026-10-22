@@ -89,6 +89,25 @@ bakery turns flour, apples, carrots, pumpkins and honey into bread, pies and cak
 it all from the farm shed. Ten island quests teach coordinates, nested loops, `9 - x` for a mirror-image island and `(x
 + y) % 2` for a checkerboard.
 
+🤖 **Farmhands.** Any bot from the Bot Dock can be sent to your island (button on its Bot Dock card, or from the farm
+shed). There it runs a second program, `import farm`: `farm.ripe()` lists what's ready, `farm.harvest(x, y)` drives over
+and picks it, `farm.store()` empties the basket into the barn, `farm.make("flour", 3)` starts the windmill or bakery and
+`farm.ship("wheat", 10)` sends goods to Marisol. Like the harbor bots, each shift is worked out first and played back in
+3D, and the real island only changes as each action finishes. The starter program stops when the battery drops under
+30%, which is the first thing it teaches. Farmhands charge on their own pad by the shed and catch up a few shifts when
+you come back after time away.
+
+⚔️ **Showdowns.** Three bosses, each beaten by one Python function that the game replays against harder and harder
+phases (three hearts, checkpoints, a results table of every round). The Kraken under Harbor Town's pier: `fire(tentacles)`
+returns the lanes to shoot, skipping armoured blue ones. Gearjaw the rusted golem on Gull Isle: `react(move)` reads a
+dictionary and picks dodge, jump, shield or attack, until it starts faking and overheating. The Tangle, at the heart of
+Storm Reef: `untie(knot)` adds up nested lists of any depth, which only recursion solves. Beat Gearjaw for the compass to
+reach the reef; beat the Tangle and the storm clears for good.
+
+👋 **Family visits.** With a family code, your island travels with the family sync as a short string (three characters
+a square). A 🏝️ Visit button on the family board sails you to a relative's island to drive round it, crops ripe, nothing
+to take.
+
 - **Eight zone portals.** Dark ones are sealed until you finish the zone before. Step through to play.
 - **Townsfolk with real conversations.** Marisol (harbor master), Old Pip (loops), Odo (decisions and crabs),
   Wrenna (functions and upgrades), the Clockwright (Git), Dad (reviews and pull requests), the Oracle (bots),
@@ -187,6 +206,10 @@ js/audio.js       synthesized sound effects
 js/game.js        save slots, screens, progression, stars, achievements, settings, and the play modes
 js/rpg.js         Harbor Town economy: skills, loot, market, crafting, upgrades, paint, quests, daily contracts
 js/hub.js         Harbor Town: the TOWN layout, driving keys / joystick, NPC conversations (scripted + Ollama)
+js/home.js        your own island: the `import build` blueprint, crops, barn, machines, family-visit snapshots
+js/farmhand.js    farmhands: Botworks bots running `import farm` on your island
+js/bots.js        Botworks: helper bots running `import bot` in Harbor Town
+js/bosses.js      showdowns: the Kraken, Gearjaw and the Tangle, story scenes, Storm Reef
 js/family.js      shared family world: family code, shared market, board, trading, real PR reviews (Supabase edge function)
 js/device.js      phone/desktop detection (sets data-device for the phone layout)
 docs/             company program, competitor teardown (with REA), research report

@@ -387,8 +387,21 @@ var $builtinmodule = function (name) {
     spots: [], strollers: [], bots: [], gears: [],
     moor: { kind: "moor", x: 1.05, z: 24.3, label: "⛵ Your boat", boat: { x: 2.9, z: 23.8, ry: -Math.PI / 2 }, land: { x: 0, z: 23.6, yaw: Math.PI / 2 } },
     get name() { return islandName(); },
-    get decor() {
-      const g = st().grid, ix = index(g), out = [{ kind: "dock", x: 0, z: 17, len: 8 }, { kind: "lamp", x: -2.6, z: 15.2 }, { kind: "lamp", x: 2.6, z: 15.2 },
+    get decor() { return decorFor(st().grid, fresh); },
+    get props() {
+      const out = [{ kind: "blueprint", x: 3.6, z: 11.4, ry: 0, padY: 1.0, label: "📐 Blueprint table" }, { kind: "shed", x: -4.4, z: 11.6, ry: 0, padY: 1.0, label: "🧺 Farm shed" }, this.moor];
+      if (window.Bots && Bots.crew.length && window.Farmhands) out.push({ kind: "botdock", x: Farmhands.PAD.x, z: Farmhands.PAD.z, ry: 0, label: "🤖 Farmhand pad" }); // where farmhands charge (farmhand.js)
+      return out.concat(machineProps(st().grid));
+    },
+    bare(x, z) { return bareIn(st().grid, x, z); },
+    stage: (k) => stage(k),
+    busy: (k) => !!st().jobs[k], // a machine at work: the sails turn, the chimney smokes
+    doneFresh() { fresh = []; },
+  };
+  function bareIn(g, x, z) { const c = cellAt(x, z); if (c.x < 0 || c.y < 0 || c.x >= N || c.y >= N) return false; const k = index(g)[key(c.x, c.y)]; return !!(k && BARE[g[k].t]); }
+  function machineProps(g) { const out = []; for (const k in g) { const P = PIECES[g[k].t]; if (!P.machine) continue; const [x, y] = k.split(",").map(Number), p = centre(x, y, 2); out.push({ kind: g[k].t, id: k, x: p.x, z: p.z, ry: 0, padY: 1.0, label: P.icon + " " + P.name }); } return out; }
+  function decorFor(g, fresh) {
+      const ix = index(g), out = [{ kind: "dock", x: 0, z: 17, len: 8 }, { kind: "lamp", x: -2.6, z: 15.2 }, { kind: "lamp", x: 2.6, z: 15.2 },
         { kind: "tree", x: -17, z: 9, s: 2.4, ry: 1 }, { kind: "tree", x: 16, z: 10, s: 2.2, ry: 2 }, { kind: "tree", x: -18, z: -6, s: 2.5, ry: 3 }, { kind: "tree", x: 18, z: -5, s: 2.2, ry: 4 },
         { kind: "rock", x: -13, z: 16, s: 1.5, ry: 1 }, { kind: "rock", x: 12, z: 17, s: 1.7, ry: 2 }, { kind: "rock", x: -20, z: 2, s: 1.6, ry: 0 }, { kind: "rock", x: 4, z: -19, s: 1.6, ry: 3 }];
       const jt = (x, y) => { const k = ix[key(x, y)]; return !!(k && JOIN[g[k].t]); };
@@ -401,18 +414,33 @@ var $builtinmodule = function (name) {
           links: JOIN[c.t] ? { e: jt(x + 1, y), w: jt(x - 1, y), n: jt(x, y + 1), s: jt(x, y - 1) } : null });
       }
       return out;
-    },
-    get props() {
-      const g = st().grid, out = [{ kind: "blueprint", x: 3.6, z: 11.4, ry: 0, padY: 1.0, label: "📐 Blueprint table" }, { kind: "shed", x: -4.4, z: 11.6, ry: 0, padY: 1.0, label: "🧺 Farm shed" }, this.moor];
-      if (window.Bots && Bots.crew.length && window.Farmhands) out.push({ kind: "botdock", x: Farmhands.PAD.x, z: Farmhands.PAD.z, ry: 0, label: "🤖 Farmhand pad" }); // where farmhands charge (farmhand.js)
-      for (const k in g) { const P = PIECES[g[k].t]; if (!P.machine) continue; const [x, y] = k.split(",").map(Number), p = centre(x, y, 2); out.push({ kind: g[k].t, id: k, x: p.x, z: p.z, ry: 0, padY: 1.0, label: P.icon + " " + P.name }); }
-      return out;
-    },
-    bare(x, z) { const c = cellAt(x, z); if (c.x < 0 || c.y < 0 || c.x >= N || c.y >= N) return false; const g = st().grid, k = index(g)[key(c.x, c.y)]; return !!(k && BARE[g[k].t]); },
-    stage: (k) => stage(k),
-    busy: (k) => !!st().jobs[k], // a machine at work: the sails turn, the chimney smokes
-    doneFresh() { fresh = []; },
-  };
+  }
+
+  // ---------- family visits ----------
+  // Your island travels with the family sync as a short string: three characters a piece (x, y, and which piece).
+  function snapshot() {
+    const h = st(); if (!Object.keys(h.grid).length) return null;
+    return { name: islandName(), g: Object.keys(h.grid).map(k => k.replace(",", "") + ORDER.indexOf(h.grid[k].t).toString(36)).join(""), harvests: h.stats.harvests || 0, shipped: h.stats.shipped || 0 };
+  }
+  function parseGrid(s) {
+    const g = {}; for (let i = 0; i + 2 < String(s || "").length + 0; i += 3) { const x = +s[i], y = +s[i + 1], t = ORDER[parseInt(s[i + 2], 36)]; if (t && x >= 0 && y >= 0 && x < N && y < N) g[key(x, y)] = { t, at: 0 }; }
+    return g;
+  }
+  // a family member's island, to walk around: everything ripe, nothing to take
+  function visitTown(snap, who) {
+    const clean = (x) => String(x || "").replace(/[<>&"]/g, "").slice(0, 40); // their names come from another player's save
+    const g = parseGrid(snap.g), T = TOWN; who = clean(who) || "Family"; snap = { ...snap, name: clean(snap.name) };
+    return { size: T.size, radius: T.radius, seed: T.seed, start: T.start, plaza: T.plaza, bay: T.bay, hills: T.hills, flats: T.flats, spots: [], strollers: [], bots: [], gears: [], visit: true, who,
+      moor: { ...T.moor }, name: snap.name || who + "'s island",
+      get decor() { return decorFor(g, []); },
+      get props() { return [{ kind: "shed", x: -4.4, z: 11.6, ry: 0, padY: 1.0, label: `🧺 ${who}'s farm shed` }, this.moor].concat(machineProps(g)); },
+      bare: (x, z) => bareIn(g, x, z), stage: () => 1, busy: () => false, doneFresh() {}, grid: g };
+  }
+  function visitPiece(T, p) { // what you see when you use something on a visit
+    if (p.kind === "shed") { const s0 = T.snap || {}, s = { harvests: Number(s0.harvests) | 0, shipped: Number(s0.shipped) | 0 }; api.toast(`🧺 ${T.who}'s barn. ${s.harvests ? `${s.harvests} harvests so far` : "Not much harvested yet"}${s.shipped ? `, ${s.shipped} 🪙 shipped to Marisol` : ""}.`); return true; }
+    if (p.kind === "mill" || p.kind === "bakery") { api.toast(`${PIECES[p.kind].icon} ${T.who}'s ${PIECES[p.kind].name.toLowerCase()}. It only works for them.`); return true; }
+    return false;
+  }
 
   // ---------- hub glue ----------
   function init(a) { api = a; }
@@ -433,7 +461,7 @@ var $builtinmodule = function (name) {
 
   // what the farmhands (farmhand.js) need to do real work on the island
   const farm = { st, bank, unbank, startJob, ripeness, near, BARN_CAP, G, gn, harvestYield: (k) => { const h = st(), c = h.grid[k], P = PIECES[c.t], [x, y] = k.split(",").map(Number); return P.yield[0] + Math.floor(Math.random() * (P.yield[1] - P.yield[0] + 1)) + (P.crop && near(h.grid, x, y, 2, "scarecrow") ? 1 : 0); } };
-  return { init, arrive, leave, interact, blueprint, summary, progress, unlocked, islandName, settle, TOWN, PIECES, MAKES, N, centre, farm,
+  return { init, arrive, leave, interact, blueprint, summary, progress, unlocked, islandName, settle, TOWN, PIECES, MAKES, N, centre, farm, snapshot, visitTown, visitPiece, parseGrid,
     debug: { runBlueprint, diff, apply, stage, st, poll, setAt(k, t) { const c = st().grid[k]; if (c) c.at = t; } } };
 })();
 window.Home = Home;

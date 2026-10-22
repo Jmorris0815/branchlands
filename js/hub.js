@@ -151,7 +151,7 @@ const Hub = (() => {
     $("screen-level").classList.remove("roam"); $("joy").hidden = true; $("talkBtn").hidden = true; $("jumpBtn").hidden = true; $("boostBtn").hidden = true;
   }
   const refresh = () => renderPanel();
-  function remember() { if (!window.Render3D) return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.save().island = room ? "harbor" : island; api.persistSave(); } } // inside a room, a reload puts you just outside its door
+  function remember() { if (!window.Render3D) return; if (island === "visit") return; const p = room ? INTERIORS[room].outside : Render3D.roam.pose(); if (p) { api.save().hub3 = p; api.save().island = room ? "harbor" : island; api.persistSave(); } } // (a visit isn't saved: a reload puts you back where you were before) // inside a room, a reload puts you just outside its door
 
   // ---------- free roam (3D) ----------
   const hooks = {
@@ -310,14 +310,21 @@ const Hub = (() => {
   }
   // sail far enough from one island and the current carries you to the other
   function sailAway(to) {
-    if (!to && (Home.unlocked() || Bosses.reefOpen())) return sailMenu();
+    if (!to && (Home.unlocked() || Bosses.reefOpen() || TOWNS.visit)) return sailMenu();
     to = to || (island === "harbor" ? "gull" : "harbor"); const T = TOWNS[to]; api.toast(`⛵ Sailing to ${T.name}…`); api.sfx("teleport");
-    fade(() => { if (island === "home") Home.leave(); island = to; nearProp = null; Render3D.roam.start(T, hooks, { x: 0, z: T.radius + 13, yaw: Math.PI / 2, sail: true }); if (to === "home") Home.arrive(); remember(); renderPanel(); });
+    fade(() => { if (island === "home") Home.leave(); if (island === "visit" && to !== "visit") delete TOWNS.visit; island = to; nearProp = null; Render3D.roam.start(T, hooks, { x: 0, z: T.radius + 13, yaw: Math.PI / 2, sail: true }); if (to === "home") Home.arrive(); remember(); renderPanel(); });
   }
   function sailMenu() {
     const where = [["harbor", "⚓", "Harbor Town", "the market, the Workshop, everyone you know"], ["gull", "🏝️", "Gull Isle", "Old Gully, treasure chests, swordfish"], ["home", "🏡", Home.islandName(), "your own island"], ["reef", "🌀", "Storm Reef", Bosses.won("tangle") ? "the heartstone, and calm water at last" : "the Tangle. Bring your best code"]].filter(w => (w[0] !== "home" || Home.unlocked()) && (w[0] !== "reef" || Bosses.reefOpen()));
+    if (TOWNS.visit && island === "visit") where.push(["visit", "👋", TOWNS.visit.name, TOWNS.visit.who + "'s island"]);
     api.showModal(`<h2>⛵ Where to?</h2><p>The current will take you anywhere you like.</p><div style="display:grid;gap:8px">${where.map(([id, ic, name, what]) => `<button data-sail="${id}" class="${id === island ? "" : "primary"}" style="text-align:left">${ic} <b>${name}</b> <span class="muted">· ${id === island ? "turn back" : what}</span></button>`).join("")}</div>`);
     $("modalBody").querySelectorAll("button[data-sail]").forEach(b => b.onclick = () => { api.hideModal(); sailAway(b.dataset.sail); });
+  }
+  // a family member's island (from the family sync): sail over and drive round it
+  function visit(snap, who) {
+    if (!active || room || !window.Render3D || !snap || !snap.g) return false;
+    api.hideModal();
+    TOWNS.visit = Home.visitTown(snap, who); TOWNS.visit.snap = snap; sailAway("visit"); return true;
   }
   // after a blueprint is built: the island is made again around Bolt, standing where he was
   function rebuildIsland() {
@@ -410,6 +417,7 @@ const Hub = (() => {
   function interact(p) {
     api.sfx("click");
     if (island === "home" && Home.interact(p)) return; // the blueprint table, the farm shed, the windmill and bakery
+    if (island === "visit" && Home.visitPiece(TOWNS.visit, p)) return;
     if (p.kind === "door") return enterRoom(p.to);
     if (p.kind === "exit") return leaveRoom();
     if (p.kind === "spot") return p.map ? api.showScreen("map") : api.openTown(p.tab);
@@ -446,6 +454,7 @@ const Hub = (() => {
       const p = nearProp, phone = document.documentElement.dataset.device === "phone";
       if (island === "home" && !room) return homePanel(el, p, phone);
       if (island === "reef" && !room) return reefPanel(el, p, phone);
+      if (island === "visit" && !room) return visitPanel(el, p, phone);
       el.innerHTML = `<div class="zonechip">${island === "gull" ? "🏝️ Gull Isle" : "⚓ Harbor Town"}</div><h2>${s.settings.name ? "Welcome back, " + s.settings.name + "." : "Harbor Town"}</h2>
         <p>${phone ? "Drive Bolt with the <b>joystick</b>, drag the picture with your other thumb to look around, and tap <b>Talk</b> when you reach someone." : "Drive Bolt with <b>WASD</b> or the <b>arrow keys</b>, or <b>click</b> where to go. Drag to look around, scroll to zoom. Drive up to someone and press <b>E</b> to talk, shop, or step through a portal. <b>Space</b> jumps, <b>Shift</b> boosts. Dark gates are sealed until you finish the zone before them."}</p>
         <p class="muted">⚙️ ${gearsFound()} of ${TOWNS[island].gears.length} golden gears found here${island === "gull" ? ` · 💰 ${(town().chests || []).length} of ${GULL.chests.length} chests` : town().best ? ` · 🏁 rally best ${fmt(town().best)}` : " · 🏁 the Harbor Rally flag is by the pier"} · ⛵ your boat is at the end of the pier · <b>!</b> over someone means a quest, <b>?</b> a reward waiting.</p>
@@ -469,6 +478,16 @@ const Hub = (() => {
       <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button></div>
       <div id="nearby">${p ? `<button class="primary" data-near="1">Use: ${p.label}</button>` : `<span class="muted">Nothing within reach.</span>`}</div>
       <p class="muted" style="margin-top:10px">🪙 ${RPG.state.coins} · total level ${RPG.totalLevel()}</p>`;
+    const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
+    $("photoBtn").onclick = () => photo(true);
+  }
+  function visitPanel(el, p, phone) {
+    const T = TOWNS.visit, n = Object.keys(T.grid).length, crops = Object.values(T.grid).filter(c => Home.PIECES[c.t].good).length;
+    el.innerHTML = `<div class="zonechip">👋 ${T.name}</div><h2>Visiting ${T.who}</h2>
+      <p>This is ${T.who}'s island, built from their own blueprint: ${n} things, ${crops} of them growing. Have a drive round. Everything here belongs to them, so nothing comes off in your basket.</p>
+      <p class="muted">The island as it was the last time ${T.who}'s game synced with the family. ⛵ Your boat is at the end of the pier: sail out to go home.</p>
+      <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button></div>
+      <div id="nearby">${p ? `<button class="primary" data-near="1">Use: ${p.label}</button>` : `<span class="muted">Nothing within reach.</span>`}</div>`;
     const b = el.querySelector("button[data-near]"); if (b) b.onclick = () => interactNear();
     $("photoBtn").onclick = () => photo(true);
   }
@@ -612,6 +631,6 @@ const Hub = (() => {
     catch (e) { return "(The free-talk line is down: " + (e.message || e) + ". Is Ollama running with OLLAMA_ORIGINS set?)"; }
   }
 
-  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, photo, rebuildIsland, sailTo: sailAway, refresh, get room() { return room; }, get island() { return island; }, get active() { return active; }, PROPS, TOWN, GULL, TOWNS, INTERIORS };
+  return { init, open, close, pressE: interactNear, enterRoom, leaveRoom, photo, rebuildIsland, sailTo: sailAway, refresh, visit, get room() { return room; }, get island() { return island; }, get active() { return active; }, PROPS, TOWN, GULL, TOWNS, INTERIORS };
 })();
 window.Hub = Hub;

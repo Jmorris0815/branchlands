@@ -27,7 +27,8 @@ const Family = (() => {
   }
   function snapshot() {
     const S = RPG.state;
-    return { coins: S.coins, total: RPG.totalLevel(), missions: Object.keys(save.completed).length, stars: Object.values(save.completed).filter((c) => c.stars === 3).length, titles: S.titles, paint: S.paint, hat: S.cos.hat.on, name: save.settings.name };
+    return { coins: S.coins, total: RPG.totalLevel(), missions: Object.keys(save.completed).length, stars: Object.values(save.completed).filter((c) => c.stars === 3).length, titles: S.titles, paint: S.paint, hat: S.cos.hat.on, name: save.settings.name,
+      island: window.Home && Home.unlocked() ? Home.snapshot() : null, bosses: window.Bosses ? Bosses.snapshot() : null }; // island: so the family can sail over and look round (home.js)
   }
   async function create(familyName, playerName) { const j = await call("create", { family_name: familyName, player_name: playerName }); save.family = { code: j.code, token: j.token, playerId: j.player_id, name: j.family.name }; api.persist(); await sync(); return j; }
   async function join(code, playerName) { const j = await call("join", { code, player_name: playerName }); save.family = { code: j.code, token: j.token, playerId: j.player_id, name: j.family.name }; api.persist(); await sync(); return j; }
@@ -73,7 +74,7 @@ const Family = (() => {
     const meId = last.me.id;
     let h = `<h3>${esc(last.family.name)} · family code</h3><div class="famcode">${esc(last.family.code)}</div><div class="toolbar"><span class="muted">Give this code to family on another device or save slot.</span><span class="sp"></span><button class="small" data-fam="refresh">Refresh</button><button class="small danger" data-fam="leave">Leave family</button></div>`;
     h += `<h3>Family board</h3><div class="tablewrap"><table class="goods"><tr><th>Player</th><th>Total level</th><th>Coins</th><th>Missions</th><th>3★</th><th>Titles</th><th>Seen</th></tr>`;
-    for (const p of [...last.players].sort((x, y) => ((y.snapshot || {}).total || 0) - ((x.snapshot || {}).total || 0))) { const s = p.snapshot || {}; h += `<tr><td>${p.id === meId ? "⭐ " : ""}${esc(p.name)}</td><td>${s.total ?? "–"}</td><td>🪙 ${s.coins ?? "–"}</td><td>${s.missions ?? "–"}/${LEVELS.length}</td><td>${s.stars ?? "–"}</td><td>${esc((s.titles || []).join(", ")) || "–"}</td><td class="muted">${ago(p.last_seen)}</td></tr>`; }
+    for (const p of [...last.players].sort((x, y) => ((y.snapshot || {}).total || 0) - ((x.snapshot || {}).total || 0))) { const s = p.snapshot || {}; h += `<tr><td>${p.id === meId ? "⭐ " : ""}${esc(p.name)}</td><td>${s.total ?? "–"}</td><td>🪙 ${s.coins ?? "–"}</td><td>${s.missions ?? "–"}/${LEVELS.length}</td><td>${s.stars ?? "–"}</td><td>${esc((s.titles || []).join(", ")) || "–"}${(s.bosses || []).map((id) => ({ kraken: " 🐙", golem: " ⚙️", tangle: " 🌀" }[id] || "")).join("")}${p.id !== meId && s.island && s.island.g ? ` <button class="small" data-fam="visit" data-id="${p.id}">🏝️ Visit</button>` : ""}</td><td class="muted">${ago(p.last_seen)}</td></tr>`; }
     h += `</table></div>`;
     const inb = inbox(), mine = last.reviews.filter((r) => r.author_id === meId);
     h += `<h3>Pull requests waiting for your review · ${inb.length}</h3>`;
@@ -94,6 +95,8 @@ const Family = (() => {
       else if (a === "join") await join($("famCode").value.trim().toUpperCase(), $("famMe2").value.trim());
       else if (a === "leave") { if (b.textContent !== "Really leave?") { b.textContent = "Really leave?"; b.disabled = false; return; } await leave(); }
       else if (a === "refresh") await sync();
+      else if (a === "visit") { const p = last.players.find((x) => x.id === b.dataset.id); if (!p || !p.snapshot || !p.snapshot.island) throw new Error("Their island isn't here yet. They need to open the game once."); if (window.Hub && !Hub.active && $("townBack")) $("townBack").click(); // out of the menus and into the 3D world first
+        if (!window.Hub || !Hub.visit(p.snapshot.island, p.name)) throw new Error("Go out to Harbor Town first, then sail over."); return; }
       else if (a === "offer") { const g = $("ofGood").value, q = Math.max(1, +$("ofQty").value | 0), p = Math.max(1, +$("ofPrice").value | 0); if (!g || RPG.have(g) < q) throw new Error("Not enough of that in your pack."); RPG.take(g, q); try { await offer(g, q, p); } catch (e) { RPG.add(g, q); throw e; } api.toast("Offer posted."); }
       else if (a === "cancel") { const o = last.offers.find((x) => x.id === b.dataset.id); const r = await cancelOffer(b.dataset.id); if (r.cancelled && o) { RPG.add(o.good, o.qty); api.toast("Offer cancelled; goods are back in your pack."); } }
       else if (a === "buy") { const o = last.offers.find((x) => x.id === b.dataset.id); if (!o) throw new Error("That offer is gone."); if (RPG.state.coins < o.price) throw new Error("Not enough coins."); if (RPG.have(o.good) + o.qty > RPG.cap()) throw new Error("No room in your pack for that."); const got = await buy(o.id); RPG.spend(got.price); RPG.add(got.good, got.qty); api.toast(`Bought ${got.qty} ${esc(got.good)} from ${esc(got.seller_name)}.`); }
