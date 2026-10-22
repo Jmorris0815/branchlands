@@ -261,7 +261,7 @@ var $builtinmodule = function (name) {
     for (const b of s.crew) {
       const L = live[b.id];
       if (L) { const t = tau(L); payUpTo(b, L, t); if (t >= L.S.t) { endShift(b, L.S, true); delete live[b.id]; } continue; }
-      if (!b.on || b.stuck || !b.code) continue;
+      if (!b.on || b.stuck || !b.code || b.post === "farm") continue;
       busy = true;
       try {
         const S = await simulate(b, hash(b.id) ^ (b.shiftNo++ * 7919));
@@ -302,6 +302,7 @@ var $builtinmodule = function (name) {
     const rep = { away, bots: [], coins: 0, items: {} }; busy = true;
     try {
       for (const b of s.crew) {
+        if (b.post === "farm") continue; // farmhands work on your island (farmhand.js)
         const R = { b, shifts: 0, coins: 0, items: {}, flats: 0, err: null }; rep.bots.push(R);
         if (!b.on || !b.code || b.stuck) { R.off = true; continue; }
         const runs = []; let used = 0;
@@ -340,7 +341,7 @@ var $builtinmodule = function (name) {
   // ---------- what the 3D town draws: where each bot is and what it's doing right now ----------
   function poses() {
     const s = st(); if (!s.crew.length) return [];
-    return s.crew.map((b, i) => {
+    return s.crew.filter(b => b.post !== "farm").map((b, i) => {
       const base = { id: b.id, name: b.name, color: b.color, slot: i };
       const L = live[b.id];
       if (!L) return { ...base, place: "dock", act: !b.on ? "off" : b.stuck ? "stuck" : "charge", k: 0, carry: [], batt: 1, say: b.stuck ? "Fix my code!" : null };
@@ -368,6 +369,7 @@ var $builtinmodule = function (name) {
   const hasMats = (m) => !m || Object.entries(m).every(([g, n]) => RPG.have(g) >= n);
   const takeMats = (m) => { if (m) for (const [g, n] of Object.entries(m)) RPG.take(g, n); };
   function status(b) {
+    if (b.post === "farm") return window.Farmhands ? Farmhands.status(b) : "on your island";
     const L = live[b.id]; if (!b.on) return "switched off"; if (b.stuck) return "⚠ stuck: needs a code fix"; if (!L) return "charging at the dock";
     const p = poses().find(x => x.id === b.id) || {}; const where = PLACES[p.place] ? PLACES[p.place].name : "";
     return { go: `driving to ${PLACES[p.to] ? PLACES[p.to].name : "?"}`, fish: "fishing off the pier", pick: "picking apples", dig: "digging on the beach", sell: "selling at the market", sort: "at the Fish Sorter", unload: "unloading at the dock", charge: "charging at the dock", flat: "flat battery!", error: "confused by its code", wait: "waiting", stand: "at " + where }[p.act] || "at " + where;
@@ -377,7 +379,7 @@ var $builtinmodule = function (name) {
     const bar = (v, c) => `<span style="display:inline-block;width:70px;height:8px;border-radius:4px;background:rgba(128,128,128,0.3);vertical-align:middle"><span style="display:block;height:8px;border-radius:4px;width:${Math.round(v * 100)}%;background:${c}"></span></span>`;
     const card = (b) => { const p = poses().find(x => x.id === b.id) || { batt: 1 }; return `<div class="card"><div class="ct"><span class="big" style="color:${b.color}">🤖</span> <b>${b.name}</b></div>
       <div class="muted">${status(b)}</div><div class="muted">🔋 ${bar(p.batt, p.batt < 0.25 ? "#e05a4a" : "#3fbf6a")} · ${b.stats.shifts} shifts · ${b.stats.coins} 🪙 earned</div>
-      <div class="row"><button class="small primary" data-code="${b.id}">✏️ Code</button><button class="small" data-up="${b.id}">🔧 Upgrade</button><button class="small" data-log="${b.id}">📋 Log</button><button class="small" data-watch="${b.id}">👀 Watch</button><button class="small" data-on="${b.id}">${b.on ? "⏸ Stop" : "▶ Start"}</button></div></div>`; };
+      <div class="row"><button class="small primary" data-code="${b.id}">✏️ Code</button><button class="small" data-up="${b.id}">🔧 Upgrade</button><button class="small" data-log="${b.id}">📋 Log</button>${b.post === "farm" ? "" : `<button class="small" data-watch="${b.id}">👀 Watch</button>`}<button class="small" data-on="${b.id}">${b.on ? "⏸ Stop" : "▶ Start"}</button>${window.Farmhands && Farmhands.canPost() ? `<button class="small" data-post="${b.id}">${b.post === "farm" ? "⚓ Bring back to the harbor" : "🏝️ Send to your island"}</button>` : ""}</div></div>`; };
     const build = next ? `<div class="card"><div class="ct"><span class="big">➕</span> <b>Build bot ${s.crew.length + 1}</b></div><div class="muted">${next.coins ? `🪙 ${next.coins} ${matText(next.mats)} · needs Robotics ${next.req}` : "Free: Wrenna has the parts for your first one."}</div>
       <div class="row"><button class="small primary" id="buildBot" ${(R < next.req || RPG.state.coins < next.coins || !hasMats(next.mats)) ? "disabled" : ""}>Build it</button></div></div>` : "";
     const cr = crateCount();
@@ -386,7 +388,8 @@ var $builtinmodule = function (name) {
       <h3>📦 Crate</h3><p>${cr ? things(s.crate) : "Empty. Bots fill it with <code>bot.unload()</code> at the dock, and whatever they still carry when a shift ends."} <span class="muted">(${cr} of ${crateCap()})</span></p>
       <div class="row"><button id="crateGet" class="${cr ? "primary" : ""}" ${cr ? "" : "disabled"}>Take it all into your backpack</button><button id="dockUp" class="small">⚡ Dock level ${s.dock + 1}: charges in ${DOCK.charge[s.dock]} s, crate holds ${crateCap()}</button><button id="closeBtn">Close</button></div>`);
     const mb = $("modalBody");
-    mb.querySelectorAll("button[data-code]").forEach(x => x.onclick = () => editor(x.dataset.code));
+    mb.querySelectorAll("button[data-code]").forEach(x => x.onclick = () => byId(x.dataset.code).post === "farm" ? Farmhands.editor(x.dataset.code, hq) : editor(x.dataset.code));
+    mb.querySelectorAll("button[data-post]").forEach(x => x.onclick = () => { Farmhands.post(x.dataset.post, byId(x.dataset.post).post !== "farm"); hq(); });
     mb.querySelectorAll("button[data-up]").forEach(x => x.onclick = () => upgrades(x.dataset.up));
     mb.querySelectorAll("button[data-log]").forEach(x => x.onclick = () => logView(x.dataset.log));
     mb.querySelectorAll("button[data-watch]").forEach(x => x.onclick = () => { api.hideModal(); if (window.Render3D && Render3D.roam.watch) Render3D.roam.watch(x.dataset.watch); });
@@ -459,7 +462,8 @@ var $builtinmodule = function (name) {
   }
 
   return {
-    init(a, d) { api = a; deps = d; }, start, stop, hq, poses, summary, PLACES, get crew() { return st().crew; },
+    init(a, d) { api = a; deps = d; }, start, stop, hq, poses, summary, PLACES, get crew() { return st().crew; }, byId, val, rng, hash, robo,
+    bench(id) { const b = byId(id), L = live[id]; if (b && L) { payUpTo(b, L, tau(L)); delete live[id]; } }, // stop a harbor shift now (the bot is off to the island)
     flags: () => st().flags,
     debug: { simulate: (b, seed) => simulate(b, seed || 1), set speed(v) { speed = v; }, get speed() { return speed; }, live, tick, catchUp, setLast: (t) => { st().last = t; } },
   };

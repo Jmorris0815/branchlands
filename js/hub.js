@@ -134,7 +134,7 @@ const Hub = (() => {
 
   function props() { return PROPS.map(p => p.kind === "boss" ? { ...p, label: bossLabel(p.boss) } : p.kind === "portal" ? { ...p, locked: !api.zoneUnlocked(p.zone), label: ZONES[p.zone - 1].emoji + " " + ZONES[p.zone - 1].name, color: ZONES[p.zone - 1].color } : p); }
 
-  function init(a) { api = a; Bots.init(a, { FISH, sorterCode }); Home.init(a); Bosses.init(a); window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
+  function init(a) { api = a; Bots.init(a, { FISH, sorterCode }); Home.init(a); Farmhands.init(a); Bosses.init(a); window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", () => { keys.clear(); sendInput(); if (window.Render3D) Render3D.roam.boost(false); }); initJoy(); }
   function open() {
     active = true; nearProp = null; const s = api.save(); if (window.Audio_) Audio_.ambient("harbor");
     $("screen-level").classList.add("roam"); $("joy").hidden = false; $("talkBtn").hidden = false; $("jumpBtn").hidden = false; $("boostBtn").hidden = false;
@@ -161,8 +161,8 @@ const Hub = (() => {
     gearTaken: id => town().gears.includes(id),
     onSail: () => sailAway(),
     onGear: id => gotGear(id),
-    workers: () => room || island !== "harbor" ? [] : Bots.poses(), // helper bots at work (bots.js decides where, render3d draws them)
-    places: Bots.PLACES,
+    workers: () => room ? [] : island === "harbor" ? Bots.poses() : island === "home" ? Farmhands.poses() : [], // helper bots at work (bots.js / farmhand.js decide where, render3d draws them)
+    get places() { return island === "home" ? Farmhands.PLACES : Bots.PLACES; },
     marks: () => { const m = {}; for (const p of PROPS) if (p.kind === "npc") { const qs = RPG.questsFor(p.id); if (qs.some(q => q.ready)) m[p.id] = "?"; else if (qs.length) m[p.id] = "!"; } return m; }, // over their heads and on the minimap
   };
   // what you have done around town: gears found, rally best time and medals
@@ -417,7 +417,7 @@ const Hub = (() => {
     if (p.kind === "moor") return sailToggle();
     if (p.kind === "chest") return openChest(p);
     if (p.kind === "fish") return goFish();
-    if (p.kind === "botdock") return Bots.hq();
+    if (p.kind === "botdock") return island === "home" ? Farmhands.panel() : Bots.hq();
     if (p.kind === "boss") return Bosses.menu(p.boss);
     if (p.kind === "sorter") return Render3D.roam.sorting ? null : sorterMenu();
     if (p.kind === "npc") talk(p.id);
@@ -475,7 +475,7 @@ const Hub = (() => {
   function homePanel(el, p, phone) {
     el.innerHTML = `<div class="zonechip">🏡 ${Home.islandName()}</div><h2>Your island</h2>
       <p>Ten squares by ten, and all of it yours. Write the island in Python at the <b>📐 Blueprint table</b>, then build it. When crops turn ripe, ${phone ? "drive" : "drive Bolt"} straight through them to harvest. Apple trees and beehives: drive up close.</p>
-      <p class="muted">🏡 ${Home.summary()}</p>
+      <p class="muted">🏡 ${Home.summary()}</p>${Farmhands.summary() ? `<p class="muted">🤖 ${Farmhands.summary()}</p>` : ""}
       <p class="muted">🧺 The farm shed keeps what you harvest; ship it to Marisol from there. The windmill and bakery keep working while you're away. ⛵ Your boat is at the end of the pier.</p>
       <div class="row"><button id="photoBtn" class="small">📷 Photo mode</button><button id="bpBtn" class="small">📐 Blueprint</button></div>
       <div id="nearby">${p ? `<button class="primary" data-near="1">Use: ${p.label}</button>` : `<span class="muted">Nothing within reach.</span>`}</div>

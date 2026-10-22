@@ -88,11 +88,12 @@ for x in range(1, 4):
   const speedOf = (grid, x, y) => near(grid, x, y, 1, "well") ? 2 : 1;
   const hiveOk = (grid, x, y) => near(grid, x, y, 2, "flowers") >= 3;
   // how ripe something is, 0 to 1 (1 = ready). A hive without flowers never fills.
-  function stage(k) {
-    const h = st(), c = h.grid[k]; if (!c) return 0; const P = PIECES[c.t]; if (!P.grow) return 1;
-    const [x, y] = k.split(",").map(Number); if (c.t === "hive" && !hiveOk(h.grid, x, y)) return 0;
-    return Math.min(1, (now() - (c.at == null ? now() : c.at)) / 1000 * speedOf(h.grid, x, y) / P.grow);
+  function ripeness(grid, k, t) { // also used by the farmhands' model of the island, at a time later in their shift
+    const c = grid[k]; if (!c) return 0; const P = PIECES[c.t]; if (!P.grow) return 1;
+    const [x, y] = k.split(",").map(Number); if (c.t === "hive" && !hiveOk(grid, x, y)) return 0;
+    return Math.min(1, (t - (c.at == null ? t : c.at)) / 1000 * speedOf(grid, x, y) / P.grow);
   }
+  const stage = (k) => ripeness(st().grid, k, now());
 
   // ---------- the blueprint: Python module `build` ----------
   class BuildError extends Error {}
@@ -233,7 +234,8 @@ var $builtinmodule = function (name) {
         <div class="row"><button id="shipAll" class="primary">🚢 Ship everything (+${worth} 🪙)</button></div>` : `<p class="muted">The barn is empty. Plant something with the blueprint, then drive Bolt through it when it's ripe.</p>`}
       ${bp.length ? `<p class="muted">In your backpack: ${bp.map(g => `<button class="small" data-put="${g}">Put ${gn(g, RPG.have(g))} in the barn</button>`).join(" ")}</p>` : ""}
       <p class="muted">${Object.keys(h.jobs).length ? "⚙️ " + Object.keys(h.jobs).map(k => { const j = h.jobs[k]; return `${G(j.out).name}: ${j.done} of ${j.n}`; }).join(" · ") + " · " : ""}The barn holds ${BARN_CAP} of each thing.</p>
-      <div class="row"><button id="closeBtn">Done</button></div>`);
+      <div class="row"><button id="handsBtn">🤖 Farmhands${window.Bots && Bots.crew.some(b => b.post === "farm") ? ` (${Bots.crew.filter(b => b.post === "farm").length})` : ""}</button><button id="closeBtn">Done</button></div>`);
+    $("handsBtn").onclick = () => Farmhands.panel(shedMenu);
     const ship = (g, n) => { if (!n || !unbank(g, n)) return 0; const got = G(g).base * n; RPG.addCoins(got); RPG.state.stats.sold += got; RPG.state.stats.soldToday += got; h.stats.shipped = (h.stats.shipped || 0) + got; return got; };
     $("modalBody").querySelectorAll("button[data-ship]").forEach(b => b.onclick = () => { const got = ship(b.dataset.ship, barnHas(b.dataset.ship)); api.sfx("gem"); api.toast(`🚢 Shipped for ${got} 🪙`); api.persistSave(); shedMenu(); });
     $("modalBody").querySelectorAll("button[data-take]").forEach(b => b.onclick = () => { const g = b.dataset.take, k = RPG.add(g, barnHas(g)); unbank(g, k); api.persistSave(); api.toast(k ? `🎒 Took ${gn(g, k)}.` : "🎒 Your backpack has no room for more of those."); shedMenu(); });
@@ -402,6 +404,7 @@ var $builtinmodule = function (name) {
     },
     get props() {
       const g = st().grid, out = [{ kind: "blueprint", x: 3.6, z: 11.4, ry: 0, padY: 1.0, label: "📐 Blueprint table" }, { kind: "shed", x: -4.4, z: 11.6, ry: 0, padY: 1.0, label: "🧺 Farm shed" }, this.moor];
+      if (window.Bots && Bots.crew.length && window.Farmhands) out.push({ kind: "botdock", x: Farmhands.PAD.x, z: Farmhands.PAD.z, ry: 0, label: "🤖 Farmhand pad" }); // where farmhands charge (farmhand.js)
       for (const k in g) { const P = PIECES[g[k].t]; if (!P.machine) continue; const [x, y] = k.split(",").map(Number), p = centre(x, y, 2); out.push({ kind: g[k].t, id: k, x: p.x, z: p.z, ry: 0, padY: 1.0, label: P.icon + " " + P.name }); }
       return out;
     },
@@ -413,8 +416,8 @@ var $builtinmodule = function (name) {
 
   // ---------- hub glue ----------
   function init(a) { api = a; }
-  function arrive() { const h = st(); settle(); if (!h.flags.visit) { h.flags.visit = true; api.persistSave(); } clearInterval(pollT); pollT = setInterval(poll, 200); }
-  function leave() { clearInterval(pollT); pollT = null; }
+  function arrive() { const h = st(); settle(); if (!h.flags.visit) { h.flags.visit = true; api.persistSave(); } clearInterval(pollT); pollT = setInterval(poll, 200); if (window.Farmhands) Farmhands.start(); }
+  function leave() { clearInterval(pollT); pollT = null; if (window.Farmhands) Farmhands.stop(); }
   function interact(p) {
     if (p.kind === "blueprint") { blueprint(); return true; }
     if (p.kind === "shed") { shedMenu(); return true; }
@@ -428,7 +431,9 @@ var $builtinmodule = function (name) {
     return `${Object.keys(g).length} things built · ${ripe ? `<b>${ripe} ready to harvest</b>` : crops.length ? "nothing ripe yet" : "nothing planted yet"} · ${barn} in the barn${jobs ? ` · ⚙️ ${jobs} machine${jobs > 1 ? "s" : ""} working` : ""}`;
   }
 
-  return { init, arrive, leave, interact, blueprint, summary, progress, unlocked, islandName, settle, TOWN, PIECES, MAKES, N, centre,
+  // what the farmhands (farmhand.js) need to do real work on the island
+  const farm = { st, bank, unbank, startJob, ripeness, near, BARN_CAP, G, gn, harvestYield: (k) => { const h = st(), c = h.grid[k], P = PIECES[c.t], [x, y] = k.split(",").map(Number); return P.yield[0] + Math.floor(Math.random() * (P.yield[1] - P.yield[0] + 1)) + (P.crop && near(h.grid, x, y, 2, "scarecrow") ? 1 : 0); } };
+  return { init, arrive, leave, interact, blueprint, summary, progress, unlocked, islandName, settle, TOWN, PIECES, MAKES, N, centre, farm,
     debug: { runBlueprint, diff, apply, stage, st, poll, setAt(k, t) { const c = st().grid[k]; if (c) c.at = t; } } };
 })();
 window.Home = Home;
