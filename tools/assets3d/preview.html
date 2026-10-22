@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Branchlands model preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #dfe7ee; font: 14px system-ui, sans-serif; color: #223; }
+  canvas { display: block; }
+  #bar { position: fixed; top: 8px; left: 8px; background: #fff; padding: 6px 10px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+  #bar a { margin-right: 8px; }
+</style>
+<div id="bar"></div>
+<script type="module">
+// Open as tools/assets3d/preview.html?m=bolt (served from the repo root). Drag to orbit, wheel to zoom.
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/+esm";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm";
+import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm";
+import { RoomEnvironment } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js/+esm";
+const names = ["bolt","house","tree","rock","crate","pillar","crystal","ice","crab","apple","key","lens","villager","villager2","villager3","villager4","villager5","villager6","stall"];
+const name = new URLSearchParams(location.search).get("m") || "bolt";
+document.getElementById("bar").innerHTML = names.map(n => `<a href="?m=${n}" ${n === name ? 'style="font-weight:700"' : ""}>${n}</a>`).join("") + `<span id="info"></span>`;
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.9; renderer.shadowMap.enabled = true; document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xdfe7ee);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.01, 100); camera.position.set(2.2, 1.6, 2.6);
+const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 0.5, 0);
+const sun = new THREE.DirectionalLight(0xffffff, 2.5); sun.position.set(3, 5, 2); sun.castShadow = true; scene.add(sun, new THREE.HemisphereLight(0xffffff, 0x886644, 0.5));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(1.5, 48), new THREE.MeshStandardMaterial({ color: 0xcfd8df })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+scene.add(new THREE.GridHelper(2, 2, 0x889, 0xaab)); // one tile = 1 unit, so the grid shows two tiles across
+scene.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0.02, 0), 0.9, 0xd04040)); // +x: the way Bolt faces at dir 0
+const all = new URLSearchParams(location.search).has("all");
+if (all) {
+  // ?all=1: every model on one 4 x 4 grid, each shown 1 unit tall, so the whole set can be judged in one look
+  camera.position.set(0, 9, 11); controls.target.set(0, 0.3, 0); floor.scale.setScalar(6); scene.children.filter(o => o.isGridHelper || o.isArrowHelper).forEach(o => scene.remove(o));
+  const lab = (t, x, z) => { const c = document.createElement("canvas"); c.width = 256; c.height = 64; const g = c.getContext("2d"); g.font = "700 40px system-ui"; g.fillStyle = "#223"; g.textAlign = "center"; g.fillText(t, 128, 46); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true })); sp.position.set(x, 1.25, z); sp.scale.set(1.6, 0.4, 1); scene.add(sp); };
+  names.forEach((n, i) => { const x = (i % 4) * 2.4 - 3.6, z = Math.floor(i / 4) * 2.4 - 3.6; lab(n, x, z);
+    new GLTFLoader().load(`../../assets/models/${n}.glb`, g => { const root = g.scene, box = new THREE.Box3().setFromObject(root), sz = new THREE.Vector3(), c = new THREE.Vector3(); box.getSize(sz); box.getCenter(c);
+      const s = 1 / Math.max(sz.x, sz.y, sz.z); root.scale.setScalar(s); root.position.set(x - c.x * s, -box.min.y * s, z - c.z * s); root.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); scene.add(root);
+      scene.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(x, 0.02, z), 0.7, 0xd04040)); }); });
+}
+if (!all) new GLTFLoader().load(`../../assets/models/${name}.glb`, g => {
+  const root = g.scene, box = new THREE.Box3().setFromObject(root), sz = new THREE.Vector3(), c = new THREE.Vector3(); box.getSize(sz); box.getCenter(c);
+  const s = 1 / Math.max(sz.x, sz.y, sz.z); root.scale.setScalar(s); root.position.set(-c.x * s, -box.min.y * s, -c.z * s);
+  let tris = 0; root.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; tris += o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; } });
+  scene.add(root);
+  document.getElementById("info").textContent = ` ${name}: ${Math.round(tris).toLocaleString()} triangles, raw size ${sz.x.toFixed(2)} × ${sz.y.toFixed(2)} × ${sz.z.toFixed(2)} (x × y × z), shown 1 unit tall`;
+}, undefined, () => document.getElementById("info").textContent = ` no assets/models/${name}.glb yet`);
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+if (all) floor.geometry = new THREE.CircleGeometry(1.5, 48);
+(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+</script>

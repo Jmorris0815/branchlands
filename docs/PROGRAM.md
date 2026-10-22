@@ -1,6 +1,6 @@
 # Branchlands: company program
 
-*Version 0.1, 17 October 2026. Owner: Justin Morris.*
+*Version 0.5, 18 October 2026. Owner: Justin Morris.*
 
 ## 1. The one-line pitch
 
@@ -23,7 +23,7 @@ Branchlands owns the gap: **collaboration and AI as game content, not as a featu
 
 Type Python → robot acts → world changes → zone completes → a **Reason** unlocks ("Stop doing boring stuff by hand") → a **real-world quest** sends the skill to the kid's own computer and repo → next zone opens.
 
-The prototype in this repo implements the loop end to end: 7 zones, 14 levels, four play modes (robot world, Git terminal, PR review, chatbot), progression and save.
+The prototype in this repo implements the loop end to end: 8 zones, 35 levels, seven play modes (robot world in Python or JavaScript, Git terminal with merge conflicts and push/pull, PR review, PR authoring, rule and memory chatbots, a real local LLM via Ollama), a world map, star ratings, achievements, a level editor with share links, and GitHub-verified real-world quests.
 
 ### 3.2 Mechanics borrowed from the teardown (as patterns, not content)
 
@@ -45,17 +45,92 @@ Combat theming (Common Sense Media flags CodeCombat for it). Gems/loot boxes. Le
 
 | Phase | Weeks | Ships | Done when |
 |---|---|---|---|
-| 0. Prototype | now | this repo | a kid can play 1-1 through 7-1 unassisted |
+| 0. Prototype | done | this repo: 35 levels, 8 zones, editor, Ollama Oracle, JS zone, GitHub quest check, realistic 3D, Harbor Town hub with economy/skills/quests/NPCs, save slots | a kid can play 1-1 through 8-5 unassisted |
 | 1. Family alpha | 1–6 | Justin + son use the repo for real: his branches, his PRs, his levels | 10 merged PRs authored by the kid; 3 new levels he designed |
-| 2. Real Git zone | 6–12 | Zone 5 reads the player's actual repo via a tiny local helper (`branchlands serve`), quests auto-complete on real commits | first commit in the real repo marks 5-1 done in-game |
-| 3. Co-op | 12–20 | two browsers, one world: author/reviewer roles, live PR review on a shared level, deliberate merge-conflict level | two families outside ours finish Zone 6 together |
-| 4. The real Oracle | 20–26 | Zone 7-2: the kid's `reply()` falls back to a local Ollama model with a system prompt they write; Zone 7-3: train a tiny classifier (Machine Learning for Kids pattern) | NPC in the kid's own game answers from a model running on their machine |
-| 5. Content + art | 26–40 | 30+ levels, level editor (Learn Git Branching has one; copy the idea), pixel art, sound | 2 hours of play per zone |
+| 2. Real Git zone | 6–12 | Zone 5 reads the player's actual repo via a tiny local helper (`branchlands serve`); today the game already verifies commits and merged PRs through the public GitHub API | first local commit marks 5-1 done in-game without GitHub |
+| 3. Co-op | shipped early (Oct 2026) | family code → shared market, board, trading post, and 6-4 pull requests reviewed by the other player inside their game (Supabase edge function, no accounts). Next: shared level-editor PRs, a deliberate two-player merge-conflict level | two families outside ours finish Zone 6 together |
+| 4. The real Oracle | 20–26 | 7-3 (Ollama system-prompt Oracle) ships in the prototype; next: the Oracle becomes an NPC inside the robot world, plus 7-4: train a tiny classifier (Machine Learning for Kids pattern) | NPC in the kid's own game answers from a model running on their machine |
+| 5. Content + art | 26–40 | 60+ levels (35 and a level editor exist), community level packs from share links, realism pass per §3.6 (HDRI skies, rigged robot, zone-intro clips), music | 2 hours of play per zone |
 | 6. Launch | 40–52 | public web app, homeschool co-op pilots, Discord | 500 families, 20 paying |
 
 ### 3.5 Technical stack (keep it boring)
 
 Static HTML/CSS/JS, no build step (so a kid can read every file). Skulpt for Python-in-browser (same engine Hedy uses). GitHub Pages for hosting. Later: a small Node helper for the real-Git zone, Ollama for local models, Supabase (already in the family's toolbox) for optional accounts and shared worlds. REA was evaluated and is not part of the product; it is a teardown tool (see §6).
+
+### 3.6 Visual direction
+
+**What "realistic" means here, and what shipped.** The prototype now renders every level with the same
+techniques a modern engine uses, scaled to a browser: physically based materials (roughness, metalness,
+clearcoat), a physically based sky model whose light also feeds reflections, a sun with soft shadow maps,
+filmic tone mapping, bloom on emissive objects, exponential fog, a displaced-wave water shader with Fresnel
+and sun glitter, a spotlight headlight on the robot, instanced floor tiles, and an orbit camera with an
+intro sweep. Each zone has its own sun height, haze and palette, so Fog Bridge is a grey overcast morning
+and the Workshop is a warm evening. It is `js/render3d.js`, about 330 lines, loads Three.js from a CDN,
+needs no build step, and falls back to the 2D renderer when WebGL or the network is missing.
+
+**Why it is not Unreal Engine.** Unreal is the right tool for a different product. It is a native engine
+(C++ and Blueprints, tens of gigabytes installed, hundreds of megabytes shipped); it has not supported a
+browser target since 4.23; and the thing Branchlands sells is a kid typing Python into a page and watching
+it run, inside a repo he can read end to end. An Unreal build would mean the kid cannot read the engine,
+cannot open a pull request against the game from a Chromebook, and cannot run it in the same tab as his
+editor. If Branchlands ever has a native "deluxe" edition, Unreal (or Godot, which is open source and a kid
+can read) is the candidate; Phase 5, not Phase 1.
+
+**Where Seedance, Kling, Higgsfield and friends fit.** AI video models make clips, not interactive worlds,
+so they belong to three jobs: (1) the eight **zone-intro cutscenes** (5–10 seconds each, played in the
+zone-unlock modal, compressed to roughly 2 MB WebM and stored under `assets/intro/`); (2) the **trailer**
+for the Show HN post and any store page; (3) **concept art** the 3D models are built to match. AI image
+models have a fourth, more technical use that directly multiplies realism: an equirectangular 360° sky
+image per zone, used as the environment map and background instead of the procedural sky. Cost and access:
+these run through paid APIs or Figma Weave (not yet linked on the family account); generating a full set
+is an afternoon and tens of dollars, and should be approved per batch.
+
+**Next steps for realism, in order of payoff per hour:**
+
+1. HDRI skies: one generated 360° sky per zone (cheapest large jump in realism).
+2. A rigged robot: a GLTF model of Bolt with idle, walk, turn, pick and ouch animations (Blender or Mixamo).
+3. Screen-space ambient occlusion and contact shadows under objects.
+4. Zone atmosphere particles: fog wisps on Fog Bridge, fireflies in the Orchard at dusk, snow on Mirror Sea.
+5. Water refraction and depth-tinted shallows (needs a depth pre-pass).
+6. God rays from the low sun on Fog Bridge and the Oracle.
+7. A day–night cycle tied to progress through a zone; cinematic camera when a zone unlocks.
+8. Zone-intro clips from a video model, behind a parent-approved budget.
+
+**Performance budget.** 60 fps at 800×500 on an integrated GPU for "realistic"; "fast 3D" drops shadows,
+bloom and device-pixel scaling for Chromebooks; "classic 2D" always works. A level never ships with more
+than about 250 draw calls.
+
+### 3.7 Progression and economy (the RuneScape layer)
+
+**Design rule: every system is downstream of writing code.** Skills level only by finishing or replaying
+missions (and committing in the Time Tower). Loot only comes from what the robot's code picked up or
+finished. Coins only come from selling that loot, from quests, and from first-completion bounties. Nothing
+for sale skips a lesson: upgrades add power to `robot` but the line limits, the `def` requirement and the
+par-based stars still decide the rating, so a kid with a Long Arm still has to write the loop.
+
+**What shipped in the prototype (October 2026):**
+
+| System | Shape | Teaches |
+|---|---|---|
+| Home screen | three save slots, new / continue / delete, legacy save migrated to slot 1 | ownership of "my game" |
+| Harbor hub | walkable 3D town on the same renderer as levels; arrow keys / click-to-walk with BFS pathing; portals, 8 NPCs, 6 stalls, map sign | spatial sense of the world; portals make unlocking visible |
+| Conversations | scripted topics per NPC with computed clues ("next is 1-3, hint: …"), quest hand-ins in dialog, free chat via local Ollama in character | contextual help instead of a help page |
+| Skills | 8 skills, level = f(xp) with xp(L) = 25·(L−1)^1.5, first clear ×2, par bonus ×1.25, replays ×0.4 | mastery as a number the kid owns |
+| Loot | pick events → apples/gems/lenses/scrap; zone drops per clear; a shard per Git commit; backpack cap 20/60/200; drops halve after 5 clears of a level per day | persistence pays, grinding is bounded |
+| Market | daily seeded prices ±25%, one HOT good +40%, −2% per unit sold until tomorrow (floor 35%), buy = sell × 1.5 | supply, demand, planning, arbitrage over days |
+| Workshop | 4 recipes with skill gates, 7 upgrades (5 change the sim, 2 enlarge the pack) | compounding: cheap → dear |
+| Paint | 7 colours, 3 quest-only, applied to the robot in 2D and 3D | identity |
+| Quests | 14 NPC quests with typed steps (complete, par, gather, craft, sell, gear, commits, total level); 3 daily contracts | curriculum sequencing in disguise |
+
+**Shared world without accounts.** The family code model (a code plus a per-player token, nothing personal stored) keeps COPPA simple: no email, no login, a family of at most six. It shipped as `js/family.js` + the `bl-family` edge function. The single-player economy is deterministic per day (seeded by the date), which already makes two
+siblings' markets identical and comparable without any networking. Phase 3 puts the economy in Supabase
+(already in the family toolbox): family-scoped markets, trading between the two accounts, an opt-in family
+leaderboard, and PR-review quests that are actually assigned to the other player.
+
+**Content budget to feel like RuneScape, not a demo:** 40+ quests (14 now), 12+ upgrades, 3 recipe tiers,
+cosmetic hats and trails, a bank with tabs, a "collection log", NPC schedules (Pip is in the orchard in the
+morning), and a soundtrack per zone. All of it is data in `js/rpg.js` and `js/hub.js`, which is the point:
+the kid can add a quest by adding an object.
 
 ## 4. Business
 

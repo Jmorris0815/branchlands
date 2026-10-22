@@ -1,0 +1,98 @@
+<!doctype html><meta charset="utf-8"><title>rig convert</title><pre id="log"></pre>
+<!-- Mixamo FBX -> one glTF per person, with idle / idle2 / walk / wave / talk clips.
+     Put next to this page: <name>.glb (the original, for its texture) and fbx/<name>_rig.fbx (Mixamo download WITH skin,
+     Breathing Idle), fbx/idle2.fbx, walk.fbx (in place), wave_m.fbx (mirrored, so people holding something wave with the
+     free hand), talk.fbx (all WITHOUT skin). Serve with mixamo_recv.py (it also saves the result), open the page, and
+     copy fbx/<name>_rig.glb into assets/models/. Add &head=<name>,... for people whose hat or hair the auto-rigger
+     glued to an arm (lockHead below moves those vertices onto the head bone). -->
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/+esm";
+import { FBXLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/FBXLoader.js/+esm";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm";
+import { mergeVertices } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js/+esm";
+import { GLTFExporter } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/exporters/GLTFExporter.js/+esm";
+const log = s => (document.getElementById("log").textContent += s + "\n");
+const fbx = new FBXLoader(), gltf = new GLTFLoader();
+const load = (l, u) => new Promise((res, rej) => l.load(u, res, undefined, rej));
+// keep only rotations (and hips position for idle sway), drop scale tracks, rename
+function clean(clip, name, keepHipsPos) {
+  clip.name = name;
+  clip.tracks = clip.tracks.filter(t => t.name.endsWith(".quaternion") || (keepHipsPos && /Hips\.position$/.test(t.name)));
+  return clip;
+}
+// hats, hair and braids that the auto-rigger glued to the arms: everything above the chin follows the head, and
+// arm-weighted bits around the shoulders go to whichever is nearer (relative to its thickness), the arm or the head
+function lockHead(mesh) {
+  const bones = mesh.skeleton.bones, at = n => bones.findIndex(b => b.name === "mixamorig" + n);
+  const bind = i => new THREE.Vector3().setFromMatrixPosition(mesh.skeleton.boneInverses[i].clone().invert());
+  const head = at("Head"), hp = bind(head), np = bind(at("Neck")), chinY = (hp.y + np.y) / 2;
+  const armY = bind(at("LeftArm")).y, H = hp.y - bind(at("Hips")).y, low = armY - H * 0.2;
+  const seg = new THREE.Line3(), q = new THREE.Vector3();
+  const dist = (p, a, b) => a.distanceToSquared(b) < 1e-6 ? a.distanceTo(p) : seg.set(a, b).closestPointToPoint(p, true, q).distanceTo(p);
+  const segs = []; bones.forEach((b, i) => { if (/mixamorig(Left|Right)(Arm|ForeArm|Hand)/.test(b.name)) { const c = bones.indexOf(b.children.find(o => o.isBone)); segs.push([bind(i), bind(c < 0 ? i : c)]); } });
+  const top = hp.clone().add(new THREE.Vector3(0, H * 0.15, 0));
+  const armD = p => Math.min(...segs.map(([a, b]) => dist(p, a, b))) / (H * 0.07), headD = p => dist(p, np, top) / (H * 0.14);
+  const pos = mesh.geometry.attributes.position, si = mesh.geometry.attributes.skinIndex, sw = mesh.geometry.attributes.skinWeight;
+  const v = new THREE.Vector3(); let nh = 0;
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(mesh.bindMatrix);
+    if (v.y < low) continue;
+    let best = 0, bw = -1; for (let k = 0; k < 4; k++) if (sw.getComponent(i, k) > bw) { bw = sw.getComponent(i, k); best = si.getComponent(i, k); }
+    const arm = /mixamorig(Left|Right)(Arm|ForeArm|Hand)/.test(bones[best].name);
+    if (arm ? headD(v) < armD(v) : v.y > chinY) { si.setXYZW(i, head, 0, 0, 0); sw.setXYZW(i, 1, 0, 0, 0); nh++; }
+  }
+  si.needsUpdate = sw.needsUpdate = true;
+  log("  head lock: " + nh + " verts to head");
+}
+const LOCK = (new URLSearchParams(location.search).get("head") || "").split(",");
+// Mixamo can't rig some hats (the sailor's cap). Rig a copy cut off at the brow (mixamo_prep.py with CUT=<cm>), then
+// give every vertex of the full model the weights of the nearest rigged vertex; whatever is above the cut follows the head.
+function transfer(base, orig, cut) {
+  let src = null; base.traverse(o => { if (o.isSkinnedMesh) src = o; });
+  let mesh = null; orig.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+  orig.scene.updateMatrixWorld(true);
+  const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), P = g.attributes.position;
+  // the same frame mixamo_prep.py wrote: 180 tall, feet at 0, centred
+  g.computeBoundingBox(); const b = g.boundingBox, s = 180 / (b.max.y - b.min.y);
+  g.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2); g.scale(s, s, s);
+  const SP = src.geometry.attributes.position, SI = src.geometry.attributes.skinIndex, SW = src.geometry.attributes.skinWeight;
+  const sv = []; const t = new THREE.Vector3(); for (let i = 0; i < SP.count; i++) sv.push(t.fromBufferAttribute(SP, i).applyMatrix4(src.bindMatrix).clone());
+  const sb = new THREE.Box3().setFromPoints(sv); log("  rigged copy box " + sb.min.toArray().map(Math.round) + " .. " + sb.max.toArray().map(Math.round) + ", full model top " + Math.round((b.max.y - b.min.y) * s));
+  const head = src.skeleton.bones.findIndex(o => o.name === "mixamorigHead");
+  const n = P.count, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4), v = new THREE.Vector3(); let capped = 0;
+  for (let i = 0; i < n; i++) {
+    v.fromBufferAttribute(P, i);
+    if (v.y >= cut - 1) { si[i * 4] = head; sw[i * 4] = 1; capped++; continue; }
+    let best = 0, bd = Infinity; for (let j = 0; j < sv.length; j++) { const d = sv[j].distanceToSquared(v); if (d < bd) { bd = d; best = j; } }
+    for (let k = 0; k < 4; k++) { si[i * 4 + k] = SI.getComponent(best, k); sw[i * 4 + k] = SW.getComponent(best, k); }
+  }
+  // back into the rigged mesh's own frame, glTF texture coordinates turned FBX-way up
+  const inv = src.bindMatrix.clone().invert(); g.applyMatrix4(inv);
+  const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+  g.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute("skinWeight", new THREE.BufferAttribute(sw, 4));
+  for (const k of Object.keys(g.attributes)) if (!["position", "normal", "uv", "skinIndex", "skinWeight"].includes(k)) g.deleteAttribute(k);
+  src.geometry = g; src.normalizeSkinWeights();
+  log("  weights copied to " + n + " verts, " + capped + " on the head");
+}
+const FROM = new URLSearchParams(location.search).get("from"), CUTCM = +(new URLSearchParams(location.search).get("cut") || 0);
+async function convert(name) {
+  const base = await load(fbx, "fbx/" + (FROM || name) + "_rig.fbx");
+  const orig = await load(gltf, name + ".glb");
+  if (FROM) transfer(base, orig, CUTCM);
+  let map = null; orig.scene.traverse(o => { if (o.isMesh && o.material.map) map = o.material.map; });
+  const tex = new THREE.Texture(map.image); tex.flipY = true; tex.colorSpace = THREE.SRGBColorSpace; tex.needsUpdate = true; tex.userData.mimeType = "image/jpeg";
+  let skinned = 0;
+  base.traverse(o => { if (o.isSkinnedMesh) { skinned++; o.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }); o.name = "body"; const n0 = o.geometry.attributes.position.count; o.geometry = mergeVertices(o.geometry, 1e-4); log("  verts " + n0 + " -> " + o.geometry.attributes.position.count); if (LOCK.includes(name)) lockHead(o); } });
+  const clips = [clean(base.animations[0], "idle", true)];
+  for (const k of ["idle2", "walk", "wave", "talk"]) { const a = await load(fbx, "fbx/" + (k === "wave" ? "wave_m" : k) + ".fbx"); clips.push(clean(a.animations[0], k, k !== "walk")); }
+  const bones = new Set(); base.traverse(o => { if (o.isBone) bones.add(o.name); });
+  for (const c of clips) c.tracks = c.tracks.filter(t => bones.has(t.name.split(".")[0]));
+  base.scale.setScalar(0.01); base.name = name + "_rig";
+  const box = new THREE.Box3().setFromObject(base);
+  log(name + ": skinned meshes " + skinned + ", bones " + (base.getObjectByProperty("type", "Bone") ? "yes" : "no") + ", clips " + clips.map(c => c.name + ":" + c.duration.toFixed(2) + "s/" + c.tracks.length).join(" ") + ", height " + (box.max.y - box.min.y).toFixed(2));
+  const glb = await new GLTFExporter().parseAsync(base, { binary: true, animations: clips });
+  const r = await fetch("/save?name=" + name + "_rig.glb", { method: "POST", body: glb });
+  log("  saved " + glb.byteLength + " bytes: " + r.status);
+}
+window.done = (async () => { try { for (const n of (new URLSearchParams(location.search).get("n") || "villager,villager5").split(",")) await convert(n); log("DONE"); } catch (e) { log("ERR " + e.stack); } })();
+</script>

@@ -84,3 +84,9 @@ Do this once deliberately in week one, so it's boring by the time it happens for
 ## Commit messages
 
 One line, present tense, says what changed: `Add level 3-3: two bridges`, `Fix jump over goal tile`.
+
+## Who reviews whom
+
+- **Justin** (`Jmorris0815`) owns the repo and reviews Bentley's pull requests.
+- **Bentley** (`bloxyarmy2015-gif`) has write access: he branches, opens pull requests, and reviews Justin's. Neither of us merges our own PR without the other's approval; that is what the branch protection on `main` enforces.
+- First task for Bentley: accept the invite at https://github.com/Jmorris0815/branchlands/invitations, then review pull request #1 and press **Approve** if the game plays.

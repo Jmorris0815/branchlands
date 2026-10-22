@@ -6,71 +6,179 @@
 <title>Branchlands</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/style.css">
+<script src="js/device.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
 </head>
 <body>
 <header>
-  <h1>🌿 Branchlands</h1>
-  <span class="tag">a world you fix by writing real Python · every zone unlocks a new reason to code</span>
+  <button id="homeBtn" class="plain"><h1>🌿 Branchlands</h1></button>
+  <span class="tag">a world you fix by writing real code · every zone unlocks a new reason to code</span>
   <span class="sp"></span>
+  <span id="rank" class="rank"></span>
   <span id="xp">0 XP</span>
+  <span id="coins" class="rank" title="coins">🪙 0</span>
+  <button id="famBadge" hidden title="family inbox: reviews and offers">📬</button>
+  <button id="hubBtn">⚓ Harbor</button>
+  <button id="mapBtn">🗺️ Map</button>
   <button id="codexBtn">📜 Codex</button>
+  <button id="soundBtn" title="sound on/off">🔊</button>
+  <button id="settingsBtn" title="settings">⚙️</button>
 </header>
 
-<nav id="zones"></nav>
+<!-- ============ HOME: save slots ============ -->
+<section id="screen-home" class="screen" hidden>
+  <div class="home">
+    <div class="hero"><h2>🌿 Branchlands</h2><p>A world you fix by writing real code. Pick a save, or start a new game. Three slots, like a real console.</p></div>
+    <div id="slots" class="slots"></div>
+    <p class="muted">Saves live in this browser. Export one from ⚙️ Settings to carry it to another computer.</p>
+  </div>
+</section>
 
-<main>
-  <aside id="levels" class="panel"></aside>
+<!-- ============ HARBOR TOWN: quest board, skills, storehouse, market, workshop, paint ============ -->
+<section id="screen-town" class="screen" hidden>
+  <div class="levelbar"><button id="townBack">← Harbor</button><h2 class="edh">⚓ Harbor Town</h2><span id="townCoins" class="muted"></span></div>
+  <div id="townTabs" class="tabs"><button data-tab="board">📜 Quest board</button><button data-tab="skills">📈 Skills</button><button data-tab="pack">🎒 Storehouse</button><button data-tab="market">🏪 Market</button><button data-tab="workshop">🔧 Workshop</button><button data-tab="paint">🎨 Style</button><button data-tab="family">👨‍👩‍👦 Family</button></div>
+  <div id="townBody" class="panel"></div>
+</section>
 
-  <section id="mission" class="panel"></section>
+<!-- ============ WORLD MAP ============ -->
+<section id="screen-map" class="screen" hidden>
+  <div class="mapwrap panel"><canvas id="map" width="900" height="480"></canvas></div>
+  <div class="maprow">
+    <div id="mapInfo" class="panel"></div>
+    <div id="questPanel" class="panel"></div>
+  </div>
+</section>
 
-  <section class="stagecol">
-    <div id="mode-robot" class="mode panel" hidden>
-      <canvas id="world" width="352" height="220"></canvas>
-    </div>
-
-    <div id="mode-git" class="mode panel" hidden>
-      <canvas id="graph" width="400" height="130"></canvas>
-      <div id="term"></div>
-      <input id="termIn" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, press Enter  (help)">
-    </div>
-
-    <div id="mode-review" class="mode panel" hidden>
-      <div id="prHead"></div>
-      <textarea id="reviewComment" placeholder="Your review comment: what is wrong, and on which line?"></textarea>
-      <div class="toolbar"><button id="requestBtn">✍️ Request changes</button><span id="reviewStatus"></span></div>
-    </div>
-
-    <div id="mode-oracle" class="mode panel" hidden>
-      <div id="chat"></div>
-      <input id="chatIn" type="text" autocomplete="off" placeholder="talk to your bot after you press Run">
-    </div>
-
-    <div id="mode-editor" class="mode panel" hidden>
-      <div class="toolbar">
-        <button id="runBtn" class="primary">▶ Run (Ctrl+Enter)</button>
-        <button id="resetBtn">↺ Reset world</button>
-        <button id="starterBtn" class="small">starter code</button>
-        <span class="sp"></span>
-        <span id="lineCount"></span>
-        <select id="speed"><option value="normal">normal</option><option value="fast">fast</option></select>
+<!-- ============ LEVEL ============ -->
+<section id="screen-level" class="screen" hidden>
+  <div class="levelbar">
+    <button id="backBtn">← Harbor</button>
+    <div id="levels"></div>
+  </div>
+  <main>
+    <section id="mission" class="panel"></section>
+    <section class="stagecol">
+      <div id="mode-robot" class="mode panel" hidden>
+        <div class="worldwrap"><canvas id="world" width="352" height="220"></canvas><canvas id="fx" width="352" height="220"></canvas><div id="joy" hidden><div id="joyKnob"></div></div><button id="talkBtn" class="primary" hidden>Talk</button><button id="jumpBtn" hidden>Jump</button><button id="boostBtn" hidden>Boost</button></div>
+        <div class="camhint muted">drag to look around or tilt · scroll to zoom · edge numbers are x and y · footprints count each move · ⚙️ Settings → Graphics</div>
       </div>
-      <textarea id="code" spellcheck="false"></textarea>
-      <div id="console"></div>
+
+      <div id="mode-git" class="mode panel" hidden>
+        <div class="graphwrap"><canvas id="graph" width="400" height="150"></canvas></div>
+        <div id="term"></div>
+        <input id="termIn" type="text" autocomplete="off" spellcheck="false" placeholder="type a command, press Enter  (help)">
+      </div>
+
+      <div id="mode-review" class="mode panel" hidden>
+        <div id="prHead"></div>
+        <textarea id="reviewComment" placeholder="Your review comment: what is wrong, and on which line?"></textarea>
+        <div class="toolbar"><button id="requestBtn">✍️ Request changes</button><span id="reviewStatus"></span></div>
+      </div>
+
+      <div id="mode-author" class="mode panel" hidden>
+        <div class="prform">
+          <label>Pull request title<input id="prTitle" type="text" placeholder="e.g. Collect three apples with a loop"></label>
+          <label>What changed and why<textarea id="prBody" placeholder="Describe what your code does so someone who never saw it understands."></textarea></label>
+          <label class="check"><input id="prTested" type="checkbox"> I ran it from a fresh Reset world and it reached the goal</label>
+          <div class="toolbar"><button id="openPrBtn" class="primary">Open pull request → Dad reviews</button><span id="prStatus"></span></div>
+        </div>
+      </div>
+
+      <div id="mode-oracle" class="mode panel" hidden>
+        <div id="chat"></div>
+        <input id="chatIn" type="text" autocomplete="off" placeholder="talk to your bot after you press Run">
+      </div>
+
+      <div id="mode-ollama" class="mode panel" hidden>
+        <div class="toolbar">
+          <input id="olEndpoint" type="text" value="http://localhost:11434" spellcheck="false">
+          <button id="olConnect">Connect</button>
+          <select id="olModel"><option value="">model…</option></select>
+          <span id="olStatus" class="muted"></span>
+        </div>
+        <div id="olSetup" class="setup"></div>
+        <div id="olChat"></div>
+        <input id="olChatIn" type="text" autocomplete="off" placeholder="say something to your Oracle">
+      </div>
+
+      <div id="mode-code" class="mode panel" hidden>
+        <div class="toolbar">
+          <button id="runBtn" class="primary">▶ Run (Ctrl+Enter)</button>
+          <button id="resetBtn">↺ Reset world</button>
+          <button id="starterBtn" class="small">starter code</button>
+          <button id="remixBtn" class="small" title="open this map in the level editor">✎ remix</button>
+          <span class="sp"></span>
+          <select id="langSel" hidden><option value="py">Python</option><option value="js">JavaScript</option></select>
+          <span id="lineCount"></span>
+          <select id="speed"><option value="slow">slow</option><option value="normal" selected>normal</option><option value="fast">fast</option></select><label class="check small" title="the camera rides behind Bolt while your code runs"><input id="followCam" type="checkbox" checked> 🎥 follow Bolt</label>
+        </div>
+        <div id="symbar" class="symbar"></div>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"></textarea>
+        <div id="console"></div>
+      </div>
+    </section>
+  </main>
+</section>
+
+<!-- ============ LEVEL EDITOR ============ -->
+<section id="screen-editor" class="screen" hidden>
+  <div class="levelbar"><button id="edBack">← Map</button><h2 class="edh">Level Editor</h2><span class="muted">Paint a map, set the rules, play it, then export it for a pull request or send a share link.</span></div>
+  <div class="edgrid">
+    <div class="panel">
+      <div id="edPalette" class="palette"></div>
+      <div class="toolbar"><label>W <input id="edW" type="number" min="4" max="18" value="10"></label><label>H <input id="edH" type="number" min="3" max="12" value="6"></label><button id="edResize" class="small">resize</button><button id="edClear" class="small">clear</button></div>
+      <div class="edcanvaswrap"><canvas id="edCanvas" width="320" height="192"></canvas></div>
     </div>
-  </section>
-</main>
+    <div class="panel edform">
+      <label>Title<input id="edTitle" type="text" placeholder="The Crab Garden"></label>
+      <label>Story<textarea id="edStory" placeholder="What's happening, and what should the robot do?"></textarea></label>
+      <div class="row2">
+        <label>Goal<select id="edGoal"><option value="reach">reach the 🏠</option><option value="collect">collect every item</option><option value="deliver">collect, then reach 🏠</option><option value="switches">press every switch, then 🏠</option></select></label>
+        <label>Zone theme<select id="edZone"><option value="1">Lighthouse (sand)</option><option value="2">Orchard (grass)</option><option value="3">Fog Bridge (stone)</option><option value="4">Workshop (wood)</option><option value="7">Oracle (crystal)</option><option value="8">Mirror Sea (ice)</option></select></label>
+      </div>
+      <div class="row2">
+        <label>Robot faces<select id="edDir"><option value="0">east</option><option value="1">south</option><option value="2">west</option><option value="3">north</option></select></label>
+        <label>Language<select id="edLang"><option value="py">Python</option><option value="js">JavaScript</option></select></label>
+      </div>
+      <div class="row2">
+        <label>Max lines (blank = none)<input id="edMax" type="number" min="1" max="40"></label>
+        <label class="check"><input id="edDef" type="checkbox"> must use a function</label>
+      </div>
+      <label>Starter code<textarea id="edStarter" class="mono">import robot
+
+</textarea></label>
+      <label>Hints (one per line)<textarea id="edHints"></textarea></label>
+      <div class="toolbar"><button id="edPlay" class="primary">▶ Play-test</button><button id="edExport">Export for levels.js</button><button id="edLink">🔗 Share link</button><button id="edImport" class="small">import from box</button></div>
+      <textarea id="edOut" class="mono" placeholder="export / share link appears here. Paste a share link or JSON here and click import."></textarea>
+      <div id="edStatus" class="muted"></div>
+    </div>
+  </div>
+</section>
 
 <div id="modal" hidden><div id="modalBody"></div></div>
+<div id="toasts"></div>
 
-<footer>Branchlands prototype · Python runs in your browser via Skulpt · progress is saved in this browser only</footer>
+<footer>Branchlands · Python runs in your browser via Skulpt, JavaScript in a Web Worker, the island is drawn by Three.js · progress is saved in this browser (export it in ⚙️ Settings)</footer>
 
 <script src="js/levels.js"></script>
 <script src="js/sim.js"></script>
 <script src="js/python.js"></script>
-<script src="js/render.js"></script>
+<script src="js/jsrunner.js"></script>
 <script src="js/gitsim.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/map.js"></script>
+<script src="js/quests.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/rpg.js"></script>
+<script src="js/bots.js"></script>
+<script src="js/home.js"></script>
+<script src="js/farmhand.js"></script>
+<script src="js/bosses.js"></script>
+<script src="js/hub.js"></script>
+<script src="js/family.js"></script>
 <script src="js/game.js"></script>
+<script type="module" async src="js/render3d.js"></script>
 </body>
 </html>
